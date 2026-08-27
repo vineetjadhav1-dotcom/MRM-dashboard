@@ -1,0 +1,239 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+}
+
+/* Custom fine-tuning and typography utilities */
+body {
+  font-family: var(--font-sans);
+  background-color: #f8fafc;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* CSS rules for html2pdf DOM capture */
+body.is-exporting-pdf {
+  background-color: #ffffff !important;
+}
+
+body.is-exporting-pdf,
+body.is-exporting-pdf #root,
+body.is-exporting-pdf #app-root-layout,
+body.is-exporting-pdf #main-content-area,
+body.is-exporting-pdf #dashboard-main-container,
+body.is-exporting-pdf #dashboard-vertical-layout,
+body.is-exporting-pdf #dashboard-main-content-area,
+body.is-exporting-pdf #dashboard-tab-panel,
+body.is-exporting-pdf #leaderwise-dashboard-root,
+body.is-exporting-pdf #leader-dashboard-main-view,
+body.is-exporting-pdf #leader-projects-window,
+body.is-exporting-pdf #leader-projects-blocks-grid {
+  display: block !important;
+  position: static !important;
+  float: none !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: visible !important;
+  overflow-x: visible !important;
+  overflow-y: visible !important;
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+body.is-exporting-pdf .no-print,
+body.is-exporting-pdf .print-btn,
+body.is-exporting-pdf #header-controls,
+body.is-exporting-pdf #dashboard-left-sidebar-wrapper,
+body.is-exporting-pdf #column-mapper-panel,
+body.is-exporting-pdf #app-header,
+body.is-exporting-pdf #mrm-export-pdf-btn,
+body.is-exporting-pdf #export-pdf-header-btn {
+  display: none !important;
+}
+
+body.is-exporting-pdf #mrm-print-header {
+  display: block !important;
+}
+
+/* Professional Print Styles for PDF Export & Browser Ctrl+P (A4 Landscape) */
+@page {
+  size: A4 landscape;
+  margin: 10mm 10mm 10mm 10mm;
+}
+
+@media print {
+  /* 1. Reset root & outer layout containers to standard block flow to enable browser multi-page print engine pagination */
+  html, 
+  body, 
+  #root, 
+  #app-root-layout, 
+  #main-content-area, 
+  #dashboard-main-container,
+  #dashboard-vertical-layout, 
+  #dashboard-main-content-area,
+  #dashboard-tab-panel,
+  #leaderwise-dashboard-root, 
+  #leader-dashboard-main-view, 
+  #leader-projects-window,
+  #leader-projects-blocks-grid,
+  #project-dashboard-root,
+  main, 
+  section, 
+  article {
+    display: block !important;
+    position: static !important;
+    float: none !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    overflow-x: visible !important;
+    overflow-y: visible !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+  }
+
+  html, body {
+    color: #0f172a !important;
+    font-size: 11px !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* 2. Unstick and unfix sticky or fixed elements during printing */
+  .sticky, .fixed {
+    position: static !important;
+  }
+
+  /* 3. Hide non-essential UI elements during print */
+  header,
+  nav,
+  footer,
+  .no-print,
+  .print-btn,
+  button,
+  input,
+  select,
+  #header-controls,
+  #dashboard-left-sidebar-wrapper,
+  #dashboard-left-sidebar-card,
+  #leader-selector-horizontal,
+  #mrm-3level-filter-card,
+  #column-mapper-panel,
+  #app-loader-overlay,
+  #tab-controls-container,
+  #mrm-metric-toggles {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  /* 4. Ensure all children have visible overflow and no height clipping */
+  *, *::before, *::after {
+    overflow: visible !important;
+    max-height: none !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  .overflow-x-auto,
+  .overflow-y-auto,
+  .overflow-hidden,
+  .max-h-32,
+  .max-h-64,
+  .max-h-96,
+  .max-h-\[300px\],
+  .max-h-\[220px\],
+  .max-h-\[500px\] {
+    overflow: visible !important;
+    max-height: none !important;
+    height: auto !important;
+  }
+
+  /* 5. Section page break utilities */
+  .print-page-break {
+    page-break-before: always !important;
+    break-before: page !important;
+    padding-top: 10px !important;
+  }
+
+  /* 6. Prevent awkward breaks inside cards and individual project blocks */
+  .print-avoid-break,
+  #mrm-print-header,
+  #leader-window-header,
+  #leader-primary-kpis-grid > div,
+  #leader-stages-distribution,
+  #leader-stages-name-highlights > div,
+  #leader-targets-overview,
+  #leader-visuals-panel,
+  #leader-monthly-data-table,
+  #leader-projects-blocks-grid > div {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* 7. Optimize active leader card background for high contrast print readability */
+  #leader-window-header {
+    background-color: #f8fafc !important;
+    color: #0f172a !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 1rem !important;
+    box-shadow: none !important;
+  }
+
+  #leader-window-header h3 {
+    color: #0f172a !important;
+  }
+
+  #leader-window-header span, 
+  #leader-window-header p {
+    color: #334155 !important;
+  }
+
+  /* 8. Chart container height for print */
+  #leader-recharts-container {
+    height: 300px !important;
+    width: 100% !important;
+  }
+
+  /* 9. Clean up tables during printing */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+
+  th, td {
+    padding: 6px 8px !important;
+    font-size: 10px !important;
+  }
+}

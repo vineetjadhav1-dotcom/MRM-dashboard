@@ -1,0 +1,8 @@
+{
+  "name": "Monthly Review Meeting Dashboard",
+  "description": "A dashboard style report for the monthly review meeting, visualizing project statuses, leader reports, VPs, and areas from Google Sheets.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
