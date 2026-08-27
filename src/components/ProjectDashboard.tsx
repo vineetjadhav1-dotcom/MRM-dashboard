@@ -132,6 +132,7 @@ export default function ProjectDashboard({
   const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
   const [drawerTab, setDrawerTab] = useState<'metadata' | 'vowd' | 'milestone' | 'labour' | 'ur' | 'uc'>('vowd');
   const [drawerSearch, setDrawerSearch] = useState<string>('');
+  const [isDetailTableCollapsed, setIsDetailTableCollapsed] = useState<boolean>(false);
 
   // Project Searchable Dropdown state
   const [isProjectComboboxOpen, setIsProjectComboboxOpen] = useState<boolean>(false);
