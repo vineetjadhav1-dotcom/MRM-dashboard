@@ -1,4 +1,5 @@
 import { DashboardMetrics } from '@/src/types';
+import { formatBudgetDisplay } from '@/src/utils/sheetParser';
 import { 
   FolderGit2, 
   Users, 
@@ -8,7 +9,9 @@ import {
   AlertTriangle, 
   XCircle, 
   HelpCircle,
-  Building
+  Building,
+  Briefcase,
+  HardHat
 } from 'lucide-react';
 
 interface DashboardMetricsCardsProps {
@@ -16,7 +19,18 @@ interface DashboardMetricsCardsProps {
 }
 
 export default function DashboardMetricsCards({ metrics }: DashboardMetricsCardsProps) {
-  const { totalProjects, totalVPs, totalLeaders, totalAreas, statusCounts } = metrics;
+  const { 
+    totalProjects, 
+    totalVPs, 
+    totalLeaders, 
+    totalAreas, 
+    statusCounts,
+    totalAreaSqft = 0,
+    totalAreaUnderConstruction = 0,
+    totalBudgetUnderManagement = 0,
+    totalBudgetUnderConstruction = 0,
+    projectsUnderConstructionCount = 0
+  } = metrics;
 
   const greenCount = statusCounts['Green'] || 0;
   const amberCount = statusCounts['Amber'] || 0;
@@ -28,78 +42,131 @@ export default function DashboardMetricsCards({ metrics }: DashboardMetricsCards
   const redPct = totalProjects > 0 ? Math.round((redCount / totalProjects) * 100) : 0;
   const grayPct = totalProjects > 0 ? Math.round((grayCount / totalProjects) * 100) : 0;
 
-  const cards = [
-    {
-      title: 'Total Projects',
-      value: totalProjects,
-      icon: FolderGit2,
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-50/70 border-blue-100',
-      desc: 'Active projects tracked in MRM'
-    },
-    {
-      title: 'Reporting VPs',
-      value: totalVPs,
-      icon: Users,
-      color: 'text-indigo-600',
-      bgColor: 'bg-indigo-50/70 border-indigo-100',
-      desc: 'Executive sponsors assigned'
-    },
-    {
-      title: 'Project Leaders',
-      value: totalLeaders,
-      icon: Users,
-      color: 'text-violet-600',
-      bgColor: 'bg-violet-50/70 border-violet-100',
-      desc: 'Active operational leads'
-    },
-    {
-      title: 'Strategic Areas',
-      value: totalAreas,
-      icon: Layers,
-      color: 'text-purple-600',
-      bgColor: 'bg-purple-50/70 border-purple-100',
-      desc: 'Unique vertical focus domains'
-    },
-    {
-      title: 'Area Under Construction',
-      value: metrics.totalAreaUnderConstruction ? metrics.totalAreaUnderConstruction.toLocaleString() : '0',
-      suffix: ' Sqft',
-      icon: Building,
-      color: 'text-emerald-600',
-      bgColor: 'bg-emerald-50/70 border-emerald-100',
-      desc: 'Sum of active construction area'
-    }
-  ];
-
   return (
     <div className="space-y-6 font-sans" id="metrics-dashboard-box">
-      {/* KPI Cards Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4" id="kpi-grid">
-        {cards.map((card, idx) => {
-          const Icon = card.icon;
-          return (
-            <div 
-              key={idx} 
-              className={`p-5 rounded-2xl bg-white border border-slate-200 shadow-sm transition-all hover:shadow-md hover:translate-y-[-1px] flex flex-col justify-between`}
-              id={`kpi-card-${idx}`}
-            >
-              <div className="flex justify-between items-start">
-                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{card.title}</span>
-                <div className={`p-2 rounded-xl ${card.bgColor.split(' ')[0]} border ${card.bgColor.split(' ')[1]}`}>
-                  <Icon className={`w-5 h-5 ${card.color}`} />
-                </div>
+      {/* 2 Primary Executive Showcase Cards: Under Management vs Under Construction */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5" id="executive-summary-panels">
+        {/* 1. Under Management Panel */}
+        <div className="bg-gradient-to-br from-white via-indigo-50/20 to-slate-50 border border-slate-200 rounded-3xl p-5 shadow-xs space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div className="flex items-center space-x-2.5">
+              <div className="p-2 bg-indigo-600 text-white rounded-xl shadow-xs">
+                <Briefcase className="w-4 h-4" />
               </div>
-              <div className="mt-4">
-                <span className="text-3xl font-extrabold text-slate-900 tracking-tight">
-                  {card.value}
-                  {card.suffix && <span className="text-xs text-slate-500 font-medium">{card.suffix}</span>}
-                </span>
-                <p className="text-[10px] text-slate-400 font-medium mt-1 uppercase tracking-wide">{card.desc}</p>
+              <div>
+                <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">1. Under Management</h4>
+                <p className="text-[10px] text-slate-400">Total portfolio active scope</p>
               </div>
             </div>
-          );
-        })}
+            <span className="px-2.5 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-full text-[10px] font-extrabold">
+              All Stages
+            </span>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-white border border-slate-200/80 rounded-2xl p-3 shadow-2xs">
+              <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider block">No. of Projects</span>
+              <span className="text-2xl font-black text-slate-900 block mt-0.5">{totalProjects}</span>
+              <span className="text-[9px] text-slate-400">Total portfolio</span>
+            </div>
+
+            <div className="bg-white border border-slate-200/80 rounded-2xl p-3 shadow-2xs">
+              <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider block">Total Area</span>
+              <span className="text-base sm:text-lg font-black text-indigo-700 block mt-0.5 truncate">
+                {totalAreaSqft > 0 ? totalAreaSqft.toLocaleString() : '0'}{' '}
+                <span className="text-[10px] font-bold text-slate-500">Sqft</span>
+              </span>
+              <span className="text-[9px] text-slate-400">Mapped spatial</span>
+            </div>
+
+            <div className="bg-white border border-slate-200/80 rounded-2xl p-3 shadow-2xs">
+              <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider block">Total Budget</span>
+              <span className="text-base sm:text-lg font-black text-slate-900 block mt-0.5 truncate">
+                {totalBudgetUnderManagement > 0 ? `₹ ${formatBudgetDisplay(totalBudgetUnderManagement)}` : 'N/A'}
+              </span>
+              <span className="text-[9px] text-slate-400">Portfolio budget</span>
+            </div>
+          </div>
+        </div>
+
+        {/* 2. Under Construction Panel */}
+        <div className="bg-gradient-to-br from-white via-emerald-50/20 to-slate-50 border border-emerald-200/80 rounded-3xl p-5 shadow-xs space-y-4">
+          <div className="flex items-center justify-between border-b border-emerald-100/70 pb-3">
+            <div className="flex items-center space-x-2.5">
+              <div className="p-2 bg-emerald-600 text-white rounded-xl shadow-xs">
+                <HardHat className="w-4 h-4" />
+              </div>
+              <div>
+                <h4 className="text-xs font-black text-emerald-950 uppercase tracking-wider">2. Under Construction</h4>
+                <p className="text-[10px] text-emerald-600 font-medium">Start • Ongoing • Finishing • Nearing Comp</p>
+              </div>
+            </div>
+            <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200/70 rounded-full text-[10px] font-extrabold">
+              Active Sites
+            </span>
+          </div>
+
+          <div className="grid grid-cols-3 gap-3">
+            <div className="bg-white border border-emerald-100 rounded-2xl p-3 shadow-2xs">
+              <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider block">No. of Projects</span>
+              <span className="text-2xl font-black text-emerald-800 block mt-0.5">{projectsUnderConstructionCount}</span>
+              <span className="text-[9px] text-emerald-600/80">In construction</span>
+            </div>
+
+            <div className="bg-white border border-emerald-100 rounded-2xl p-3 shadow-2xs">
+              <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider block">Const. Area</span>
+              <span className="text-base sm:text-lg font-black text-emerald-700 block mt-0.5 truncate">
+                {totalAreaUnderConstruction > 0 ? totalAreaUnderConstruction.toLocaleString() : '0'}{' '}
+                <span className="text-[10px] font-bold text-emerald-600/70">Sqft</span>
+              </span>
+              <span className="text-[9px] text-slate-400">Active site area</span>
+            </div>
+
+            <div className="bg-white border border-emerald-100 rounded-2xl p-3 shadow-2xs">
+              <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider block">Const. Budget</span>
+              <span className="text-base sm:text-lg font-black text-emerald-800 block mt-0.5 truncate">
+                {totalBudgetUnderConstruction > 0 ? `₹ ${formatBudgetDisplay(totalBudgetUnderConstruction)}` : '₹ 0 Cr.'}
+              </span>
+              <span className="text-[9px] text-slate-400">Construction budget</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Leadership & Vertical Coverage Mini Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs flex items-center justify-between">
+          <div>
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Reporting VPs</span>
+            <span className="text-2xl font-extrabold text-slate-900 block mt-1">{totalVPs}</span>
+            <p className="text-[10px] text-slate-400 mt-0.5">Executive sponsors</p>
+          </div>
+          <div className="p-2.5 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-600">
+            <Users className="w-5 h-5" />
+          </div>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs flex items-center justify-between">
+          <div>
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Project Leaders</span>
+            <span className="text-2xl font-extrabold text-slate-900 block mt-1">{totalLeaders}</span>
+            <p className="text-[10px] text-slate-400 mt-0.5">Active operational leads</p>
+          </div>
+          <div className="p-2.5 rounded-xl bg-violet-50 border border-violet-100 text-violet-600">
+            <Users className="w-5 h-5" />
+          </div>
+        </div>
+
+        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs flex items-center justify-between">
+          <div>
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Strategic Verticals</span>
+            <span className="text-2xl font-extrabold text-slate-900 block mt-1">{totalAreas}</span>
+            <p className="text-[10px] text-slate-400 mt-0.5">Unique focus domains</p>
+          </div>
+          <div className="p-2.5 rounded-xl bg-purple-50 border border-purple-100 text-purple-600">
+            <Layers className="w-5 h-5" />
+          </div>
+        </div>
       </div>
 
       {/* RAG Health Status Rollup Bar */}

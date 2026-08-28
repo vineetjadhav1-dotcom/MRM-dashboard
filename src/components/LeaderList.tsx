@@ -6,6 +6,7 @@ import ExportReportModal from './report/ExportReportModal';
 import { getDefaultMRMTitle } from '@/src/utils/mrmPdfCompiler';
 import AttentionNeededProjects from './AttentionNeededProjects';
 import { sortVpNames, sortLeaderItems, sortLeaderNames, isCompleteOrLostStage, parseSpiNumeric, getStageRankForBlankSpi } from '@/src/utils/customOrder';
+import { isUnderConstructionStage, parseBudgetValue, formatBudgetDisplay } from '@/src/utils/sheetParser';
 import { 
   ResponsiveContainer, 
   ComposedChart,
@@ -293,7 +294,7 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
   const [mrmBaselinePlan, setMrmBaselinePlan] = useState<'r0' | 'r1' | 'both'>('r1');
   const [mrmShowMonthlyBars, setMrmShowMonthlyBars] = useState<boolean>(true);
   const [mrmShowCumulativeLines, setMrmShowCumulativeLines] = useState<boolean>(true);
-  const [isMrmTableCollapsed, setIsMrmTableCollapsed] = useState<boolean>(false);
+  const [isMrmTableCollapsed, setIsMrmTableCollapsed] = useState<boolean>(true);
   
   // Individual leader search query for their projects
   const [projectSearchQuery, setProjectSearchQuery] = useState<string>('');
@@ -391,38 +392,30 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
     const handoverProjects: Project[] = [];
     const holdProjects: Project[] = [];
 
+    let totalBudgetUnderManagement = 0;
+    let totalBudgetUnderConstruction = 0;
+    let projectsUnderConstructionCount = 0;
+
     (activeLeader.projects || []).forEach(p => {
       if (!p) return;
 
+      const budgetVal = parseBudgetValue(p.totalBudget);
+      totalBudgetUnderManagement += budgetVal;
+
       // Area
+      let areaVal = 0;
       if (p.areaSqft) {
         const val = parseFloat(String(p.areaSqft).replace(/,/g, ''));
         if (!isNaN(val)) {
+          areaVal = val;
           totalArea += val;
-
-          if (p.projectStage) {
-            const stage = String(p.projectStage).trim().toLowerCase();
-            const matchesConstruction = 
-              stage === 'excavation' ||
-              stage === 'construction start' ||
-              stage === 'on going project' ||
-              stage === 'on going' ||
-              stage === 'ongoing' ||
-              stage === 'finishing stage' ||
-              stage === 'finishing' ||
-              stage === 'nearing completion' ||
-              stage.includes('excavation') ||
-              stage.includes('construction start') ||
-              stage.includes('on going') ||
-              stage.includes('ongoing') ||
-              stage.includes('finishing') ||
-              stage.includes('nearing completion');
-
-            if (matchesConstruction) {
-              areaUnderConstruction += val;
-            }
-          }
         }
+      }
+
+      if (isUnderConstructionStage(p.projectStage)) {
+        projectsUnderConstructionCount += 1;
+        areaUnderConstruction += areaVal;
+        totalBudgetUnderConstruction += budgetVal;
       }
 
       // Stage tracking & list population
@@ -556,6 +549,21 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
     return {
       totalArea,
       areaUnderConstruction,
+      totalBudgetUnderManagement,
+      totalBudgetUnderConstruction,
+      projectsUnderConstructionCount,
+      underManagement: {
+        count: activeLeader.projectsCount,
+        area: totalArea,
+        budget: totalBudgetUnderManagement,
+        budgetFormatted: formatBudgetDisplay(totalBudgetUnderManagement)
+      },
+      underConstruction: {
+        count: projectsUnderConstructionCount,
+        area: areaUnderConstruction,
+        budget: totalBudgetUnderConstruction,
+        budgetFormatted: formatBudgetDisplay(totalBudgetUnderConstruction)
+      },
       avgSpi,
       milestones: { plan: msPlan, ach: msAch, pct: msPct, fr: msFr },
       vowd: { plan: vowdPlan, ach: vowdAch, pct: vowdPct, fr: vowdFr },
@@ -1287,50 +1295,92 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
                 </div>
               </div>
 
-              {/* Leader KPI Aggregate Highlights Row */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4" id="leader-primary-kpis-grid">
+              {/* Executive KPI Aggregate Highlights Row: 1. Under Management vs 2. Under Construction */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4" id="leader-primary-kpis-grid">
                 
-                {/* Total Managed Area (Drawn from projectwise sizes) */}
-                <div className="bg-white border border-slate-200 rounded-2xl p-4.5 flex items-center space-x-4 shadow-xs" id="leader-kpi-area">
-                  <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl shrink-0">
-                    <Building className="w-6 h-6" />
-                  </div>
-                  <div className="space-y-0.5 truncate">
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block">Total Area managed</span>
-                    <span className="text-xl font-extrabold text-slate-800 block">
-                      {stats.totalArea > 0 ? stats.totalArea.toLocaleString() : 'N/A'}{' '}
-                      <span className="text-xs text-slate-500 font-medium">Sqft</span>
+                {/* 1. Under Management Panel */}
+                <div className="bg-gradient-to-br from-white via-indigo-50/25 to-slate-50 border border-slate-200 rounded-3xl p-5 shadow-xs space-y-3.5 relative overflow-hidden" id="leader-kpi-under-management">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                    <div className="flex items-center space-x-2.5">
+                      <div className="p-2 bg-indigo-600 text-white rounded-xl shadow-xs">
+                        <Briefcase className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">1. Under Management</h4>
+                        <p className="text-[10px] text-slate-400">Total portfolio active scope across all stages</p>
+                      </div>
+                    </div>
+                    <span className="px-2.5 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-full text-[10px] font-extrabold">
+                      {activeLeader.projectsCount} {activeLeader.projectsCount === 1 ? 'Project' : 'Projects'}
                     </span>
-                    <p className="text-[10px] text-slate-400 truncate">Sum of all mapped spatial areas</p>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="bg-white border border-slate-200/80 rounded-2xl p-3 shadow-2xs">
+                      <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider block">No. of Projects</span>
+                      <span className="text-xl font-black text-slate-900 block mt-0.5">{stats.underManagement.count}</span>
+                      <span className="text-[9px] text-slate-400 font-medium">Total portfolio</span>
+                    </div>
+
+                    <div className="bg-white border border-slate-200/80 rounded-2xl p-3 shadow-2xs">
+                      <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider block">Total Area</span>
+                      <span className="text-base sm:text-lg font-black text-indigo-700 block mt-0.5 truncate">
+                        {stats.underManagement.area > 0 ? stats.underManagement.area.toLocaleString() : '0'}{' '}
+                        <span className="text-[10px] font-bold text-slate-500">Sqft</span>
+                      </span>
+                      <span className="text-[9px] text-slate-400 font-medium">Mapped spatial</span>
+                    </div>
+
+                    <div className="bg-white border border-slate-200/80 rounded-2xl p-3 shadow-2xs">
+                      <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider block">Total Budget</span>
+                      <span className="text-base sm:text-lg font-black text-slate-900 block mt-0.5 truncate">
+                        {stats.underManagement.budget > 0 ? `₹ ${stats.underManagement.budgetFormatted}` : 'N/A'}
+                      </span>
+                      <span className="text-[9px] text-slate-400 font-medium">Portfolio budget</span>
+                    </div>
                   </div>
                 </div>
 
-                {/* Area Under Construction */}
-                <div className="bg-white border border-slate-200 rounded-2xl p-4.5 flex items-center space-x-4 shadow-xs" id="leader-kpi-construction-area">
-                  <div className="p-3 bg-emerald-50 text-emerald-600 rounded-2xl shrink-0">
-                    <Building className="w-6 h-6" />
-                  </div>
-                  <div className="space-y-0.5 truncate">
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block">Area Under Construction</span>
-                    <span className="text-xl font-extrabold text-slate-800 block">
-                      {stats.areaUnderConstruction > 0 ? stats.areaUnderConstruction.toLocaleString() : '0'}{' '}
-                      <span className="text-xs text-slate-500 font-medium">Sqft</span>
+                {/* 2. Under Construction Panel */}
+                <div className="bg-gradient-to-br from-white via-emerald-50/25 to-slate-50 border border-emerald-200/80 rounded-3xl p-5 shadow-xs space-y-3.5 relative overflow-hidden" id="leader-kpi-under-construction">
+                  <div className="flex items-center justify-between border-b border-emerald-100/70 pb-3">
+                    <div className="flex items-center space-x-2.5">
+                      <div className="p-2 bg-emerald-600 text-white rounded-xl shadow-xs">
+                        <Building className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-black text-emerald-950 uppercase tracking-wider">2. Under Construction</h4>
+                        <p className="text-[10px] text-emerald-600 font-medium">Start • Ongoing • Finishing • Nearing Comp</p>
+                      </div>
+                    </div>
+                    <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200/70 rounded-full text-[10px] font-extrabold">
+                      {stats.underConstruction.count} {stats.underConstruction.count === 1 ? 'Project' : 'Projects'}
                     </span>
-                    <p className="text-[10px] text-slate-400 truncate">Construction/ongoing/finishing stage</p>
                   </div>
-                </div>
 
-                {/* No. of Projects */}
-                <div className="bg-white border border-slate-200 rounded-2xl p-4.5 flex items-center space-x-4 shadow-xs" id="leader-kpi-projects-count">
-                  <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl shrink-0">
-                    <Briefcase className="w-6 h-6" />
-                  </div>
-                  <div className="space-y-0.5 truncate">
-                    <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block">No. of Projects</span>
-                    <span className="text-xl font-extrabold text-slate-800 block">
-                      {activeLeader.projectsCount}
-                    </span>
-                    <p className="text-[10px] text-slate-400 truncate">Total active portfolio projects</p>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="bg-white border border-emerald-100 rounded-2xl p-3 shadow-2xs">
+                      <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider block">No. of Projects</span>
+                      <span className="text-xl font-black text-emerald-800 block mt-0.5">{stats.underConstruction.count}</span>
+                      <span className="text-[9px] text-emerald-600/80 font-medium">In active execution</span>
+                    </div>
+
+                    <div className="bg-white border border-emerald-100 rounded-2xl p-3 shadow-2xs">
+                      <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider block">Const. Area</span>
+                      <span className="text-base sm:text-lg font-black text-emerald-700 block mt-0.5 truncate">
+                        {stats.underConstruction.area > 0 ? stats.underConstruction.area.toLocaleString() : '0'}{' '}
+                        <span className="text-[10px] font-bold text-emerald-600/70">Sqft</span>
+                      </span>
+                      <span className="text-[9px] text-slate-400 font-medium">Active site area</span>
+                    </div>
+
+                    <div className="bg-white border border-emerald-100 rounded-2xl p-3 shadow-2xs">
+                      <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider block">Const. Budget</span>
+                      <span className="text-base sm:text-lg font-black text-emerald-800 block mt-0.5 truncate">
+                        {stats.underConstruction.budget > 0 ? `₹ ${stats.underConstruction.budgetFormatted}` : '₹ 0 Cr.'}
+                      </span>
+                      <span className="text-[9px] text-slate-400 font-medium">Construction budget</span>
+                    </div>
                   </div>
                 </div>
 
@@ -1347,7 +1397,6 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
                   {/* Upcoming */}
                   <div 
                     onClick={() => setSelectedStageKey('upcoming')}
-                    title={`Upcoming Stage (${stats.upcomingProjects.length} Projects):\n${stats.upcomingProjects.map((p, i) => `${i + 1}. ${p.name || p.code} [${p.code || ''}]`).join('\n') || 'No projects'}`}
                     className={`group relative hover:z-[100] bg-slate-50 p-3 rounded-2xl text-center flex flex-col justify-between cursor-pointer transition-all ${
                       selectedStageKey === 'upcoming' ? 'ring-2 ring-slate-600 border-slate-400 shadow-sm' : 'border border-slate-150 hover:border-slate-300'
                     }`}
@@ -1362,14 +1411,11 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
                         <span className="bg-slate-700 text-white px-2 py-0.5 rounded text-[10px] font-black">{stats.upcomingProjects.length} {stats.upcomingProjects.length === 1 ? 'Project' : 'Projects'}</span>
                       </div>
                       {stats.upcomingProjects.length > 0 ? (
-                        <div className="max-h-48 overflow-y-auto space-y-2 pr-1 scrollbar-thin scrollbar-thumb-slate-700">
+                        <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1 scrollbar-thin scrollbar-thumb-slate-700">
                           {stats.upcomingProjects.map((p, i) => (
-                            <div key={i} className="border-b border-slate-800/70 pb-1.5 last:border-0 last:pb-0">
-                              <div className="flex items-center justify-between text-[9px] mb-0.5">
-                                <span className="font-mono text-indigo-300 font-bold">{p.code || `P${i+1}`}</span>
-                                {p.spi && <span className="text-slate-400 font-semibold">SPI: {p.spi}</span>}
-                              </div>
-                              <span className="font-semibold text-slate-100 leading-tight block text-xs" title={p.name}>{p.name}</span>
+                            <div key={i} className="py-1 border-b border-slate-800/70 last:border-0 text-xs font-semibold text-slate-100 leading-snug flex items-start space-x-1.5">
+                              <span className="text-slate-500 font-mono text-[10px] shrink-0">{i + 1}.</span>
+                              <span className="flex-1">{p.name || p.code}</span>
                             </div>
                           ))}
                         </div>
@@ -1383,7 +1429,6 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
                   {/* Design Stage */}
                   <div 
                     onClick={() => setSelectedStageKey('design')}
-                    title={`Design Stage (${stats.designProjects.length} Projects):\n${stats.designProjects.map((p, i) => `${i + 1}. ${p.name || p.code} [${p.code || ''}]`).join('\n') || 'No projects'}`}
                     className={`group relative hover:z-[100] bg-indigo-50/40 p-3 rounded-2xl text-center flex flex-col justify-between cursor-pointer transition-all ${
                       selectedStageKey === 'design' ? 'ring-2 ring-indigo-500 border-indigo-400 shadow-sm' : 'border border-indigo-100 hover:border-indigo-300'
                     }`}
@@ -1398,14 +1443,11 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
                         <span className="bg-indigo-900 text-indigo-100 px-2 py-0.5 rounded text-[10px] font-black">{stats.designProjects.length} {stats.designProjects.length === 1 ? 'Project' : 'Projects'}</span>
                       </div>
                       {stats.designProjects.length > 0 ? (
-                        <div className="max-h-48 overflow-y-auto space-y-2 pr-1 scrollbar-thin scrollbar-thumb-slate-700">
+                        <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1 scrollbar-thin scrollbar-thumb-slate-700">
                           {stats.designProjects.map((p, i) => (
-                            <div key={i} className="border-b border-slate-800/70 pb-1.5 last:border-0 last:pb-0">
-                              <div className="flex items-center justify-between text-[9px] mb-0.5">
-                                <span className="font-mono text-indigo-300 font-bold">{p.code || `P${i+1}`}</span>
-                                {p.spi && <span className="text-indigo-200 font-semibold">SPI: {p.spi}</span>}
-                              </div>
-                              <span className="font-semibold text-slate-100 leading-tight block text-xs" title={p.name}>{p.name}</span>
+                            <div key={i} className="py-1 border-b border-slate-800/70 last:border-0 text-xs font-semibold text-slate-100 leading-snug flex items-start space-x-1.5">
+                              <span className="text-slate-500 font-mono text-[10px] shrink-0">{i + 1}.</span>
+                              <span className="flex-1">{p.name || p.code}</span>
                             </div>
                           ))}
                         </div>
@@ -1419,7 +1461,6 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
                   {/* Excavation Stage */}
                   <div 
                     onClick={() => setSelectedStageKey('excavation')}
-                    title={`Excavation Stage (${stats.excavationProjects.length} Projects):\n${stats.excavationProjects.map((p, i) => `${i + 1}. ${p.name || p.code} [${p.code || ''}]`).join('\n') || 'No projects'}`}
                     className={`group relative hover:z-[100] bg-amber-50/40 p-3 rounded-2xl text-center flex flex-col justify-between cursor-pointer transition-all ${
                       selectedStageKey === 'excavation' ? 'ring-2 ring-amber-500 border-amber-400 shadow-sm' : 'border border-amber-100 hover:border-amber-300'
                     }`}
@@ -1434,14 +1475,11 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
                         <span className="bg-amber-900 text-amber-100 px-2 py-0.5 rounded text-[10px] font-black">{stats.excavationProjects.length} {stats.excavationProjects.length === 1 ? 'Project' : 'Projects'}</span>
                       </div>
                       {stats.excavationProjects.length > 0 ? (
-                        <div className="max-h-48 overflow-y-auto space-y-2 pr-1 scrollbar-thin scrollbar-thumb-slate-700">
+                        <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1 scrollbar-thin scrollbar-thumb-slate-700">
                           {stats.excavationProjects.map((p, i) => (
-                            <div key={i} className="border-b border-slate-800/70 pb-1.5 last:border-0 last:pb-0">
-                              <div className="flex items-center justify-between text-[9px] mb-0.5">
-                                <span className="font-mono text-amber-300 font-bold">{p.code || `P${i+1}`}</span>
-                                {p.spi && <span className="text-amber-200 font-semibold">SPI: {p.spi}</span>}
-                              </div>
-                              <span className="font-semibold text-slate-100 leading-tight block text-xs" title={p.name}>{p.name}</span>
+                            <div key={i} className="py-1 border-b border-slate-800/70 last:border-0 text-xs font-semibold text-slate-100 leading-snug flex items-start space-x-1.5">
+                              <span className="text-slate-500 font-mono text-[10px] shrink-0">{i + 1}.</span>
+                              <span className="flex-1">{p.name || p.code}</span>
                             </div>
                           ))}
                         </div>
@@ -1455,7 +1493,6 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
                   {/* Construction Start */}
                   <div 
                     onClick={() => setSelectedStageKey('constructionStart')}
-                    title={`Construction Start (${stats.constructionStartProjects.length} Projects):\n${stats.constructionStartProjects.map((p, i) => `${i + 1}. ${p.name || p.code} [${p.code || ''}]`).join('\n') || 'No projects'}`}
                     className={`group relative hover:z-[100] bg-cyan-50/40 p-3 rounded-2xl text-center flex flex-col justify-between cursor-pointer transition-all ${
                       selectedStageKey === 'constructionStart' ? 'ring-2 ring-cyan-500 border-cyan-400 shadow-sm' : 'border border-cyan-100 hover:border-cyan-300'
                     }`}
@@ -1470,14 +1507,11 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
                         <span className="bg-cyan-900 text-cyan-100 px-2 py-0.5 rounded text-[10px] font-black">{stats.constructionStartProjects.length} {stats.constructionStartProjects.length === 1 ? 'Project' : 'Projects'}</span>
                       </div>
                       {stats.constructionStartProjects.length > 0 ? (
-                        <div className="max-h-48 overflow-y-auto space-y-2 pr-1 scrollbar-thin scrollbar-thumb-slate-700">
+                        <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1 scrollbar-thin scrollbar-thumb-slate-700">
                           {stats.constructionStartProjects.map((p, i) => (
-                            <div key={i} className="border-b border-slate-800/70 pb-1.5 last:border-0 last:pb-0">
-                              <div className="flex items-center justify-between text-[9px] mb-0.5">
-                                <span className="font-mono text-cyan-300 font-bold">{p.code || `P${i+1}`}</span>
-                                {p.spi && <span className="text-cyan-200 font-semibold">SPI: {p.spi}</span>}
-                              </div>
-                              <span className="font-semibold text-slate-100 leading-tight block text-xs" title={p.name}>{p.name}</span>
+                            <div key={i} className="py-1 border-b border-slate-800/70 last:border-0 text-xs font-semibold text-slate-100 leading-snug flex items-start space-x-1.5">
+                              <span className="text-slate-500 font-mono text-[10px] shrink-0">{i + 1}.</span>
+                              <span className="flex-1">{p.name || p.code}</span>
                             </div>
                           ))}
                         </div>
@@ -1491,7 +1525,6 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
                   {/* On Going project */}
                   <div 
                     onClick={() => setSelectedStageKey('ongoing')}
-                    title={`Ongoing Stage (${stats.ongoingProjects.length} Projects):\n${stats.ongoingProjects.map((p, i) => `${i + 1}. ${p.name || p.code} [${p.code || ''}]`).join('\n') || 'No projects'}`}
                     className={`group relative hover:z-[100] bg-blue-50/40 p-3 rounded-2xl text-center flex flex-col justify-between cursor-pointer transition-all ${
                       selectedStageKey === 'ongoing' ? 'ring-2 ring-blue-500 border-blue-400 shadow-sm' : 'border border-blue-100 hover:border-blue-300'
                     }`}
@@ -1506,14 +1539,11 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
                         <span className="bg-blue-900 text-blue-100 px-2 py-0.5 rounded text-[10px] font-black">{stats.ongoingProjects.length} {stats.ongoingProjects.length === 1 ? 'Project' : 'Projects'}</span>
                       </div>
                       {stats.ongoingProjects.length > 0 ? (
-                        <div className="max-h-48 overflow-y-auto space-y-2 pr-1 scrollbar-thin scrollbar-thumb-slate-700">
+                        <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1 scrollbar-thin scrollbar-thumb-slate-700">
                           {stats.ongoingProjects.map((p, i) => (
-                            <div key={i} className="border-b border-slate-800/70 pb-1.5 last:border-0 last:pb-0">
-                              <div className="flex items-center justify-between text-[9px] mb-0.5">
-                                <span className="font-mono text-blue-300 font-bold">{p.code || `P${i+1}`}</span>
-                                {p.spi && <span className="text-blue-200 font-semibold">SPI: {p.spi}</span>}
-                              </div>
-                              <span className="font-semibold text-slate-100 leading-tight block text-xs" title={p.name}>{p.name}</span>
+                            <div key={i} className="py-1 border-b border-slate-800/70 last:border-0 text-xs font-semibold text-slate-100 leading-snug flex items-start space-x-1.5">
+                              <span className="text-slate-500 font-mono text-[10px] shrink-0">{i + 1}.</span>
+                              <span className="flex-1">{p.name || p.code}</span>
                             </div>
                           ))}
                         </div>
@@ -1527,7 +1557,6 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
                   {/* Finishing stage */}
                   <div 
                     onClick={() => setSelectedStageKey('finishing')}
-                    title={`Finishing Stage (${stats.finishingProjects.length} Projects):\n${stats.finishingProjects.map((p, i) => `${i + 1}. ${p.name || p.code} [${p.code || ''}]`).join('\n') || 'No projects'}`}
                     className={`group relative hover:z-[100] bg-violet-50/40 p-3 rounded-2xl text-center flex flex-col justify-between cursor-pointer transition-all ${
                       selectedStageKey === 'finishing' ? 'ring-2 ring-violet-500 border-violet-400 shadow-sm' : 'border border-violet-100 hover:border-violet-300'
                     }`}
@@ -1542,14 +1571,11 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
                         <span className="bg-violet-900 text-violet-100 px-2 py-0.5 rounded text-[10px] font-black">{stats.finishingProjects.length} {stats.finishingProjects.length === 1 ? 'Project' : 'Projects'}</span>
                       </div>
                       {stats.finishingProjects.length > 0 ? (
-                        <div className="max-h-48 overflow-y-auto space-y-2 pr-1 scrollbar-thin scrollbar-thumb-slate-700">
+                        <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1 scrollbar-thin scrollbar-thumb-slate-700">
                           {stats.finishingProjects.map((p, i) => (
-                            <div key={i} className="border-b border-slate-800/70 pb-1.5 last:border-0 last:pb-0">
-                              <div className="flex items-center justify-between text-[9px] mb-0.5">
-                                <span className="font-mono text-violet-300 font-bold">{p.code || `P${i+1}`}</span>
-                                {p.spi && <span className="text-violet-200 font-semibold">SPI: {p.spi}</span>}
-                              </div>
-                              <span className="font-semibold text-slate-100 leading-tight block text-xs" title={p.name}>{p.name}</span>
+                            <div key={i} className="py-1 border-b border-slate-800/70 last:border-0 text-xs font-semibold text-slate-100 leading-snug flex items-start space-x-1.5">
+                              <span className="text-slate-500 font-mono text-[10px] shrink-0">{i + 1}.</span>
+                              <span className="flex-1">{p.name || p.code}</span>
                             </div>
                           ))}
                         </div>
@@ -1563,7 +1589,6 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
                   {/* Nearing completion */}
                   <div 
                     onClick={() => setSelectedStageKey('nearingCompletion')}
-                    title={`Nearing Completion (${stats.nearingCompletionProjects.length} Projects):\n${stats.nearingCompletionProjects.map((p, i) => `${i + 1}. ${p.name || p.code} [${p.code || ''}]`).join('\n') || 'No projects'}`}
                     className={`group relative hover:z-[100] bg-emerald-50/40 p-3 rounded-2xl text-center flex flex-col justify-between cursor-pointer transition-all ${
                       selectedStageKey === 'nearingCompletion' ? 'ring-2 ring-emerald-500 border-emerald-400 shadow-sm' : 'border border-emerald-100 hover:border-emerald-300'
                     }`}
@@ -1578,14 +1603,11 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
                         <span className="bg-emerald-900 text-emerald-100 px-2 py-0.5 rounded text-[10px] font-black">{stats.nearingCompletionProjects.length} {stats.nearingCompletionProjects.length === 1 ? 'Project' : 'Projects'}</span>
                       </div>
                       {stats.nearingCompletionProjects.length > 0 ? (
-                        <div className="max-h-48 overflow-y-auto space-y-2 pr-1 scrollbar-thin scrollbar-thumb-slate-700">
+                        <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1 scrollbar-thin scrollbar-thumb-slate-700">
                           {stats.nearingCompletionProjects.map((p, i) => (
-                            <div key={i} className="border-b border-slate-800/70 pb-1.5 last:border-0 last:pb-0">
-                              <div className="flex items-center justify-between text-[9px] mb-0.5">
-                                <span className="font-mono text-emerald-300 font-bold">{p.code || `P${i+1}`}</span>
-                                {p.spi && <span className="text-emerald-200 font-semibold">SPI: {p.spi}</span>}
-                              </div>
-                              <span className="font-semibold text-slate-100 leading-tight block text-xs" title={p.name}>{p.name}</span>
+                            <div key={i} className="py-1 border-b border-slate-800/70 last:border-0 text-xs font-semibold text-slate-100 leading-snug flex items-start space-x-1.5">
+                              <span className="text-slate-500 font-mono text-[10px] shrink-0">{i + 1}.</span>
+                              <span className="flex-1">{p.name || p.code}</span>
                             </div>
                           ))}
                         </div>
@@ -1599,7 +1621,6 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
                   {/* Handover stage */}
                   <div 
                     onClick={() => setSelectedStageKey('handover')}
-                    title={`Handover Stage (${stats.handoverProjects.length} Projects):\n${stats.handoverProjects.map((p, i) => `${i + 1}. ${p.name || p.code} [${p.code || ''}]`).join('\n') || 'No projects'}`}
                     className={`group relative hover:z-[100] bg-teal-50/40 p-3 rounded-2xl text-center flex flex-col justify-between cursor-pointer transition-all ${
                       selectedStageKey === 'handover' ? 'ring-2 ring-teal-500 border-teal-400 shadow-sm' : 'border border-teal-100 hover:border-teal-300'
                     }`}
@@ -1614,14 +1635,11 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
                         <span className="bg-teal-900 text-teal-100 px-2 py-0.5 rounded text-[10px] font-black">{stats.handoverProjects.length} {stats.handoverProjects.length === 1 ? 'Project' : 'Projects'}</span>
                       </div>
                       {stats.handoverProjects.length > 0 ? (
-                        <div className="max-h-48 overflow-y-auto space-y-2 pr-1 scrollbar-thin scrollbar-thumb-slate-700">
+                        <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1 scrollbar-thin scrollbar-thumb-slate-700">
                           {stats.handoverProjects.map((p, i) => (
-                            <div key={i} className="border-b border-slate-800/70 pb-1.5 last:border-0 last:pb-0">
-                              <div className="flex items-center justify-between text-[9px] mb-0.5">
-                                <span className="font-mono text-teal-300 font-bold">{p.code || `P${i+1}`}</span>
-                                {p.spi && <span className="text-teal-200 font-semibold">SPI: {p.spi}</span>}
-                              </div>
-                              <span className="font-semibold text-slate-100 leading-tight block text-xs" title={p.name}>{p.name}</span>
+                            <div key={i} className="py-1 border-b border-slate-800/70 last:border-0 text-xs font-semibold text-slate-100 leading-snug flex items-start space-x-1.5">
+                              <span className="text-slate-500 font-mono text-[10px] shrink-0">{i + 1}.</span>
+                              <span className="flex-1">{p.name || p.code}</span>
                             </div>
                           ))}
                         </div>
@@ -1635,7 +1653,6 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
                   {/* Hold */}
                   <div 
                     onClick={() => setSelectedStageKey('hold')}
-                    title={`On Hold Stage (${stats.holdProjects.length} Projects):\n${stats.holdProjects.map((p, i) => `${i + 1}. ${p.name || p.code} [${p.code || ''}]`).join('\n') || 'No projects'}`}
                     className={`group relative hover:z-[100] bg-rose-50/40 p-3 rounded-2xl text-center flex flex-col justify-between cursor-pointer transition-all ${
                       selectedStageKey === 'hold' ? 'ring-2 ring-rose-500 border-rose-400 shadow-sm' : 'border border-rose-100 hover:border-rose-300'
                     }`}
@@ -1650,14 +1667,11 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
                         <span className="bg-rose-900 text-rose-100 px-2 py-0.5 rounded text-[10px] font-black">{stats.holdProjects.length} {stats.holdProjects.length === 1 ? 'Project' : 'Projects'}</span>
                       </div>
                       {stats.holdProjects.length > 0 ? (
-                        <div className="max-h-48 overflow-y-auto space-y-2 pr-1 scrollbar-thin scrollbar-thumb-slate-700">
+                        <div className="max-h-48 overflow-y-auto space-y-1.5 pr-1 scrollbar-thin scrollbar-thumb-slate-700">
                           {stats.holdProjects.map((p, i) => (
-                            <div key={i} className="border-b border-slate-800/70 pb-1.5 last:border-0 last:pb-0">
-                              <div className="flex items-center justify-between text-[9px] mb-0.5">
-                                <span className="font-mono text-rose-300 font-bold">{p.code || `P${i+1}`}</span>
-                                {p.spi && <span className="text-rose-200 font-semibold">SPI: {p.spi}</span>}
-                              </div>
-                              <span className="font-semibold text-slate-100 leading-tight block text-xs" title={p.name}>{p.name}</span>
+                            <div key={i} className="py-1 border-b border-slate-800/70 last:border-0 text-xs font-semibold text-slate-100 leading-snug flex items-start space-x-1.5">
+                              <span className="text-slate-500 font-mono text-[10px] shrink-0">{i + 1}.</span>
+                              <span className="flex-1">{p.name || p.code}</span>
                             </div>
                           ))}
                         </div>
@@ -1703,8 +1717,7 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
                                 </span>
                                 {/* Hover tooltip on project chip */}
                                 <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 z-50 mb-1.5 w-56 rounded-xl bg-slate-900/95 backdrop-blur-sm p-2 text-left text-[10px] text-white opacity-0 shadow-2xl transition-all duration-150 group-hover/chip:opacity-100 border border-slate-700">
-                                  <span className="font-mono text-indigo-300 text-[9px] block">{p.code}</span>
-                                  <span className="font-bold text-slate-100 block text-xs truncate mt-0.5">{p.name}</span>
+                                  <span className="font-bold text-slate-100 block text-xs truncate">{p.name}</span>
                                   <span className="text-slate-400 block text-[9px] mt-1 border-t border-slate-800 pt-1">
                                     Stage: <span className="text-indigo-200 font-semibold">Design ({stats.designProjects.length} total)</span>
                                   </span>
@@ -1739,8 +1752,7 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
                                 </span>
                                 {/* Hover tooltip on project chip */}
                                 <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 z-50 mb-1.5 w-56 rounded-xl bg-slate-900/95 backdrop-blur-sm p-2 text-left text-[10px] text-white opacity-0 shadow-2xl transition-all duration-150 group-hover/chip:opacity-100 border border-slate-700">
-                                  <span className="font-mono text-amber-300 text-[9px] block">{p.code}</span>
-                                  <span className="font-bold text-slate-100 block text-xs truncate mt-0.5">{p.name}</span>
+                                  <span className="font-bold text-slate-100 block text-xs truncate">{p.name}</span>
                                   <span className="text-slate-400 block text-[9px] mt-1 border-t border-slate-800 pt-1">
                                     Stage: <span className="text-amber-200 font-semibold">Excavation ({stats.excavationProjects.length} total)</span>
                                   </span>
@@ -1786,8 +1798,7 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
                                 </span>
                                 {/* Hover tooltip on project chip */}
                                 <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 z-50 mb-1.5 w-56 rounded-xl bg-slate-900/95 backdrop-blur-sm p-2 text-left text-[10px] text-white opacity-0 shadow-2xl transition-all duration-150 group-hover/chip:opacity-100 border border-slate-700">
-                                  <span className="font-mono text-teal-300 text-[9px] block">{p.code}</span>
-                                  <span className="font-bold text-slate-100 block text-xs truncate mt-0.5">{p.name}</span>
+                                  <span className="font-bold text-slate-100 block text-xs truncate">{p.name}</span>
                                   <span className="text-slate-400 block text-[9px] mt-1 border-t border-slate-800 pt-1">
                                     Stage: <span className="text-teal-200 font-semibold">Handover ({stats.handoverProjects.length} total)</span>
                                   </span>
@@ -1842,8 +1853,7 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
                                     </span>
                                     {/* Hover tooltip on project chip */}
                                     <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 z-50 mb-1.5 w-56 rounded-xl bg-slate-900/95 backdrop-blur-sm p-2 text-left text-[10px] text-white opacity-0 shadow-2xl transition-all duration-150 group-hover/chip:opacity-100 border border-slate-700">
-                                      <span className="font-mono text-indigo-300 text-[9px] block">{p.code}</span>
-                                      <span className="font-bold text-slate-100 block text-xs truncate mt-0.5">{p.name}</span>
+                                      <span className="font-bold text-slate-100 block text-xs truncate">{p.name}</span>
                                       <span className="text-slate-400 block text-[9px] mt-1 border-t border-slate-800 pt-1">
                                         Stage: <span className="text-indigo-200 font-semibold">{config.label} ({stageProjects.length} total)</span>
                                       </span>

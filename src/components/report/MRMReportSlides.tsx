@@ -24,6 +24,9 @@ import {
 export interface LeaderStats {
   totalArea: number;
   areaUnderConstruction: number;
+  totalBudgetUnderManagement?: number;
+  totalBudgetUnderConstruction?: number;
+  projectsUnderConstructionCount?: number;
   avgSpi: number | null;
   milestones: { plan: number; ach: number; pct: number; fr: number };
   vowd: { plan: number; ach: number; pct: number; fr: number };
@@ -186,60 +189,79 @@ export function SummarySlide({
           </div>
         </div>
 
-        {/* Top 3 KPI Highlights */}
-        <div className="grid grid-cols-3 gap-3">
+        {/* Primary KPI Highlights: 1. Under Management vs 2. Under Construction */}
+        <div className="grid grid-cols-2 gap-3">
+          {/* 1. Under Management */}
           <div 
-            className="rounded-xl p-3 flex items-center space-x-3 border"
-            style={{ backgroundColor: '#ffffff', borderColor: '#e2e8f0' }}
+            className="rounded-2xl p-3.5 space-y-2 border"
+            style={{ backgroundColor: '#f8fafc', borderColor: '#e2e8f0' }}
           >
-            <div 
-              className="p-2.5 rounded-xl shrink-0"
-              style={{ backgroundColor: '#eef2ff', color: '#4f46e5' }}
-            >
-              <Building className="w-5 h-5" />
-            </div>
-            <div className="truncate">
-              <span className="text-[9px] font-black uppercase tracking-wider block" style={{ color: '#94a3b8' }}>Total Area Managed</span>
-              <span className="text-base font-black block" style={{ color: '#1e293b' }}>
-                {stats.totalArea > 0 ? stats.totalArea.toLocaleString() : 'N/A'} <span className="text-[10px] font-bold" style={{ color: '#64748b' }}>Sqft</span>
+            <div className="flex items-center justify-between border-b pb-1.5" style={{ borderColor: '#e2e8f0' }}>
+              <div className="flex items-center space-x-2">
+                <div className="p-1.5 rounded-lg" style={{ backgroundColor: '#eef2ff', color: '#4f46e5' }}>
+                  <Briefcase className="w-4 h-4" />
+                </div>
+                <span className="text-[10px] font-black uppercase tracking-wider" style={{ color: '#0f172a' }}>1. Under Management</span>
+              </div>
+              <span className="text-[8.5px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: '#eef2ff', color: '#4338ca' }}>
+                All Stages
               </span>
-              <p className="text-[8.5px] truncate" style={{ color: '#94a3b8' }}>Sum of all mapped spatial areas</p>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              <div className="rounded-xl p-2 bg-white border" style={{ borderColor: '#e2e8f0' }}>
+                <span className="text-[8px] font-black uppercase tracking-wider block" style={{ color: '#94a3b8' }}>Projects</span>
+                <span className="text-sm font-black block mt-0.5" style={{ color: '#0f172a' }}>{projectsCount}</span>
+              </div>
+              <div className="rounded-xl p-2 bg-white border" style={{ borderColor: '#e2e8f0' }}>
+                <span className="text-[8px] font-black uppercase tracking-wider block" style={{ color: '#94a3b8' }}>Total Area</span>
+                <span className="text-sm font-black block mt-0.5 truncate" style={{ color: '#4338ca' }}>
+                  {stats.totalArea > 0 ? stats.totalArea.toLocaleString() : '0'} <span className="text-[8px] font-bold" style={{ color: '#64748b' }}>Sqft</span>
+                </span>
+              </div>
+              <div className="rounded-xl p-2 bg-white border" style={{ borderColor: '#e2e8f0' }}>
+                <span className="text-[8px] font-black uppercase tracking-wider block" style={{ color: '#94a3b8' }}>Total Budget</span>
+                <span className="text-sm font-black block mt-0.5 truncate" style={{ color: '#0f172a' }}>
+                  {stats.totalBudgetUnderManagement && stats.totalBudgetUnderManagement > 0 ? formatValue(stats.totalBudgetUnderManagement, true) : 'N/A'}
+                </span>
+              </div>
             </div>
           </div>
 
+          {/* 2. Under Construction */}
           <div 
-            className="rounded-xl p-3 flex items-center space-x-3 border"
-            style={{ backgroundColor: '#ffffff', borderColor: '#e2e8f0' }}
+            className="rounded-2xl p-3.5 space-y-2 border"
+            style={{ backgroundColor: '#f0fdf4', borderColor: '#bbf7d0' }}
           >
-            <div 
-              className="p-2.5 rounded-xl shrink-0"
-              style={{ backgroundColor: '#ecfdf5', color: '#059669' }}
-            >
-              <Building className="w-5 h-5" />
-            </div>
-            <div className="truncate">
-              <span className="text-[9px] font-black uppercase tracking-wider block" style={{ color: '#94a3b8' }}>Area Under Construction</span>
-              <span className="text-base font-black block" style={{ color: '#1e293b' }}>
-                {stats.areaUnderConstruction > 0 ? stats.areaUnderConstruction.toLocaleString() : '0'} <span className="text-[10px] font-bold" style={{ color: '#64748b' }}>Sqft</span>
+            <div className="flex items-center justify-between border-b pb-1.5" style={{ borderColor: '#dcfce7' }}>
+              <div className="flex items-center space-x-2">
+                <div className="p-1.5 rounded-lg" style={{ backgroundColor: '#ecfdf5', color: '#059669' }}>
+                  <Building className="w-4 h-4" />
+                </div>
+                <span className="text-[10px] font-black uppercase tracking-wider" style={{ color: '#064e3b' }}>2. Under Construction</span>
+              </div>
+              <span className="text-[8.5px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: '#dcfce7', color: '#166534' }}>
+                Start • Ongoing • Finishing • Near Comp
               </span>
-              <p className="text-[8.5px] truncate" style={{ color: '#94a3b8' }}>Construction/ongoing/finishing stage</p>
             </div>
-          </div>
 
-          <div 
-            className="rounded-xl p-3 flex items-center space-x-3 border"
-            style={{ backgroundColor: '#ffffff', borderColor: '#e2e8f0' }}
-          >
-            <div 
-              className="p-2.5 rounded-xl shrink-0"
-              style={{ backgroundColor: '#eff6ff', color: '#2563eb' }}
-            >
-              <Briefcase className="w-5 h-5" />
-            </div>
-            <div className="truncate">
-              <span className="text-[9px] font-black uppercase tracking-wider block" style={{ color: '#94a3b8' }}>No. of Projects</span>
-              <span className="text-base font-black block" style={{ color: '#1e293b' }}>{projectsCount}</span>
-              <p className="text-[8.5px] truncate" style={{ color: '#94a3b8' }}>Total active portfolio projects</p>
+            <div className="grid grid-cols-3 gap-2">
+              <div className="rounded-xl p-2 bg-white border" style={{ borderColor: '#bbf7d0' }}>
+                <span className="text-[8px] font-black uppercase tracking-wider block" style={{ color: '#059669' }}>Projects</span>
+                <span className="text-sm font-black block mt-0.5" style={{ color: '#064e3b' }}>{stats.projectsUnderConstructionCount || 0}</span>
+              </div>
+              <div className="rounded-xl p-2 bg-white border" style={{ borderColor: '#bbf7d0' }}>
+                <span className="text-[8px] font-black uppercase tracking-wider block" style={{ color: '#059669' }}>Const. Area</span>
+                <span className="text-sm font-black block mt-0.5 truncate" style={{ color: '#047857' }}>
+                  {stats.areaUnderConstruction > 0 ? stats.areaUnderConstruction.toLocaleString() : '0'} <span className="text-[8px] font-bold" style={{ color: '#059669' }}>Sqft</span>
+                </span>
+              </div>
+              <div className="rounded-xl p-2 bg-white border" style={{ borderColor: '#bbf7d0' }}>
+                <span className="text-[8px] font-black uppercase tracking-wider block" style={{ color: '#059669' }}>Const. Budget</span>
+                <span className="text-sm font-black block mt-0.5 truncate" style={{ color: '#064e3b' }}>
+                  {stats.totalBudgetUnderConstruction && stats.totalBudgetUnderConstruction > 0 ? formatValue(stats.totalBudgetUnderConstruction, true) : '0 Cr.'}
+                </span>
+              </div>
             </div>
           </div>
         </div>

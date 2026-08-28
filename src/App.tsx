@@ -5,6 +5,7 @@ import Header from '@/src/components/Header';
 import Dashboard from '@/src/components/Dashboard';
 import { logout } from '@/src/lib/firebase';
 import { RefreshCw } from 'lucide-react';
+import { ActiveTab } from '@/src/types';
 
 export default function App() {
   const {
@@ -30,6 +31,7 @@ export default function App() {
 
   // Default to entering the dashboard immediately with full access
   const [hasEntered, setHasEntered] = useState<boolean>(true);
+  const [activeTab, setActiveTab] = useState<ActiveTab>('projectDashboard');
 
   // Set document title
   useEffect(() => {
@@ -100,7 +102,7 @@ export default function App() {
         </div>
       )}
 
-      {/* Corporate Dashboard Header */}
+      {/* Corporate Dashboard Header with Dropdown Navigation Menu */}
       <Header
         user={user}
         isUsingDemo={isUsingDemo}
@@ -113,11 +115,15 @@ export default function App() {
         software2Projects={software2Projects}
         onLoadCustomData={handleCustomDataLoaded}
         onOpenLogin={() => setHasEntered(false)}
+        activeTab={activeTab}
+        onSelectTab={setActiveTab}
       />
 
       {/* Main Dashboard Canvas */}
       <main className="flex-1" id="main-content-area">
         <Dashboard
+          activeTab={activeTab}
+          onSelectTab={setActiveTab}
           projects={projects}
           software2Projects={software2Projects}
           isUsingDemo={isUsingDemo}
@@ -134,6 +140,7 @@ export default function App() {
           onToggleDemo={handleToggleDemoSetting}
         />
       </main>
+
 
       {/* Footnote */}
       <footer className="py-6 border-t border-slate-200 bg-white text-center text-[10px] font-medium text-slate-400 mt-12">

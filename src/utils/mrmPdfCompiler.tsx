@@ -18,6 +18,7 @@ import {
   parseSpiNumeric, 
   getStageRankForBlankSpi 
 } from '@/src/utils/customOrder';
+import { isUnderConstructionStage, parseBudgetValue } from '@/src/utils/sheetParser';
 import { DEMO_SOFTWARE2_PROJECTS } from '@/src/hooks/useGoogleSheets';
 
 export interface MRMReportExportOptions {
@@ -103,24 +104,28 @@ export function calculateEntityStats(projects: Project[]): LeaderStats {
   const handoverProjectNames: string[] = [];
   const holdProjectNames: string[] = [];
 
+  let totalBudgetUnderManagement = 0;
+  let totalBudgetUnderConstruction = 0;
+  let projectsUnderConstructionCount = 0;
+
   projects.forEach((p) => {
+    const budgetVal = parseBudgetValue(p.totalBudget);
+    totalBudgetUnderManagement += budgetVal;
+
     // Spatial area
+    let parsedArea = 0;
     if (p.areaSqft) {
-      const parsed = parseFloat(p.areaSqft.replace(/,/g, ''));
+      const parsed = parseFloat(String(p.areaSqft).replace(/,/g, ''));
       if (!isNaN(parsed) && parsed > 0) {
+        parsedArea = parsed;
         totalArea += parsed;
-        const st = (p.projectStage || '').toLowerCase();
-        if (
-          st.includes('ongoing') || 
-          st.includes('construction') || 
-          st.includes('finishing') || 
-          st.includes('structure') ||
-          st.includes('excavation') ||
-          st.includes('start')
-        ) {
-          areaUnderConstruction += parsed;
-        }
       }
+    }
+
+    if (isUnderConstructionStage(p.projectStage)) {
+      projectsUnderConstructionCount += 1;
+      areaUnderConstruction += parsedArea;
+      totalBudgetUnderConstruction += budgetVal;
     }
 
     // Health Standing / Status
@@ -221,6 +226,9 @@ export function calculateEntityStats(projects: Project[]): LeaderStats {
   return {
     totalArea,
     areaUnderConstruction,
+    totalBudgetUnderManagement,
+    totalBudgetUnderConstruction,
+    projectsUnderConstructionCount,
     avgSpi: spiCount > 0 ? spiSum / spiCount : null,
     milestones: {
       plan: msPlan,

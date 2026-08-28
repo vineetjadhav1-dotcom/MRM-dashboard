@@ -132,7 +132,8 @@ export default function ProjectDashboard({
   const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
   const [drawerTab, setDrawerTab] = useState<'metadata' | 'vowd' | 'milestone' | 'labour' | 'ur' | 'uc'>('vowd');
   const [drawerSearch, setDrawerSearch] = useState<string>('');
-  const [isDetailTableCollapsed, setIsDetailTableCollapsed] = useState<boolean>(false);
+  const [isDetailTableCollapsed, setIsDetailTableCollapsed] = useState<boolean>(true);
+  const [isBreakdownTableCollapsed, setIsBreakdownTableCollapsed] = useState<boolean>(true);
 
   // Project Searchable Dropdown state
   const [isProjectComboboxOpen, setIsProjectComboboxOpen] = useState<boolean>(false);
@@ -644,6 +645,16 @@ export default function ProjectDashboard({
       .sort((a, b) => b.plan - a.plan);
   }, [filteredProjects, activeMetric, selectedPlanType]);
 
+  // Index of the last completed month in monthlyData (e.g. Jul-26)
+  const lastCompletedMonthIndex = useMemo(() => {
+    for (let i = monthlyData.length - 1; i >= 0; i--) {
+      if (monthlyData[i].Achievement !== null && monthlyData[i].Achievement !== undefined) {
+        return i;
+      }
+    }
+    return 3; // Fallback to index 3 ("Jul-26")
+  }, [monthlyData]);
+
   // Custom data label renderers
   const renderPlanLabel = useCallback((props: any) => {
     const { x, y, width, value } = props;
@@ -674,22 +685,82 @@ export default function ProjectDashboard({
     );
   }, [monthlyData, currentConfig.colorAch]);
 
-  const renderCumAchievementLabel = useCallback((props: any) => {
-    const { x, y, width, value, index } = props;
+  // Data label renderer for Cumulative Plan Line (Only for Mar 27 & Last Completed Month)
+  const renderCumPlanLineLabel = useCallback((props: any) => {
+    const { x, y, value, index } = props;
     if (value === undefined || value === null || value === 0) return null;
+
+    const isLastCompleted = index === lastCompletedMonthIndex;
+    const isMar27 = index === monthlyData.length - 1;
+
+    if (!isLastCompleted && !isMar27) return null;
+
     const formatted = typeof value === 'number' ? (value % 1 === 0 ? value : value.toFixed(1)) : value;
-    let text = String(formatted);
-    const row = monthlyData[index];
-    if (row && row['CumAchievement %'] !== null && row['CumAchievement %'] > 0) {
-      text = `${formatted} (${row['CumAchievement %']}%)`;
-    }
-    const cx = x + (width ? width / 2 : 0);
+
     return (
-      <text x={cx} y={y - 8} fill={currentConfig.colorAch} fontSize={8} fontWeight={700} textAnchor="middle">
-        {text}
-      </text>
+      <g>
+        <rect
+          x={x - 24}
+          y={y - 25}
+          width={48}
+          height={18}
+          rx={4}
+          fill="#ffffff"
+          stroke="#94a3b8"
+          strokeWidth={1.5}
+        />
+        <text
+          x={x}
+          y={y - 12}
+          fill="#1e293b"
+          fontSize={10}
+          fontWeight={800}
+          textAnchor="middle"
+        >
+          {formatted}
+        </text>
+      </g>
     );
-  }, [monthlyData, currentConfig.colorAch]);
+  }, [lastCompletedMonthIndex, monthlyData.length]);
+
+  // Data label renderer for Cumulative Achievement Line (Only for Last Completed Month)
+  const renderCumAchLineLabel = useCallback((props: any) => {
+    const { x, y, value, index } = props;
+    if (value === undefined || value === null || value === 0) return null;
+
+    const isLastCompleted = index === lastCompletedMonthIndex;
+    if (!isLastCompleted) return null;
+
+    const formatted = typeof value === 'number' ? (value % 1 === 0 ? value : value.toFixed(1)) : value;
+    const row = monthlyData[index];
+    const pct = row ? row['CumAchievement %'] : 0;
+    const labelText = pct > 0 ? `${formatted} (${pct}%)` : `${formatted}`;
+
+    return (
+      <g>
+        <rect
+          x={x - 38}
+          y={y + 8}
+          width={76}
+          height={20}
+          rx={5}
+          fill="#1e1b4b"
+          stroke="#4f46e5"
+          strokeWidth={1.5}
+        />
+        <text
+          x={x}
+          y={y + 22}
+          fill="#ffffff"
+          fontSize={10}
+          fontWeight={800}
+          textAnchor="middle"
+        >
+          {labelText}
+        </text>
+      </g>
+    );
+  }, [lastCompletedMonthIndex, monthlyData]);
 
   return (
     <div className="space-y-6 font-sans" id="project-dashboard-consolidated-root">
@@ -1218,7 +1289,9 @@ export default function ProjectDashboard({
                         strokeWidth={2}
                         strokeDasharray="4 4"
                         dot={{ r: 3 }}
-                      />
+                      >
+                        <LabelList dataKey="CumPlanR0" content={renderCumPlanLineLabel} />
+                      </Line>
                       <Line 
                         yAxisId={showMonthlyBars ? "right" : "left"} 
                         type="monotone" 
@@ -1227,7 +1300,9 @@ export default function ProjectDashboard({
                         stroke={currentConfig.colorPlan} 
                         strokeWidth={2}
                         dot={{ r: 3 }}
-                      />
+                      >
+                        <LabelList dataKey="CumPlanR1" content={renderCumPlanLineLabel} />
+                      </Line>
                       <Line 
                         yAxisId={showMonthlyBars ? "right" : "left"} 
                         type="monotone" 
@@ -1237,7 +1312,7 @@ export default function ProjectDashboard({
                         strokeWidth={3}
                         dot={{ r: 4 }}
                       >
-                        {!showMonthlyBars && <LabelList dataKey="CumAchievement" content={renderCumAchievementLabel} />}
+                        <LabelList dataKey="CumAchievement" content={renderCumAchLineLabel} />
                       </Line>
                     </>
                   ) : (
@@ -1250,7 +1325,9 @@ export default function ProjectDashboard({
                         stroke={currentConfig.colorPlan} 
                         strokeWidth={2}
                         dot={{ r: 3 }}
-                      />
+                      >
+                        <LabelList dataKey="CumPlan" content={renderCumPlanLineLabel} />
+                      </Line>
                       <Line 
                         yAxisId={showMonthlyBars ? "right" : "left"} 
                         type="monotone" 
@@ -1260,7 +1337,7 @@ export default function ProjectDashboard({
                         strokeWidth={3}
                         dot={{ r: 4 }}
                       >
-                        {!showMonthlyBars && <LabelList dataKey="CumAchievement" content={renderCumAchievementLabel} />}
+                        <LabelList dataKey="CumAchievement" content={renderCumAchLineLabel} />
                       </Line>
                     </>
                   )
@@ -1639,80 +1716,102 @@ export default function ProjectDashboard({
       {/* Project-Wise Contribution Breakdown Table */}
       <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-xs" id="project-dashboard-breakdown-list">
         <div className="px-6 py-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h3 className="text-sm font-bold text-slate-900">Project-Wise Contribution Breakdown</h3>
-            <p className="text-xs text-slate-500 mt-0.5">Individual project planned vs achieved values for {currentConfig.label}</p>
+          <div className="flex items-center gap-3">
+            <div>
+              <h3 className="text-sm font-bold text-slate-900">Project-Wise Contribution Breakdown</h3>
+              <p className="text-xs text-slate-500 mt-0.5">Individual project planned vs achieved values for {currentConfig.label}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsBreakdownTableCollapsed(!isBreakdownTableCollapsed)}
+              className="px-2.5 py-1 rounded-lg text-xs font-extrabold bg-slate-100 text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 border border-slate-200 hover:border-indigo-200 transition-all flex items-center gap-1 cursor-pointer no-print shadow-2xs"
+              title={isBreakdownTableCollapsed ? "Expand Breakdown Table" : "Collapse Breakdown Table"}
+            >
+              {isBreakdownTableCollapsed ? (
+                <>
+                  <ChevronDown className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Expand Table</span>
+                </>
+              ) : (
+                <>
+                  <ChevronUp className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>Collapse Table</span>
+                </>
+              )}
+            </button>
           </div>
           <span className="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-xs font-bold">
             {projectBreakdown.length} Projects Contributing
           </span>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="border-b border-slate-150 bg-slate-50/50 text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                <th className="py-3 px-6">Project Metadata</th>
-                <th className="py-3 px-4">VP Division</th>
-                <th className="py-3 px-4">Project Leader</th>
-                <th className="py-3 px-4 text-right">Target (Plan)</th>
-                <th className="py-3 px-4 text-right">Actual (Achieved)</th>
-                <th className="py-3 px-4 text-right">Variance</th>
-                <th className="py-3 px-6 text-right">% Achieved</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-slate-700">
-              {projectBreakdown.map((row) => (
-                <tr 
-                  key={row.code}
-                  className="hover:bg-slate-50/70 transition-colors group cursor-pointer"
-                  onClick={() => setSelectedProjectCode(row.code)}
-                >
-                  <td className="py-3.5 px-6">
-                    <div className="flex items-center space-x-3">
-                      <span className="px-2 py-1 rounded bg-slate-100 text-[10px] font-mono font-bold text-slate-600 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
-                        {row.code}
-                      </span>
-                      <div className="space-y-0.5 max-w-[240px]">
-                        <span className="font-bold text-slate-900 block truncate group-hover:text-blue-600 transition-colors">
-                          {row.name}
-                        </span>
-                        {row.stage && (
-                          <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100">
-                            {row.stage}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="py-3.5 px-4 font-semibold text-slate-700">{row.vp}</td>
-                  <td className="py-3.5 px-4 text-slate-600">{row.leader}</td>
-                  <td className="py-3.5 px-4 text-right font-bold text-slate-900">
-                    {row.plan.toLocaleString()} <span className="text-[10px] font-normal text-slate-400">{currentConfig.unit}</span>
-                  </td>
-                  <td className="py-3.5 px-4 text-right font-bold" style={{ color: currentConfig.colorAch }}>
-                    {row.achievement.toLocaleString()} <span className="text-[10px] font-normal text-slate-400">{currentConfig.unit}</span>
-                  </td>
-                  <td className={`py-3.5 px-4 text-right font-semibold ${
-                    row.variance >= 0 ? 'text-emerald-600' : 'text-rose-500'
-                  }`}>
-                    {row.variance > 0 ? '+' : ''}{row.variance}
-                  </td>
-                  <td className="py-3.5 px-6 text-right">
-                    <div className="flex items-center justify-end space-x-2">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                        row.pct >= 90 ? 'bg-emerald-50 text-emerald-700' : row.pct >= 75 ? 'bg-amber-50 text-amber-700' : 'bg-rose-50 text-rose-700'
-                      }`}>
-                        {row.pct}%
-                      </span>
-                      <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-slate-500 transition-colors" />
-                    </div>
-                  </td>
+        {!isBreakdownTableCollapsed && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr className="border-b border-slate-150 bg-slate-50/50 text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                  <th className="py-3 px-6">Project Metadata</th>
+                  <th className="py-3 px-4">VP Division</th>
+                  <th className="py-3 px-4">Project Leader</th>
+                  <th className="py-3 px-4 text-right">Target (Plan)</th>
+                  <th className="py-3 px-4 text-right">Actual (Achieved)</th>
+                  <th className="py-3 px-4 text-right">Variance</th>
+                  <th className="py-3 px-6 text-right">% Achieved</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-slate-700">
+                {projectBreakdown.map((row) => (
+                  <tr 
+                    key={row.code}
+                    className="hover:bg-slate-50/70 transition-colors group cursor-pointer"
+                    onClick={() => setSelectedProjectCode(row.code)}
+                  >
+                    <td className="py-3.5 px-6">
+                      <div className="flex items-center space-x-3">
+                        <span className="px-2 py-1 rounded bg-slate-100 text-[10px] font-mono font-bold text-slate-600 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
+                          {row.code}
+                        </span>
+                        <div className="space-y-0.5 max-w-[240px]">
+                          <span className="font-bold text-slate-900 block truncate group-hover:text-blue-600 transition-colors">
+                            {row.name}
+                          </span>
+                          {row.stage && (
+                            <span className="inline-flex items-center px-1.5 py-0.2 rounded text-[9px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100">
+                              {row.stage}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-3.5 px-4 font-semibold text-slate-700">{row.vp}</td>
+                    <td className="py-3.5 px-4 text-slate-600">{row.leader}</td>
+                    <td className="py-3.5 px-4 text-right font-bold text-slate-900">
+                      {row.plan.toLocaleString()} <span className="text-[10px] font-normal text-slate-400">{currentConfig.unit}</span>
+                    </td>
+                    <td className="py-3.5 px-4 text-right font-bold" style={{ color: currentConfig.colorAch }}>
+                      {row.achievement.toLocaleString()} <span className="text-[10px] font-normal text-slate-400">{currentConfig.unit}</span>
+                    </td>
+                    <td className={`py-3.5 px-4 text-right font-semibold ${
+                      row.variance >= 0 ? 'text-emerald-600' : 'text-rose-500'
+                    }`}>
+                      {row.variance > 0 ? '+' : ''}{row.variance}
+                    </td>
+                    <td className="py-3.5 px-6 text-right">
+                      <div className="flex items-center justify-end space-x-2">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          row.pct >= 90 ? 'bg-emerald-50 text-emerald-700' : row.pct >= 75 ? 'bg-amber-50 text-amber-700' : 'bg-rose-50 text-rose-700'
+                        }`}>
+                          {row.pct}%
+                        </span>
+                        <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-slate-500 transition-colors" />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
     </div>

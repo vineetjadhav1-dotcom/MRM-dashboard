@@ -49,6 +49,8 @@ export interface CriticalProjectAnalysis {
   recommendedAction: string;
 }
 
+const FY_MONTHS = ["Apr-26", "May-26", "Jun-26", "Jul-26", "Aug-26", "Sep-26", "Oct-26", "Nov-26", "Dec-26", "Jan-27", "Feb-27", "Mar-27"];
+
 export default function AttentionNeededProjects({
   projects,
   software2Projects = [],
@@ -60,7 +62,31 @@ export default function AttentionNeededProjects({
   const [isExpanded, setIsExpanded] = useState<boolean>(true);
   const [expandedProjectId, setExpandedProjectId] = useState<string | null>(null);
 
-  // Analyze all projects from April 2026 onwards to compute critical metrics
+  // Determine the last completed month across all software2Projects / metrics (e.g. Jul-26 or Aug-26)
+  const lastCompletedMonthIndex = useMemo(() => {
+    let maxIdx = -1;
+    software2Projects.forEach(s2 => {
+      const metricLists = [s2.vowd, s2.milestone, s2.labour, s2.ur, s2.uc];
+      metricLists.forEach(list => {
+        if (list && Array.isArray(list)) {
+          list.forEach(m => {
+            const idx = FY_MONTHS.indexOf(m.month);
+            if (idx !== -1 && m.achievement !== undefined && m.achievement !== null && m.achievement > 0) {
+              if (idx > maxIdx) maxIdx = idx;
+            }
+          });
+        }
+      });
+    });
+    return maxIdx >= 0 ? maxIdx : 3; // Default fallback to Jul-26 (index 3)
+  }, [software2Projects]);
+
+  const lastCompletedMonthName = FY_MONTHS[lastCompletedMonthIndex] || 'Jul-26';
+  const completedMonthKeys = useMemo(() => {
+    return FY_MONTHS.slice(0, lastCompletedMonthIndex + 1);
+  }, [lastCompletedMonthIndex]);
+
+  // Analyze all projects from April 2026 to last completed month to compute critical metrics
   const criticalAnalysisList: CriticalProjectAnalysis[] = useMemo(() => {
     if (!projects || projects.length === 0) return [];
 
@@ -78,17 +104,20 @@ export default function AttentionNeededProjects({
              (s.name && s.name.trim().toLowerCase() === p.name.trim().toLowerCase())
       );
 
-      // Helper to sum metrics from April 2026 onwards
-      const getCumulative = (metrics?: { month: string; plan: number; achievement: number }[]) => {
+      // Helper to sum metrics from April 2026 to last completed month
+      const getCumulative = (metrics?: { month: string; plan?: number; planR0?: number; planR1?: number; achievement: number }[]) => {
         if (!metrics || metrics.length === 0) return { plan: 0, ach: 0 };
         let plan = 0;
         let ach = 0;
         metrics.forEach(m => {
-          // April 2026 to date includes all FY26 months
-          plan += Number(m.plan) || 0;
-          ach += Number(m.achievement) || 0;
+          if (completedMonthKeys.includes(m.month)) {
+            const pR0 = m.planR0 !== undefined ? m.planR0 : (m.plan ?? 0);
+            const pR1 = m.planR1 !== undefined ? m.planR1 : pR0;
+            plan += Number(pR1) || 0;
+            ach += Number(m.achievement) || 0;
+          }
         });
-        return { plan, ach };
+        return { plan: Math.round(plan * 10) / 10, ach: Math.round(ach * 10) / 10 };
       };
 
       // 1. VOWD (Cr.)
@@ -190,9 +219,9 @@ export default function AttentionNeededProjects({
 
       let criticalFindings = '';
       if (findingsParts.length > 0) {
-        criticalFindings = `Since April 2026, ${findingsParts.join('; ')}.`;
+        criticalFindings = `From Apr 2026 to ${lastCompletedMonthName}, ${findingsParts.join('; ')}.`;
       } else {
-        criticalFindings = `Since April 2026, key delivery milestones require close monitoring due to near-threshold variance (SPI: ${spiNum.toFixed(2)}).`;
+        criticalFindings = `From Apr 2026 to ${lastCompletedMonthName}, key delivery milestones require close monitoring due to near-threshold variance (SPI: ${spiNum.toFixed(2)}).`;
       }
 
       // Recommended Action
@@ -233,7 +262,7 @@ export default function AttentionNeededProjects({
       ...item,
       rank: idx + 1
     }));
-  }, [projects, software2Projects, selectedVP, selectedLeader]);
+  }, [projects, software2Projects, selectedVP, selectedLeader, completedMonthKeys, lastCompletedMonthName]);
 
   // Filter list by selected parameter tab
   const filteredCriticalProjects = useMemo(() => {
@@ -269,7 +298,7 @@ export default function AttentionNeededProjects({
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-              In-depth performance diagnosis analyzing data from <span className="font-bold text-slate-700">April 2026 till date</span>. Highlights specific lagging deliverable parameters, shortfall gaps, and recommended executive recovery actions.
+              In-depth performance diagnosis analyzing data from <span className="font-bold text-slate-700">April 2026 to {lastCompletedMonthName}</span>. Highlights specific lagging deliverable parameters, shortfall gaps, and recommended executive recovery actions.
             </p>
           </div>
         </div>
@@ -457,7 +486,7 @@ export default function AttentionNeededProjects({
                       <div className="p-4 bg-rose-50/80 border border-rose-200 rounded-xl text-xs space-y-1.5">
                         <div className="flex items-center space-x-2 text-rose-900 font-extrabold">
                           <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-                          <span>Critical Findings (Apr 2026 – Till Date Analysis)</span>
+                          <span>Critical Findings (Apr 2026 to {lastCompletedMonthName} Analysis)</span>
                         </div>
                         <p className="text-slate-700 leading-relaxed pl-6">
                           {item.criticalFindings}

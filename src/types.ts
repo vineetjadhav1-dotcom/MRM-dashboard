@@ -131,6 +131,9 @@ export interface DashboardMetrics {
   statusCounts: Record<string, number>;
   totalAreaUnderConstruction?: number;
   totalAreaSqft?: number;
+  totalBudgetUnderManagement?: number;
+  totalBudgetUnderConstruction?: number;
+  projectsUnderConstructionCount?: number;
 }
 
 export interface MonthlyMetric {
@@ -176,4 +179,14 @@ export interface Software2Mapping {
   avgQhseRatingIndex?: number;
   metricOverrides?: { [key: string]: number };
 }
+
+export type ActiveTab = 
+  | 'projectDashboard' 
+  | 'leader' 
+  | 'leaderboard' 
+  | 'insights' 
+  | 'vp' 
+  | 'all' 
+  | 'overview';
+
 

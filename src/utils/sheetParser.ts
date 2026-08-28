@@ -488,6 +488,99 @@ export function parseSheetData(
 }
 
 /**
+ * Helper to identify if a project stage falls under "Under Construction".
+ * Under Construction is the summation of projects having stages:
+ * - Construction Start Stage
+ * - On Going project Stage
+ * - Finishing stage
+ * - Nearing completion Stage
+ */
+export function isUnderConstructionStage(stageStr?: string): boolean {
+  if (!stageStr) return false;
+  const s = String(stageStr).trim().toLowerCase();
+
+  // Exclude non-construction stages explicitly
+  if (
+    s.includes('upcoming') ||
+    s.includes('pipeline') ||
+    s.includes('design') ||
+    s.includes('drawing') ||
+    s.includes('engineering') ||
+    s.includes('excavation') ||
+    s.includes('handover') ||
+    s.includes('possession') ||
+    s.includes('hold') ||
+    s.includes('stop') ||
+    s.includes('complete') ||
+    s.includes('lost')
+  ) {
+    return false;
+  }
+
+  return (
+    s.includes('construction start') ||
+    s === 'construction start' ||
+    s === 'construction start stage' ||
+    s === 'start' ||
+    s.includes('ongoing') ||
+    s.includes('on going') ||
+    s.includes('execution') ||
+    s.includes('finishing') ||
+    s.includes('nearing completion') ||
+    s.includes('nearing comp')
+  );
+}
+
+/**
+ * Safely parse a budget string into Crores (₹ Cr.)
+ */
+export function parseBudgetValue(val?: string | number): number {
+  if (val === undefined || val === null) return 0;
+  if (typeof val === 'number') {
+    if (isNaN(val)) return 0;
+    if (val >= 10000000) return val / 10000000;
+    if (val >= 100000) return val / 10000000;
+    return val;
+  }
+  const cleanStr = String(val).trim();
+  if (!cleanStr || cleanStr === '-' || cleanStr === 'N/A' || cleanStr === 'null') return 0;
+
+  const lower = cleanStr.toLowerCase();
+  const numMatches = cleanStr.replace(/,/g, '').match(/[-+]?[0-9]*\.?[0-9]+/);
+  if (!numMatches) return 0;
+  const num = parseFloat(numMatches[0]);
+  if (isNaN(num)) return 0;
+
+  if (lower.includes('lakh') || lower.includes('lac') || lower.includes(' l')) {
+    return num / 100;
+  }
+  if (lower.includes('k') && !lower.includes('cr')) {
+    return num / 10000;
+  }
+  if (lower.includes('cr') || lower.includes('crore')) {
+    return num;
+  }
+  if (num >= 10000000) {
+    return num / 10000000;
+  }
+  if (num >= 100000 && (cleanStr.includes('$') || cleanStr.includes('₹') || cleanStr.includes('Rs'))) {
+    return num / 10000000;
+  }
+  return num;
+}
+
+/**
+ * Format numeric Crores value into a readable string (e.g. "1,250.50 Cr." or "45.00 Cr.")
+ */
+export function formatBudgetDisplay(crVal: number): string {
+  if (!crVal || isNaN(crVal) || crVal <= 0) return '0 Cr.';
+  if (crVal >= 100) {
+    return `${crVal.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 1 })} Cr.`;
+  }
+  return `${crVal.toFixed(2)} Cr.`;
+}
+
+/**
  * Compute aggregate metrics and rollup reports
  */
 export function computeDashboardMetrics(projects: Project[]): DashboardMetrics {
@@ -497,6 +590,9 @@ export function computeDashboardMetrics(projects: Project[]): DashboardMetrics {
   const areas = new Set<string>();
   let totalAreaUnderConstruction = 0;
   let totalAreaSqft = 0;
+  let totalBudgetUnderManagement = 0;
+  let totalBudgetUnderConstruction = 0;
+  let projectsUnderConstructionCount = 0;
 
   projects.forEach((proj) => {
     // Status count
@@ -508,34 +604,22 @@ export function computeDashboardMetrics(projects: Project[]): DashboardMetrics {
     if (proj.leader && proj.leader !== 'Unassigned') leaders.add(proj.leader);
     if (proj.area && proj.area !== 'Unassigned') areas.add(proj.area);
 
+    const budgetVal = parseBudgetValue(proj.totalBudget);
+    totalBudgetUnderManagement += budgetVal;
+
+    let areaVal = 0;
     if (proj.areaSqft) {
-      const val = parseFloat(proj.areaSqft.replace(/,/g, ''));
+      const val = parseFloat(String(proj.areaSqft).replace(/,/g, ''));
       if (!isNaN(val)) {
+        areaVal = val;
         totalAreaSqft += val;
-
-        if (proj.projectStage) {
-          const stage = proj.projectStage.trim().toLowerCase();
-          const matchesConstruction = 
-            stage === 'excavation' ||
-            stage === 'construction start' ||
-            stage === 'on going project' ||
-            stage === 'on going' ||
-            stage === 'ongoing' ||
-            stage === 'finishing stage' ||
-            stage === 'finishing' ||
-            stage === 'nearing completion' ||
-            stage.includes('excavation') ||
-            stage.includes('construction start') ||
-            stage.includes('on going') ||
-            stage.includes('ongoing') ||
-            stage.includes('finishing') ||
-            stage.includes('nearing completion');
-
-          if (matchesConstruction) {
-            totalAreaUnderConstruction += val;
-          }
-        }
       }
+    }
+
+    if (isUnderConstructionStage(proj.projectStage)) {
+      projectsUnderConstructionCount += 1;
+      totalAreaUnderConstruction += areaVal;
+      totalBudgetUnderConstruction += budgetVal;
     }
   });
 
@@ -546,7 +630,10 @@ export function computeDashboardMetrics(projects: Project[]): DashboardMetrics {
     totalAreas: areas.size,
     statusCounts,
     totalAreaUnderConstruction,
-    totalAreaSqft
+    totalAreaSqft,
+    totalBudgetUnderManagement,
+    totalBudgetUnderConstruction,
+    projectsUnderConstructionCount
   };
 }
 
