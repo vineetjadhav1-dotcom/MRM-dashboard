@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import { Software2Project, MonthlyMetric, Software2Mapping, Project } from '@/src/types';
-import { isCompleteOrLostStage } from '@/src/utils/customOrder';
+import { Software2Project, MonthlyMetric, Software2Mapping, Project, FiscalYearKey } from '@/src/types';
+import { isCompleteOrLostStage, isTempProject } from '@/src/utils/customOrder';
+import { getFiscalYearConfig, getStoredFiscalYear, setStoredFiscalYear, FISCAL_YEAR_KEYS } from '@/src/utils/fiscalYear';
 import { 
   ResponsiveContainer, 
   BarChart, 
@@ -155,7 +156,7 @@ export default function ProjectDashboard({
   const vpList = useMemo(() => {
     const vps = new Set<string>();
     projects.forEach(p => {
-      if (p.vp) vps.add(String(p.vp).trim());
+      if (!isTempProject(p.code) && p.vp) vps.add(String(p.vp).trim());
     });
     return Array.from(vps).sort();
   }, [projects]);
@@ -163,7 +164,7 @@ export default function ProjectDashboard({
   const leaderList = useMemo(() => {
     const leaders = new Set<string>();
     projects.forEach(p => {
-      if (p.leader) leaders.add(String(p.leader).trim());
+      if (!isTempProject(p.code) && p.leader) leaders.add(String(p.leader).trim());
     });
     return Array.from(leaders).sort();
   }, [projects]);
@@ -172,6 +173,7 @@ export default function ProjectDashboard({
   const filteredLeaders = useMemo(() => {
     const leaders = new Set<string>();
     projects.forEach(p => {
+      if (isTempProject(p.code)) return;
       const matchesVP = selectedVP === 'all' || (p.vp && String(p.vp).trim() === selectedVP);
       if (matchesVP && p.leader) {
         leaders.add(String(p.leader).trim());
@@ -185,7 +187,7 @@ export default function ProjectDashboard({
     setSelectedProjectCode('all');
     if (selectedLeader !== 'all') {
       const validLeaders = projects
-        .filter(p => vp === 'all' || (p.vp && String(p.vp).trim() === vp))
+        .filter(p => !isTempProject(p.code) && (vp === 'all' || (p.vp && String(p.vp).trim() === vp)))
         .map(p => p.leader ? String(p.leader).trim() : '');
       if (!validLeaders.includes(selectedLeader)) {
         setSelectedLeader('all');
@@ -197,14 +199,14 @@ export default function ProjectDashboard({
     setSelectedLeader(leader);
     setSelectedProjectCode('all');
     if (leader !== 'all') {
-      const proj = projects.find(p => p.leader && String(p.leader).trim() === leader);
+      const proj = projects.find(p => !isTempProject(p.code) && p.leader && String(p.leader).trim() === leader);
       if (proj && proj.vp) {
         setSelectedVP(String(proj.vp).trim());
       }
     }
   };
 
-  // Primary filtering
+  // Primary filtering (includes temp and complete/lost projects so their parameters are considered)
   const filteredProjects = useMemo(() => {
     return projects.filter(p => {
       const matchesVP = selectedVP === 'all' || (p.vp && String(p.vp).trim() === selectedVP);
@@ -231,7 +233,7 @@ export default function ProjectDashboard({
     milestone: {
       label: 'Milestones met vs planned',
       shortLabel: 'Milestone Delivery',
-      unit: 'Qty',
+      unit: 'Nos.',
       isCurrency: false,
       colorPlan: '#86efac', // green-300
       colorAch: '#15803d',  // green-700
@@ -253,8 +255,8 @@ export default function ProjectDashboard({
       textClass: 'text-purple-700'
     },
     ur: {
-      label: 'Unit Delivery - Residential (UR)',
-      shortLabel: 'Residential Delivery',
+      label: 'Unit Delivery - Residential',
+      shortLabel: 'Unit Delivery - Residential',
       unit: 'Units',
       isCurrency: false,
       colorPlan: '#fdba74', // orange-300
@@ -265,9 +267,9 @@ export default function ProjectDashboard({
       textClass: 'text-orange-700'
     },
     uc: {
-      label: 'Unit Delivery - Commercial (UC)',
-      shortLabel: 'Commercial Delivery',
-      unit: 'Units',
+      label: 'Unit Delivery - Commercial',
+      shortLabel: 'Unit Delivery - Commercial',
+      unit: 'Sqft',
       isCurrency: false,
       colorPlan: '#fcd34d', // amber-300
       colorAch: '#b45309',  // amber-700
@@ -278,11 +280,20 @@ export default function ProjectDashboard({
     }
   };
 
+  const [activeFy, setActiveFy] = useState<FiscalYearKey>(() => getStoredFiscalYear());
+
+  useEffect(() => {
+    const handleFyChanged = () => setActiveFy(getStoredFiscalYear());
+    window.addEventListener('mrm-fiscal-year-changed', handleFyChanged);
+    return () => window.removeEventListener('mrm-fiscal-year-changed', handleFyChanged);
+  }, []);
+
   const currentConfig = metricsConfig[activeMetric];
 
   // List of projects for selector dropdown
   const projectList = useMemo(() => {
     const subset = projects.filter(p => {
+      if (isTempProject(p.code)) return false;
       const matchesVP = selectedVP === 'all' || (p.vp && String(p.vp).trim() === selectedVP);
       const matchesLeader = selectedLeader === 'all' || (p.leader && String(p.leader).trim() === selectedLeader);
       return matchesVP && matchesLeader;
@@ -292,7 +303,8 @@ export default function ProjectDashboard({
 
   // Aggregate monthly values across all filtered projects for the active metric
   const monthlyData = useMemo(() => {
-    const monthKeys = ["Apr-26", "May-26", "Jun-26", "Jul-26", "Aug-26", "Sep-26", "Oct-26", "Nov-26", "Dec-26", "Jan-27", "Feb-27", "Mar-27"];
+    const fyConfig = getFiscalYearConfig(activeFy);
+    const monthKeys = fyConfig.months.map(m => m.key);
     
     let cumR0 = 0;
     let cumR1 = 0;
@@ -435,28 +447,34 @@ export default function ProjectDashboard({
         ucAch += m.achievement;
       });
 
-      // Standard project area
+      // Standard project area (Only count for active projects, exclude temp and Complete, Complete-old, Lost)
       const stdProj = allProjects?.find(ap => ap.code === p.code);
-      if (stdProj && stdProj.areaSqft) {
-        const areaVal = parseFloat(String(stdProj.areaSqft).replace(/,/g, ''));
-        if (!isNaN(areaVal)) {
-          totalAreaSqft += areaVal;
-          const stage = String(stdProj.projectStage || '').trim().toLowerCase();
-          if (
-            stage.includes('excavation') ||
-            stage.includes('construction') ||
-            stage.includes('ongoing') ||
-            stage.includes('finishing') ||
-            stage.includes('nearing')
-          ) {
+      const isTemp = isTempProject(p.code);
+      const stage = (stdProj?.projectStage || p.stage || '').trim();
+      const isCompletedOrLost = isCompleteOrLostStage(stage);
+
+      if (!isTemp && !isCompletedOrLost) {
+        if (stdProj && stdProj.areaSqft) {
+          const areaVal = parseFloat(String(stdProj.areaSqft).replace(/,/g, ''));
+          if (!isNaN(areaVal)) {
+            totalAreaSqft += areaVal;
+            const stageLower = stage.toLowerCase();
+            if (
+              stageLower.includes('excavation') ||
+              stageLower.includes('construction') ||
+              stageLower.includes('ongoing') ||
+              stageLower.includes('finishing') ||
+              stageLower.includes('nearing')
+            ) {
+              areaUnderConstruction += areaVal;
+            }
+          }
+        } else if (p.area) {
+          const areaVal = parseFloat(String(p.area).replace(/,/g, ''));
+          if (!isNaN(areaVal)) {
+            totalAreaSqft += areaVal;
             areaUnderConstruction += areaVal;
           }
-        }
-      } else if (p.area) {
-        const areaVal = parseFloat(String(p.area).replace(/,/g, ''));
-        if (!isNaN(areaVal)) {
-          totalAreaSqft += areaVal;
-          areaUnderConstruction += areaVal;
         }
       }
     });
@@ -540,7 +558,8 @@ export default function ProjectDashboard({
 
   // Multi-Metric Monthly Data for side-by-side time series cards
   const multiMetricMonthlyData = useMemo(() => {
-    const months = ["Apr-26", "May-26", "Jun-26", "Jul-26", "Aug-26", "Sep-26", "Oct-26", "Nov-26", "Dec-26", "Jan-27", "Feb-27", "Mar-27"];
+    const fyConfig = getFiscalYearConfig(activeFy);
+    const months = fyConfig.months.map(m => m.key);
     
     return months.map((m, idx) => {
       let vowdPlan = 0, vowdAch = 0;
@@ -609,10 +628,104 @@ export default function ProjectDashboard({
     });
   }, [filteredProjects, selectedPlanType]);
 
-  // Project breakdown table
+  // 5 Achievement Monthwise Curves: SPI, Labour Productivity, Quality Rating, Safety Rating, Avg QHSE Rating (Scale 0-10 for ratings)
+  const ratingsMonthlyData = useMemo(() => {
+    const fyConfig = getFiscalYearConfig(activeFy);
+    const months = fyConfig.months.map(m => m.key);
+
+    return months.map((m) => {
+      let spiTotal = 0;
+      let spiCount = 0;
+      let vowdAchTotal = 0;
+      let labourAchTotal = 0;
+      let qualityTotal = 0;
+      let qualityCount = 0;
+      let safetyTotal = 0;
+      let safetyCount = 0;
+      let qhseTotal = 0;
+      let qhseCount = 0;
+
+      filteredProjects.forEach(p => {
+        // 1. SPI from spiHistory
+        const spiItem = p.spiHistory?.find(d => d.month === m);
+        if (spiItem && spiItem.achievement !== undefined && spiItem.achievement !== null) {
+          const val = Number(spiItem.achievement);
+          if (!isNaN(val) && val > 0) {
+            spiTotal += val;
+            spiCount++;
+          }
+        }
+
+        // 2. VOWD & Labour for Labour Productivity
+        const vowdItem = p.vowd?.find(d => d.month === m);
+        const labourItem = p.labour?.find(d => d.month === m);
+        if (vowdItem && vowdItem.achievement !== undefined && vowdItem.achievement !== null) {
+          const v = Number(vowdItem.achievement);
+          if (!isNaN(v) && v > 0) vowdAchTotal += v;
+        }
+        if (labourItem && labourItem.achievement !== undefined && labourItem.achievement !== null) {
+          const l = Number(labourItem.achievement);
+          if (!isNaN(l) && l > 0) labourAchTotal += l;
+        }
+
+        // 3. Quality Rating from qualityHistory (Scale 0 to 10)
+        const qualItem = p.qualityHistory?.find(d => d.month === m);
+        if (qualItem && qualItem.achievement !== undefined && qualItem.achievement !== null) {
+          let val = Number(qualItem.achievement);
+          if (!isNaN(val) && val > 0) {
+            if (val > 10) val = val / 10;
+            qualityTotal += val;
+            qualityCount++;
+          }
+        }
+
+        // 4. Safety Rating from safetyHistory (Scale 0 to 10)
+        const safItem = p.safetyHistory?.find(d => d.month === m);
+        if (safItem && safItem.achievement !== undefined && safItem.achievement !== null) {
+          let val = Number(safItem.achievement);
+          if (!isNaN(val) && val > 0) {
+            if (val > 10) val = val / 10;
+            safetyTotal += val;
+            safetyCount++;
+          }
+        }
+
+        // 5. Avg QHSE Rating from avgQhseHistory (Scale 0 to 10)
+        const qhseItem = p.avgQhseHistory?.find(d => d.month === m);
+        if (qhseItem && qhseItem.achievement !== undefined && qhseItem.achievement !== null) {
+          let val = Number(qhseItem.achievement);
+          if (!isNaN(val) && val > 0) {
+            if (val > 10) val = val / 10;
+            qhseTotal += val;
+            qhseCount++;
+          }
+        }
+      });
+
+      // Strict check: DO NOT show data if any parameter for that month is blank/absent
+      const avgSpi = spiCount > 0 ? Math.round((spiTotal / spiCount) * 100) / 100 : null;
+      const labourProd = (labourAchTotal > 0 && vowdAchTotal > 0)
+        ? Math.round((vowdAchTotal / labourAchTotal) * 10000000)
+        : null;
+      const avgQuality = qualityCount > 0 ? Math.round((qualityTotal / qualityCount) * 10) / 10 : null;
+      const avgSafety = safetyCount > 0 ? Math.round((safetyTotal / safetyCount) * 10) / 10 : null;
+      const avgQhse = qhseCount > 0 ? Math.round((qhseTotal / qhseCount) * 10) / 10 : null;
+
+      return {
+        month: m,
+        spi: avgSpi,
+        labourProductivity: labourProd,
+        quality: avgQuality,
+        safety: avgSafety,
+        qhse: avgQhse
+      };
+    });
+  }, [filteredProjects, activeFy]);
+
+  // Project breakdown table (filters out temp and completed/lost projects for clean tabular display)
   const projectBreakdown = useMemo(() => {
     return filteredProjects
-      .filter(p => !isCompleteOrLostStage(p.stage))
+      .filter(p => !isTempProject(p.code) && !isCompleteOrLostStage(p.stage))
       .map(p => {
         let pPlan = 0;
         let pAch = 0;
@@ -762,6 +875,77 @@ export default function ProjectDashboard({
     );
   }, [lastCompletedMonthIndex, monthlyData]);
 
+  // Data label renderers for Executive Productivity & Rating Monthwise Curves
+  const renderSpiRatingLabel = useCallback((props: any) => {
+    const { x, y, value } = props;
+    if (value === undefined || value === null || value === 0) return null;
+    return (
+      <text x={x} y={y - 8} fill="#0284c7" fontSize={8.5} fontWeight={800} textAnchor="middle">
+        {typeof value === 'number' ? value.toFixed(2) : value}
+      </text>
+    );
+  }, []);
+
+  const renderLabourProdMonthlyLabel = useCallback((props: any) => {
+    const { x, y, width, value } = props;
+    if (value === undefined || value === null || value === 0) return null;
+    const cx = x + (width ? width / 2 : 0);
+    const num = Number(value);
+    const formatted = num >= 1000 ? `₹${(num / 1000).toFixed(1)}k` : `₹${Math.round(num)}`;
+    return (
+      <text x={cx} y={y - 6} fill="#7c3aed" fontSize={8} fontWeight={800} textAnchor="middle">
+        {formatted}
+      </text>
+    );
+  }, []);
+
+  const renderQualityRatingLabel = useCallback((props: any) => {
+    const { x, y, value } = props;
+    if (value === undefined || value === null || value === 0) return null;
+    return (
+      <text x={x} y={y - 8} fill="#059669" fontSize={8.5} fontWeight={800} textAnchor="middle">
+        {typeof value === 'number' ? value.toFixed(1) : value}
+      </text>
+    );
+  }, []);
+
+  const renderSafetyRatingLabel = useCallback((props: any) => {
+    const { x, y, value } = props;
+    if (value === undefined || value === null || value === 0) return null;
+    return (
+      <text x={x} y={y - 8} fill="#d97706" fontSize={8.5} fontWeight={800} textAnchor="middle">
+        {typeof value === 'number' ? value.toFixed(1) : value}
+      </text>
+    );
+  }, []);
+
+  const renderQhseRatingLabel = useCallback((props: any) => {
+    const { x, y, value } = props;
+    if (value === undefined || value === null || value === 0) return null;
+    return (
+      <text x={x} y={y - 8} fill="#4f46e5" fontSize={8.5} fontWeight={800} textAnchor="middle">
+        {typeof value === 'number' ? value.toFixed(1) : value}
+      </text>
+    );
+  }, []);
+
+  const renderEfficiencyRateLabel = useCallback((props: any) => {
+    const { x, y, value } = props;
+    if (value === undefined || value === null) return null;
+    return (
+      <text
+        x={x}
+        y={y - 8}
+        fill={currentConfig.colorAch || '#0284c7'}
+        fontSize={8.5}
+        fontWeight={800}
+        textAnchor="middle"
+      >
+        {`${Math.round(value)}%`}
+      </text>
+    );
+  }, [currentConfig.colorAch]);
+
   return (
     <div className="space-y-6 font-sans" id="project-dashboard-consolidated-root">
       
@@ -774,8 +958,36 @@ export default function ProjectDashboard({
           <div>
             <h2 className="text-lg font-extrabold text-slate-900">Project Performance Dashboard</h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              Consolidated Executive Window • FY 26-27 Monthly Timeline, S-Curve Trends &amp; Detailed Metric Analyzer
+              Consolidated Executive Window • {getFiscalYearConfig(activeFy).label} Monthly Timeline, S-Curve Trends &amp; Detailed Metric Analyzer
             </p>
+          </div>
+        </div>
+
+        {/* Fiscal Year Quick Switcher Widget */}
+        <div className="flex items-center space-x-2 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/90 rounded-2xl px-3.5 py-2 shadow-2xs">
+          <Calendar className="w-4 h-4 text-indigo-600 shrink-0" />
+          <span className="text-xs font-black text-indigo-900 shrink-0">Reporting FY:</span>
+          <div className="relative flex items-center">
+            <select
+              value={activeFy}
+              onChange={(e) => {
+                const newFy = e.target.value as FiscalYearKey;
+                setActiveFy(newFy);
+                setStoredFiscalYear(newFy);
+              }}
+              aria-label="Select Fiscal Year"
+              className="bg-white border border-blue-200 hover:border-blue-300 rounded-xl px-2.5 py-1 pr-6 text-xs font-black text-blue-900 focus:outline-none cursor-pointer shadow-2xs appearance-none"
+            >
+              {FISCAL_YEAR_KEYS.map((fy) => {
+                const cfg = getFiscalYearConfig(fy);
+                return (
+                  <option key={fy} value={fy} className="text-slate-900 font-bold">
+                    {cfg.label} ({cfg.startMonthKey}–{cfg.endMonthKey})
+                  </option>
+                );
+              })}
+            </select>
+            <ChevronDown className="w-3.5 h-3.5 text-blue-700 pointer-events-none absolute right-1.5 shrink-0" />
           </div>
         </div>
       </div>
@@ -993,7 +1205,7 @@ export default function ProjectDashboard({
           { 
             key: 'milestone' as MetricType, 
             label: 'MILESTONES', 
-            unit: 'Qty', 
+            unit: 'Nos.', 
             titleColor: 'text-emerald-700',
             badgeBg: 'bg-emerald-50 text-emerald-700', 
             barColor: 'bg-emerald-600',
@@ -1010,7 +1222,7 @@ export default function ProjectDashboard({
           },
           { 
             key: 'ur' as MetricType, 
-            label: 'RESIDENTIAL UR', 
+            label: 'UNIT DELIVERY - RESIDENTIAL', 
             unit: 'Units', 
             titleColor: 'text-orange-600',
             badgeBg: 'bg-orange-50 text-orange-600', 
@@ -1019,8 +1231,8 @@ export default function ProjectDashboard({
           },
           { 
             key: 'uc' as MetricType, 
-            label: 'COMMERCIAL UC', 
-            unit: 'Units', 
+            label: 'UNIT DELIVERY - COMMERCIAL', 
+            unit: 'Sqft', 
             titleColor: 'text-amber-700',
             badgeBg: 'bg-amber-50 text-amber-700', 
             barColor: 'bg-amber-600',
@@ -1083,7 +1295,7 @@ export default function ProjectDashboard({
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
             <div>
               <h3 className="text-sm font-bold text-slate-900">
-                FY 26-27 Monthly Progress Curve — {currentConfig.label}
+                {getFiscalYearConfig(activeFy).label} Monthly Progress Curve — {currentConfig.label}
               </h3>
               <p className="text-[10px] text-slate-400 mt-0.5">
                 Monthly Planned vs Actuals + Cumulative Progress S-Curve
@@ -1358,7 +1570,7 @@ export default function ProjectDashboard({
             <ResponsiveContainer width="100%" height="100%">
               <LineChart
                 data={monthlyData}
-                margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                margin={{ top: 18, right: 10, left: -20, bottom: 0 }}
               >
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                 <XAxis 
@@ -1398,7 +1610,9 @@ export default function ProjectDashboard({
                   strokeWidth={3} 
                   dot={{ r: 4, strokeWidth: 1 }} 
                   activeDot={{ r: 6 }} 
-                />
+                >
+                  <LabelList dataKey="Achievement %" content={renderEfficiencyRateLabel} />
+                </Line>
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -1421,7 +1635,7 @@ export default function ProjectDashboard({
           <div className="flex items-center gap-3">
             <div>
               <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <span>Detailed Metric Analyzer Table — FY 26-27 ({currentConfig.label})</span>
+                <span>Detailed Metric Analyzer Table — {getFiscalYearConfig(activeFy).label} ({currentConfig.label})</span>
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
                 Month-by-month targets, revised baselines, and cumulative accomplishment
@@ -1558,7 +1772,7 @@ export default function ProjectDashboard({
       <div className="space-y-4 pt-2">
         <div>
           <h3 className="text-sm font-bold text-slate-900">
-            Multi-Metric Trend Curves (FY 26-27)
+            Multi-Metric Trend Curves ({getFiscalYearConfig(activeFy).label})
           </h3>
           <p className="text-xs text-slate-500">
             Visual comparisons across all 5 key deliverable metrics
@@ -1653,7 +1867,7 @@ export default function ProjectDashboard({
             </div>
           </div>
 
-          {/* Residential UR Mini Card */}
+          {/* Unit Delivery - Residential Mini Card */}
           <div 
             onClick={() => setActiveMetric('ur')}
             className={`bg-white border rounded-3xl p-5 shadow-xs transition-all cursor-pointer ${
@@ -1663,7 +1877,7 @@ export default function ProjectDashboard({
             <div className="flex items-center justify-between mb-3">
               <div>
                 <span className="text-[10px] font-bold text-slate-400 uppercase">Metric 4</span>
-                <h4 className="text-xs font-bold text-slate-800">Residential Delivery (UR)</h4>
+                <h4 className="text-xs font-bold text-slate-800">Unit Delivery - Residential</h4>
               </div>
               <span className="text-xs font-extrabold text-orange-700 bg-orange-50 px-2 py-0.5 rounded-full">
                 {consolidatedMetrics.ur.pct}%
@@ -1682,7 +1896,7 @@ export default function ProjectDashboard({
             </div>
           </div>
 
-          {/* Commercial UC Mini Card */}
+          {/* Unit Delivery - Commercial Mini Card */}
           <div 
             onClick={() => setActiveMetric('uc')}
             className={`bg-white border rounded-3xl p-5 shadow-xs transition-all cursor-pointer ${
@@ -1692,7 +1906,7 @@ export default function ProjectDashboard({
             <div className="flex items-center justify-between mb-3">
               <div>
                 <span className="text-[10px] font-bold text-slate-400 uppercase">Metric 5</span>
-                <h4 className="text-xs font-bold text-slate-800">Commercial Delivery (UC)</h4>
+                <h4 className="text-xs font-bold text-slate-800">Unit Delivery - Commercial</h4>
               </div>
               <span className="text-xs font-extrabold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full">
                 {consolidatedMetrics.uc.pct}%
@@ -1706,6 +1920,226 @@ export default function ProjectDashboard({
                   <YAxis stroke="#94a3b8" fontSize={8} tickLine={false} axisLine={false} />
                   <Area type="monotone" dataKey="ucAch" stroke="#b45309" strokeWidth={2} fill="#f59e0b" fillOpacity={0.15} name="Actual" />
                   <Line type="monotone" dataKey="ucPlan" stroke="#94a3b8" strokeWidth={1.5} strokeDasharray="3 3" dot={false} name="Plan" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 5 Achievement Monthwise Curves: SPI, Labour Productivity, Quality Rating, Safety Rating, Avg QHSE Rating */}
+      <div className="space-y-4 pt-2" id="project-dashboard-ratings-curves">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+          <div>
+            <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
+              <Gauge className="w-4 h-4 text-indigo-600" />
+              <span>Executive Productivity &amp; Rating Monthwise Curves ({getFiscalYearConfig(activeFy).label})</span>
+            </h3>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Month-by-month achieved trend for SPI, Labour Productivity, Quality Rating, Safety Rating &amp; Composite QHSE
+            </p>
+          </div>
+          <span className="text-[10px] font-extrabold uppercase px-2.5 py-1 bg-indigo-50 text-indigo-700 rounded-full border border-indigo-100">
+            Achievement Only
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {/* 1. SPI Monthly Trend */}
+          <div className="bg-white border border-slate-200 hover:border-slate-300 rounded-3xl p-5 shadow-xs transition-all">
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <span className="text-[10px] font-bold text-slate-400 uppercase">Performance</span>
+                <h4 className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                  <span>Schedule Performance Index (SPI)</span>
+                </h4>
+              </div>
+              <span className="text-xs font-black text-sky-700 bg-sky-50 px-2 py-0.5 rounded-full border border-sky-100">
+                Target: 1.00+
+              </span>
+            </div>
+            <div className="h-[140px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={ratingsMonthlyData} margin={{ top: 15, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                  <XAxis dataKey="month" stroke="#94a3b8" fontSize={8} tickLine={false} axisLine={false} />
+                  <YAxis stroke="#94a3b8" fontSize={8} tickLine={false} axisLine={false} domain={[0.5, 1.5]} />
+                  <Tooltip
+                    content={({ active, payload }) => {
+                      if (active && payload && payload.length) {
+                        const val = payload[0].value;
+                        return (
+                          <div className="bg-slate-900 text-white rounded-xl px-2.5 py-1.5 text-[9px] font-bold">
+                            {payload[0].payload.month}: SPI {val !== null ? val : 'N/A'}
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
+                  />
+                  <Line type="monotone" dataKey="spi" stroke="#0284c7" strokeWidth={2.5} dot={{ r: 3.5, fill: '#0284c7' }} name="SPI">
+                    <LabelList dataKey="spi" content={renderSpiRatingLabel} />
+                  </Line>
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* 2. Labour Productivity Monthly Trend */}
+          <div className="bg-white border border-slate-200 hover:border-slate-300 rounded-3xl p-5 shadow-xs transition-all">
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <span className="text-[10px] font-bold text-slate-400 uppercase">Efficiency</span>
+                <h4 className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                  <span>Labour Productivity</span>
+                </h4>
+              </div>
+              <span className="text-xs font-black text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full border border-purple-100">
+                ₹/Lab./Day
+              </span>
+            </div>
+            <div className="h-[140px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={ratingsMonthlyData} margin={{ top: 15, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                  <XAxis dataKey="month" stroke="#94a3b8" fontSize={8} tickLine={false} axisLine={false} />
+                  <YAxis stroke="#94a3b8" fontSize={8} tickLine={false} axisLine={false} />
+                  <Tooltip
+                    content={({ active, payload }) => {
+                      if (active && payload && payload.length) {
+                        const val = payload[0].value;
+                        return (
+                          <div className="bg-slate-900 text-white rounded-xl px-2.5 py-1.5 text-[9px] font-bold">
+                            {payload[0].payload.month}: ₹{val ? Number(val).toLocaleString() : 'N/A'} /Lab./Day
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
+                  />
+                  <Bar dataKey="labourProductivity" fill="#8b5cf6" radius={[4, 4, 0, 0]} maxBarSize={22} name="Productivity">
+                    <LabelList dataKey="labourProductivity" content={renderLabourProdMonthlyLabel} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* 3. Quality Rating Monthly Trend (Scale 0-10) */}
+          <div className="bg-white border border-slate-200 hover:border-slate-300 rounded-3xl p-5 shadow-xs transition-all">
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <span className="text-[10px] font-bold text-slate-400 uppercase">Audit Rating</span>
+                <h4 className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                  <span>Quality Rating</span>
+                </h4>
+              </div>
+              <span className="text-xs font-black text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
+                Target: 8.5 / 10
+              </span>
+            </div>
+            <div className="h-[140px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={ratingsMonthlyData} margin={{ top: 15, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                  <XAxis dataKey="month" stroke="#94a3b8" fontSize={8} tickLine={false} axisLine={false} />
+                  <YAxis stroke="#94a3b8" fontSize={8} tickLine={false} axisLine={false} domain={[0, 10]} ticks={[0, 2, 4, 6, 8, 10]} />
+                  <Tooltip
+                    content={({ active, payload }) => {
+                      if (active && payload && payload.length) {
+                        const val = payload[0].value;
+                        return (
+                          <div className="bg-slate-900 text-white rounded-xl px-2.5 py-1.5 text-[9px] font-bold">
+                            {payload[0].payload.month}: Quality {val !== null ? `${val} / 10` : 'N/A'}
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
+                  />
+                  <Area type="monotone" dataKey="quality" stroke="#059669" strokeWidth={2.5} fill="#10b981" fillOpacity={0.15} name="Quality">
+                    <LabelList dataKey="quality" content={renderQualityRatingLabel} />
+                  </Area>
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* 4. Safety Rating Monthly Trend (Scale 0-10) */}
+          <div className="bg-white border border-slate-200 hover:border-slate-300 rounded-3xl p-5 shadow-xs transition-all">
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <span className="text-[10px] font-bold text-slate-400 uppercase">HSE Compliance</span>
+                <h4 className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                  <span>Safety Rating</span>
+                </h4>
+              </div>
+              <span className="text-xs font-black text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-100">
+                Target: 8.5 / 10
+              </span>
+            </div>
+            <div className="h-[140px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={ratingsMonthlyData} margin={{ top: 15, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                  <XAxis dataKey="month" stroke="#94a3b8" fontSize={8} tickLine={false} axisLine={false} />
+                  <YAxis stroke="#94a3b8" fontSize={8} tickLine={false} axisLine={false} domain={[0, 10]} ticks={[0, 2, 4, 6, 8, 10]} />
+                  <Tooltip
+                    content={({ active, payload }) => {
+                      if (active && payload && payload.length) {
+                        const val = payload[0].value;
+                        return (
+                          <div className="bg-slate-900 text-white rounded-xl px-2.5 py-1.5 text-[9px] font-bold">
+                            {payload[0].payload.month}: Safety {val !== null ? `${val} / 10` : 'N/A'}
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
+                  />
+                  <Area type="monotone" dataKey="safety" stroke="#d97706" strokeWidth={2.5} fill="#f59e0b" fillOpacity={0.15} name="Safety">
+                    <LabelList dataKey="safety" content={renderSafetyRatingLabel} />
+                  </Area>
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* 5. Avg QHSE Rating Monthly Trend (Scale 0-10) */}
+          <div className="bg-white border border-slate-200 hover:border-slate-300 rounded-3xl p-5 shadow-xs transition-all">
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <span className="text-[10px] font-bold text-slate-400 uppercase">Composite Rating</span>
+                <h4 className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                  <span>Avg QHSE Rating</span>
+                </h4>
+              </div>
+              <span className="text-xs font-black text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
+                Scale: 0–10
+              </span>
+            </div>
+            <div className="h-[140px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={ratingsMonthlyData} margin={{ top: 15, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                  <XAxis dataKey="month" stroke="#94a3b8" fontSize={8} tickLine={false} axisLine={false} />
+                  <YAxis stroke="#94a3b8" fontSize={8} tickLine={false} axisLine={false} domain={[0, 10]} ticks={[0, 2, 4, 6, 8, 10]} />
+                  <Tooltip
+                    content={({ active, payload }) => {
+                      if (active && payload && payload.length) {
+                        const val = payload[0].value;
+                        return (
+                          <div className="bg-slate-900 text-white rounded-xl px-2.5 py-1.5 text-[9px] font-bold">
+                            {payload[0].payload.month}: QHSE {val !== null ? `${val} / 10` : 'N/A'}
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
+                  />
+                  <Area type="monotone" dataKey="qhse" stroke="#4f46e5" strokeWidth={2.5} fill="#6366f1" fillOpacity={0.15} name="Avg QHSE">
+                    <LabelList dataKey="qhse" content={renderQhseRatingLabel} />
+                  </Area>
                 </AreaChart>
               </ResponsiveContainer>
             </div>

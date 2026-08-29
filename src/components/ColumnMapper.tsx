@@ -9,9 +9,7 @@ import {
   FileSpreadsheet, 
   Layers, 
   Search, 
-  CheckCircle2, 
   ChevronDown, 
-  Info,
   Check,
   Building2,
   Calendar,
@@ -43,7 +41,7 @@ function getColLetter(index: number): string {
   return letter;
 }
 
-type S2TabType = 'meta' | 'vowd' | 'milestone' | 'labour' | 'ur' | 'uc';
+type S2TabType = 'meta' | 'vowd' | 'milestone' | 'labour' | 'ur' | 'uc' | 'spi' | 'quality' | 'safety' | 'qhse';
 
 interface S2ParamDef {
   key: string;
@@ -119,88 +117,149 @@ export default function ColumnMapper({
     onUpdateSoftware2Mapping(software2Mapping, index);
   };
 
-  // 12 Fiscal Months for Software 2
+  // Standard 12 Fiscal Months for Software 2 Columns
   const MONTHS_CONFIG = [
-    { key: 'Apr-26', shortName: 'Apr', label: 'April 2026', hasR1: false },
-    { key: 'May-26', shortName: 'May', label: 'May 2026', hasR1: false },
-    { key: 'Jun-26', shortName: 'Jun', label: 'June 2026', hasR1: false },
-    { key: 'Jul-26', shortName: 'Jul', label: 'July 2026', hasR1: false },
-    { key: 'Aug-26', shortName: 'Aug', label: 'August 2026', hasR1: false },
-    { key: 'Sep-26', shortName: 'Sep', label: 'September 2026', hasR1: false },
-    { key: 'Oct-26', shortName: 'Oct', label: 'October 2026', hasR1: true },
-    { key: 'Nov-26', shortName: 'Nov', label: 'November 2026', hasR1: true },
-    { key: 'Dec-26', shortName: 'Dec', label: 'December 2026', hasR1: true },
-    { key: 'Jan-27', shortName: 'Jan', label: 'January 2027', hasR1: true },
-    { key: 'Feb-27', shortName: 'Feb', label: 'February 2027', hasR1: true },
-    { key: 'Mar-27', shortName: 'Mar', label: 'March 2027', hasR1: true },
+    { key: 'Apr', shortName: 'Apr', label: 'April', hasR1: false },
+    { key: 'May', shortName: 'May', label: 'May', hasR1: false },
+    { key: 'Jun', shortName: 'Jun', label: 'June', hasR1: false },
+    { key: 'Jul', shortName: 'Jul', label: 'July', hasR1: false },
+    { key: 'Aug', shortName: 'Aug', label: 'August', hasR1: false },
+    { key: 'Sep', shortName: 'Sep', label: 'September', hasR1: false },
+    { key: 'Oct', shortName: 'Oct', label: 'October', hasR1: true },
+    { key: 'Nov', shortName: 'Nov', label: 'November', hasR1: true },
+    { key: 'Dec', shortName: 'Dec', label: 'December', hasR1: true },
+    { key: 'Jan', shortName: 'Jan', label: 'January', hasR1: true },
+    { key: 'Feb', shortName: 'Feb', label: 'February', hasR1: true },
+    { key: 'Mar', shortName: 'Mar', label: 'March', hasR1: true },
   ];
 
-  // Default coordinate offsets for Software 2
-  const S2_DEFAULT_OFFSETS: Record<string, { r0: number; r1?: number; ach: number }> = {
-    'vowd_Apr-26': { r0: 18, ach: 19 },
-    'vowd_May-26': { r0: 20, ach: 21 },
-    'vowd_Jun-26': { r0: 22, ach: 23 },
-    'vowd_Jul-26': { r0: 24, ach: 25 },
-    'vowd_Aug-26': { r0: 26, ach: 27 },
-    'vowd_Sep-26': { r0: 28, ach: 29 },
-    'vowd_Oct-26': { r0: 30, r1: 31, ach: 32 },
-    'vowd_Nov-26': { r0: 33, r1: 34, ach: 35 },
-    'vowd_Dec-26': { r0: 36, r1: 37, ach: 38 },
-    'vowd_Jan-27': { r0: 39, r1: 40, ach: 41 },
-    'vowd_Feb-27': { r0: 42, r1: 43, ach: 44 },
-    'vowd_Mar-27': { r0: 45, r1: 46, ach: 47 },
+  // Canonical Default Coordinate Offsets for Software 2
+  const S2_DEFAULT_OFFSETS: Record<string, { r0?: number; r1?: number; ach: number }> = {
+    // VOWD (18 to 47)
+    'vowd_Apr': { r0: 18, ach: 19 },
+    'vowd_May': { r0: 20, ach: 21 },
+    'vowd_Jun': { r0: 22, ach: 23 },
+    'vowd_Jul': { r0: 24, ach: 25 },
+    'vowd_Aug': { r0: 26, ach: 27 },
+    'vowd_Sep': { r0: 28, ach: 29 },
+    'vowd_Oct': { r0: 30, r1: 31, ach: 32 },
+    'vowd_Nov': { r0: 33, r1: 34, ach: 35 },
+    'vowd_Dec': { r0: 36, r1: 37, ach: 38 },
+    'vowd_Jan': { r0: 39, r1: 40, ach: 41 },
+    'vowd_Feb': { r0: 42, r1: 43, ach: 44 },
+    'vowd_Mar': { r0: 45, r1: 46, ach: 47 },
 
-    'milestone_Apr-26': { r0: 57, ach: 58 },
-    'milestone_May-26': { r0: 59, ach: 60 },
-    'milestone_Jun-26': { r0: 61, ach: 62 },
-    'milestone_Jul-26': { r0: 63, ach: 64 },
-    'milestone_Aug-26': { r0: 65, ach: 66 },
-    'milestone_Sep-26': { r0: 67, ach: 68 },
-    'milestone_Oct-26': { r0: 69, r1: 70, ach: 71 },
-    'milestone_Nov-26': { r0: 72, r1: 73, ach: 74 },
-    'milestone_Dec-26': { r0: 75, r1: 76, ach: 77 },
-    'milestone_Jan-27': { r0: 78, r1: 79, ach: 80 },
-    'milestone_Feb-27': { r0: 81, r1: 82, ach: 83 },
-    'milestone_Mar-27': { r0: 84, r1: 85, ach: 86 },
+    // Milestones (57 to 86)
+    'milestone_Apr': { r0: 57, ach: 58 },
+    'milestone_May': { r0: 59, ach: 60 },
+    'milestone_Jun': { r0: 61, ach: 62 },
+    'milestone_Jul': { r0: 63, ach: 64 },
+    'milestone_Aug': { r0: 65, ach: 66 },
+    'milestone_Sep': { r0: 67, ach: 68 },
+    'milestone_Oct': { r0: 69, r1: 70, ach: 71 },
+    'milestone_Nov': { r0: 72, r1: 73, ach: 74 },
+    'milestone_Dec': { r0: 75, r1: 76, ach: 77 },
+    'milestone_Jan': { r0: 78, r1: 79, ach: 80 },
+    'milestone_Feb': { r0: 81, r1: 82, ach: 83 },
+    'milestone_Mar': { r0: 84, r1: 85, ach: 86 },
 
-    'ur_Apr-26': { r0: 95, ach: 96 },
-    'ur_May-26': { r0: 97, ach: 98 },
-    'ur_Jun-26': { r0: 99, ach: 100 },
-    'ur_Jul-26': { r0: 101, ach: 102 },
-    'ur_Aug-26': { r0: 103, ach: 104 },
-    'ur_Sep-26': { r0: 105, ach: 106 },
-    'ur_Oct-26': { r0: 107, r1: 108, ach: 109 },
-    'ur_Nov-26': { r0: 110, r1: 111, ach: 112 },
-    'ur_Dec-26': { r0: 113, r1: 114, ach: 115 },
-    'ur_Jan-27': { r0: 116, r1: 117, ach: 118 },
-    'ur_Feb-27': { r0: 119, r1: 120, ach: 121 },
-    'ur_Mar-27': { r0: 122, r1: 123, ach: 124 },
+    // Residential UR (95 to 124)
+    'ur_Apr': { r0: 95, ach: 96 },
+    'ur_May': { r0: 97, ach: 98 },
+    'ur_Jun': { r0: 99, ach: 100 },
+    'ur_Jul': { r0: 101, ach: 102 },
+    'ur_Aug': { r0: 103, ach: 104 },
+    'ur_Sep': { r0: 105, ach: 106 },
+    'ur_Oct': { r0: 107, r1: 108, ach: 109 },
+    'ur_Nov': { r0: 110, r1: 111, ach: 112 },
+    'ur_Dec': { r0: 113, r1: 114, ach: 115 },
+    'ur_Jan': { r0: 116, r1: 117, ach: 118 },
+    'ur_Feb': { r0: 119, r1: 120, ach: 121 },
+    'ur_Mar': { r0: 122, r1: 123, ach: 124 },
 
-    'uc_Apr-26': { r0: 132, ach: 133 },
-    'uc_May-26': { r0: 134, ach: 135 },
-    'uc_Jun-26': { r0: 136, ach: 137 },
-    'uc_Jul-26': { r0: 138, ach: 139 },
-    'uc_Aug-26': { r0: 140, ach: 141 },
-    'uc_Sep-26': { r0: 142, ach: 143 },
-    'uc_Oct-26': { r0: 144, r1: 145, ach: 146 },
-    'uc_Nov-26': { r0: 147, r1: 148, ach: 149 },
-    'uc_Dec-26': { r0: 150, r1: 151, ach: 152 },
-    'uc_Jan-27': { r0: 153, r1: 154, ach: 155 },
-    'uc_Feb-27': { r0: 156, r1: 157, ach: 158 },
-    'uc_Mar-27': { r0: 159, r1: 160, ach: 161 },
+    // Commercial UC (132 to 161)
+    'uc_Apr': { r0: 132, ach: 133 },
+    'uc_May': { r0: 134, ach: 135 },
+    'uc_Jun': { r0: 136, ach: 137 },
+    'uc_Jul': { r0: 138, ach: 139 },
+    'uc_Aug': { r0: 140, ach: 141 },
+    'uc_Sep': { r0: 142, ach: 143 },
+    'uc_Oct': { r0: 144, r1: 145, ach: 146 },
+    'uc_Nov': { r0: 147, r1: 148, ach: 149 },
+    'uc_Dec': { r0: 150, r1: 151, ach: 152 },
+    'uc_Jan': { r0: 153, r1: 154, ach: 155 },
+    'uc_Feb': { r0: 156, r1: 157, ach: 158 },
+    'uc_Mar': { r0: 159, r1: 160, ach: 161 },
 
-    'labour_Apr-26': { r0: 228, ach: 229 },
-    'labour_May-26': { r0: 230, ach: 231 },
-    'labour_Jun-26': { r0: 232, ach: 233 },
-    'labour_Jul-26': { r0: 234, ach: 235 },
-    'labour_Aug-26': { r0: 236, ach: 237 },
-    'labour_Sep-26': { r0: 238, ach: 239 },
-    'labour_Oct-26': { r0: 241, r1: 242, ach: 243 },
-    'labour_Nov-26': { r0: 244, r1: 245, ach: 246 },
-    'labour_Dec-26': { r0: 247, r1: 248, ach: 249 },
-    'labour_Jan-27': { r0: 250, r1: 251, ach: 252 },
-    'labour_Feb-27': { r0: 253, r1: 254, ach: 255 },
-    'labour_Mar-27': { r0: 256, r1: 257, ach: 258 }
+    // Labour (229 to 258: Col HV to Col IY)
+    'labour_Apr': { r0: 229, ach: 230 },
+    'labour_May': { r0: 231, ach: 232 },
+    'labour_Jun': { r0: 233, ach: 234 },
+    'labour_Jul': { r0: 235, ach: 236 },
+    'labour_Aug': { r0: 237, ach: 238 },
+    'labour_Sep': { r0: 239, ach: 240 },
+    'labour_Oct': { r0: 241, r1: 242, ach: 243 },
+    'labour_Nov': { r0: 244, r1: 245, ach: 246 },
+    'labour_Dec': { r0: 247, r1: 248, ach: 249 },
+    'labour_Jan': { r0: 250, r1: 251, ach: 252 },
+    'labour_Feb': { r0: 253, r1: 254, ach: 255 },
+    'labour_Mar': { r0: 256, r1: 257, ach: 258 },
+
+    // SPI (12 Months Achievement only) - 284 to 295
+    'spi_Apr': { ach: 284 },
+    'spi_May': { ach: 285 },
+    'spi_Jun': { ach: 286 },
+    'spi_Jul': { ach: 287 },
+    'spi_Aug': { ach: 288 },
+    'spi_Sep': { ach: 289 },
+    'spi_Oct': { ach: 290 },
+    'spi_Nov': { ach: 291 },
+    'spi_Dec': { ach: 292 },
+    'spi_Jan': { ach: 293 },
+    'spi_Feb': { ach: 294 },
+    'spi_Mar': { ach: 295 },
+
+    // Quality Rating (12 Months Achievement only) - 298 to 309
+    'quality_Apr': { ach: 298 },
+    'quality_May': { ach: 299 },
+    'quality_Jun': { ach: 300 },
+    'quality_Jul': { ach: 301 },
+    'quality_Aug': { ach: 302 },
+    'quality_Sep': { ach: 303 },
+    'quality_Oct': { ach: 304 },
+    'quality_Nov': { ach: 305 },
+    'quality_Dec': { ach: 306 },
+    'quality_Jan': { ach: 307 },
+    'quality_Feb': { ach: 308 },
+    'quality_Mar': { ach: 309 },
+
+    // Safety Rating (12 Months Achievement only) - 311 to 322
+    'safety_Apr': { ach: 311 },
+    'safety_May': { ach: 312 },
+    'safety_Jun': { ach: 313 },
+    'safety_Jul': { ach: 314 },
+    'safety_Aug': { ach: 315 },
+    'safety_Sep': { ach: 316 },
+    'safety_Oct': { ach: 317 },
+    'safety_Nov': { ach: 318 },
+    'safety_Dec': { ach: 319 },
+    'safety_Jan': { ach: 320 },
+    'safety_Feb': { ach: 321 },
+    'safety_Mar': { ach: 322 },
+
+    // Avg QHSE Rating (12 Months Achievement only) - 324 to 335
+    'qhse_Apr': { ach: 324 },
+    'qhse_May': { ach: 325 },
+    'qhse_Jun': { ach: 326 },
+    'qhse_Jul': { ach: 327 },
+    'qhse_Aug': { ach: 328 },
+    'qhse_Sep': { ach: 329 },
+    'qhse_Oct': { ach: 330 },
+    'qhse_Nov': { ach: 331 },
+    'qhse_Dec': { ach: 332 },
+    'qhse_Jan': { ach: 333 },
+    'qhse_Feb': { ach: 334 },
+    'qhse_Mar': { ach: 335 }
   };
 
   // Build Software 2 parameter list
@@ -216,23 +275,25 @@ export default function ColumnMapper({
       { key: 'meta_stage', category: 'meta', primaryLabel: 'Project Stage', subLabel: 'Current Lifecycle Stage (Col F)', defaultColIndex: 5, mappingProp: 'stageIndex' }
     );
 
-    // Helper for 12 months with verbatim user-requested titles
+    // Helper for 12 months with R0 / R1 / Ach
     const addMonths = (metricCategory: S2TabType, prefix: string, displayPrefix: string) => {
       MONTHS_CONFIG.forEach(m => {
         const offset = S2_DEFAULT_OFFSETS[`${prefix}_${m.key}`];
         if (!offset) return;
 
-        // R0 Plan
-        list.push({
-          key: `${prefix}_${m.key}_r0`,
-          category: metricCategory,
-          primaryLabel: `"${displayPrefix} ${m.shortName} R0 Plan"`,
-          subLabel: `Initial Baseline Target (${m.label})`,
-          defaultColIndex: offset.r0,
-          overrideKey: `${prefix}_${m.key}_planR0`
-        });
+        // R0 Plan (Initial plan)
+        if (offset.r0 !== undefined) {
+          list.push({
+            key: `${prefix}_${m.key}_r0`,
+            category: metricCategory,
+            primaryLabel: `"${displayPrefix} ${m.shortName} R0 Plan"`,
+            subLabel: `Initial Baseline Target (${m.label})`,
+            defaultColIndex: offset.r0,
+            overrideKey: `${prefix}_${m.key}_planR0`
+          });
+        }
 
-        // R1 Plan (Oct-Mar)
+        // R1 Plan (Revised plan from Oct / H2)
         if (m.hasR1 && offset.r1 !== undefined) {
           list.push({
             key: `${prefix}_${m.key}_r1`,
@@ -256,11 +317,33 @@ export default function ColumnMapper({
       });
     };
 
+    // Helper for 12 months Achievement only (SPI, Quality, Safety, QHSE)
+    const addAchievementOnlyMonths = (metricCategory: S2TabType, prefix: string, displayPrefix: string) => {
+      MONTHS_CONFIG.forEach(m => {
+        const offset = S2_DEFAULT_OFFSETS[`${prefix}_${m.key}`];
+        const defaultIndex = offset?.ach ?? -1;
+
+        list.push({
+          key: `${prefix}_${m.key}_ach`,
+          category: metricCategory,
+          primaryLabel: `"${displayPrefix} ${m.shortName} Ach"`,
+          subLabel: `Actual Achievement (${m.label})`,
+          defaultColIndex: defaultIndex,
+          overrideKey: `${prefix}_${m.key}_achievement`
+        });
+      });
+    };
+
     addMonths('vowd', 'vowd', 'VOWD');
     addMonths('milestone', 'milestone', 'Milestone');
     addMonths('labour', 'labour', 'Labour');
     addMonths('ur', 'ur', 'UR');
     addMonths('uc', 'uc', 'UC');
+
+    addAchievementOnlyMonths('spi', 'spi', 'SPI');
+    addAchievementOnlyMonths('quality', 'quality', 'Quality Rating');
+    addAchievementOnlyMonths('safety', 'safety', 'Safety Rating');
+    addAchievementOnlyMonths('qhse', 'qhse', 'Avg QHSE Rating');
 
     return list;
   }, []);
@@ -317,27 +400,76 @@ export default function ColumnMapper({
     onUpdateSoftware2Mapping(newMapping, software2HeaderRowIndex);
   };
 
-  // Build Software 2 options
+  // Build Software 2 default name lookup from parameter definitions
+  const s2DefaultNameLookup = useMemo(() => {
+    const map: Record<number, string> = {
+      1: 'Project ID',
+      2: 'Project Name',
+      3: 'Leader',
+      4: 'VP',
+      5: 'Project Stage',
+      6: 'SPI',
+      8: 'Quality Rating',
+      9: 'Safety Rating',
+      10: 'Avg QHSE Rating'
+    };
+    s2Parameters.forEach(p => {
+      if (p.defaultColIndex >= 0) {
+        const cleanName = p.primaryLabel.replace(/^"|"$/g, '');
+        map[p.defaultColIndex] = cleanName;
+      }
+    });
+    return map;
+  }, [s2Parameters]);
+
+  // Software 1 default name lookup
+  const s1DefaultNameLookup: Record<number, string> = {
+    1: 'Project ID',
+    2: 'Project Name',
+    3: 'Operational Area',
+    4: 'Leader / PM',
+    5: 'Vice President (VP)',
+    6: 'Project Stage',
+    7: 'PM / Site Incharge',
+    8: 'Baseline 0 Finish',
+    9: 'Baseline 1 Finish',
+    10: 'Proposed Finish Date',
+    11: 'Schedule Variance (Days)',
+    12: 'Delay in Current Month',
+    13: 'Total Budget (Cr)',
+    14: 'Total Labours',
+    15: 'Total Milestones',
+    17: 'Milestone Plan',
+    18: 'Milestone Ach',
+    19: 'Milestone Ach %',
+    20: 'Milestone FR (Next Month)',
+    22: 'VOWD Plan (Cr)',
+    23: 'VOWD Ach (Cr)',
+    24: 'VOWD Ach %',
+    25: 'VOWD FR (Next Month)',
+    27: 'Labour Plan Headcount',
+    28: 'Labour Actual Headcount',
+    29: 'Labour Deployment %',
+    30: 'Labour FR (Next Month)',
+    32: 'SPI Rating',
+    33: 'Project Status / Health',
+    34: 'Executive Update'
+  };
+
+  // Build Software 2 options (Format: Col {Letter} ({index}): {Heading})
   const s2TotalOptions = useMemo(() => {
-    const maxCols = Math.max(s2HeaderRow.length, 260);
+    const maxCols = Math.max(s2HeaderRow.length, 360);
     const opts: Array<{ idx: number; label: string; preview: string }> = [];
     
     for (let i = 0; i < maxCols; i++) {
       const letter = getColLetter(i);
       const hText = String(s2HeaderRow[i] || '').trim();
       const pText = String(s2ParentRow && s2ParentRow[i] ? s2ParentRow[i] : '').trim();
-      const sVal = String(s2SampleRow[i] || '').trim();
+      const defName = s2DefaultNameLookup[i] || '';
 
-      let displayLabel = `Col ${letter} (${i}): `;
-      if (hText) {
-        displayLabel += hText;
-      } else if (pText) {
-        displayLabel += `${pText} (Col ${letter})`;
-      } else {
-        displayLabel += `Column ${i + 1}`;
-      }
-
-      let cellPreview = hText || pText || (sVal ? `Sample: ${sVal}` : `Col ${letter}`);
+      const heading = hText || (pText ? `${pText}` : '') || defName || `Column ${i + 1}`;
+      const displayLabel = `Col ${letter} (${i}): ${heading}`;
+      const cellPreview = `"${hText || defName || pText || ''}"`;
 
       opts.push({
         idx: i,
@@ -347,7 +479,7 @@ export default function ColumnMapper({
     }
 
     return opts;
-  }, [s2HeaderRow, s2ParentRow, s2SampleRow]);
+  }, [s2HeaderRow, s2ParentRow, s2SampleRow, s2DefaultNameLookup]);
 
   // Software 1 Field Groups
   const s1FieldGroups = [
@@ -411,13 +543,17 @@ export default function ColumnMapper({
     }
   ];
 
-  const S2_TABS_CONFIG = [
-    { id: 'meta' as S2TabType, label: 'General Metadata', icon: '📋' },
-    { id: 'vowd' as S2TabType, label: 'VOWD', icon: '📈' },
-    { id: 'milestone' as S2TabType, label: 'Milestones', icon: '🎯' },
-    { id: 'labour' as S2TabType, label: 'Labour headcount', icon: '⚒️' },
-    { id: 'ur' as S2TabType, label: 'Residential UR', icon: '🏠' },
-    { id: 'uc' as S2TabType, label: 'Commercial UC', icon: '🏢' },
+  const S2_TABS_CONFIG: Array<{ id: S2TabType; label: string; icon: string }> = [
+    { id: 'meta', label: 'General Metadata', icon: '📋' },
+    { id: 'vowd', label: 'VOWD', icon: '💰' },
+    { id: 'milestone', label: 'Milestones', icon: '🎯' },
+    { id: 'labour', label: 'Labour headcount', icon: '👷' },
+    { id: 'ur', label: 'Unit Delivery - Residential', icon: '🏡' },
+    { id: 'uc', label: 'Unit Delivery - Commercial', icon: '🏢' },
+    { id: 'spi', label: 'SPI', icon: '📈' },
+    { id: 'quality', label: 'Quality Rating', icon: '⭐' },
+    { id: 'safety', label: 'Safety Rating', icon: '🦺' },
+    { id: 'qhse', label: 'Avg QHSE Rating', icon: '🛡️' },
   ];
 
   return (
@@ -456,7 +592,7 @@ export default function ColumnMapper({
           }`}
         >
           <Layers className="w-4 h-4 text-blue-400" />
-          <span>Sheet 2: Software 2 (FY 26-27 Timeline &amp; Progress)</span>
+          <span>Sheet 2: Software 2 (Timeline &amp; Progress)</span>
         </button>
 
         <button
@@ -477,7 +613,7 @@ export default function ColumnMapper({
       {/* ========================================================================= */}
       {activeSheetTab === 'software2' && (
         <div className="p-6 space-y-5" id="software2-config-panel">
-          
+
           {/* Header Row Index Selector */}
           <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
@@ -516,7 +652,7 @@ export default function ColumnMapper({
                       setActiveS2Tab(tab.id);
                       setS2FilterQuery('');
                     }}
-                    className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                       isActive
                         ? 'bg-white text-slate-900 shadow-sm border border-slate-300 ring-2 ring-blue-500/20'
                         : 'bg-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900 border border-transparent'
@@ -550,82 +686,71 @@ export default function ColumnMapper({
             )}
           </div>
 
-          {/* Parameter Mapping Rows */}
-          <div className="divide-y divide-slate-100 max-h-[600px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-200">
+          {/* Mapping Parameter Rows List */}
+          <div className="space-y-3">
             {visibleS2Rows.length === 0 ? (
-              <div className="text-center py-12 text-slate-400 space-y-2">
-                <Search className="w-8 h-8 mx-auto text-slate-300" />
-                <p className="font-bold text-sm text-slate-600">No parameters matching &quot;{s2FilterQuery}&quot;</p>
-                <p className="text-xs">Try searching for month names like &quot;Oct&quot;, &quot;Sep&quot;, or &quot;Plan&quot;.</p>
+              <div className="text-center py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                <p className="text-xs text-slate-500 font-semibold">No parameters match your search filter.</p>
               </div>
             ) : (
               visibleS2Rows.map((param) => {
-                const currentVal = getS2SelectedColIndex(param);
+                const selectedColIndex = getS2SelectedColIndex(param);
                 const isAuto = isS2AutoDetected(param);
-                const matchedOption = s2TotalOptions.find(o => o.idx === currentVal);
-                const headerPreviewText = s2HeaderRow[currentVal] 
-                  ? `"${String(s2HeaderRow[currentVal]).trim()}"` 
-                  : (matchedOption ? `"${matchedOption.preview}"` : `""`);
+                const selectedOpt = s2TotalOptions.find(o => o.idx === selectedColIndex);
+                const headerPreviewText = selectedOpt ? selectedOpt.preview.replace(/^"|"$/g, '') : (s2DefaultNameLookup[selectedColIndex] || '');
 
                 return (
-                  <div 
-                    key={param.key} 
-                    className="py-3.5 flex flex-col md:flex-row md:items-center justify-between gap-4 group hover:bg-slate-50/60 px-3 -mx-3 rounded-xl transition-colors"
+                  <div
+                    key={param.key}
+                    className="p-4 rounded-2xl border border-slate-200 hover:border-slate-300 bg-white shadow-2xs transition-all flex flex-col md:flex-row md:items-center justify-between gap-4"
                   >
-                    {/* Left: Parameter Name & Sub-label */}
-                    <div className="md:w-1/3 min-w-[200px]">
-                      <h4 className="text-sm font-extrabold text-slate-900 leading-tight">
-                        {param.primaryLabel}
-                      </h4>
-                      <p className="text-xs text-slate-400 font-medium mt-0.5">
-                        {param.subLabel}
-                      </p>
+                    <div className="space-y-1 max-w-md">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-sm font-extrabold text-slate-900 tracking-tight">
+                          {param.primaryLabel}
+                        </span>
+                        {isAuto ? (
+                          <span className="bg-emerald-50 text-emerald-700 text-[10px] font-extrabold px-2 py-0.5 rounded-full border border-emerald-200/60 flex items-center space-x-1">
+                            <Check className="w-3 h-3" />
+                            <span>Auto-Linked</span>
+                          </span>
+                        ) : (
+                          <span className="bg-amber-50 text-amber-700 text-[10px] font-extrabold px-2 py-0.5 rounded-full border border-amber-200/60">
+                            Custom Mapped
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-500">{param.subLabel}</p>
                     </div>
 
-                    {/* Middle: Auto-Detected Badge */}
-                    <div className="md:w-1/4 flex items-center md:justify-center">
-                      {isAuto ? (
-                        <span className="inline-flex items-center px-3 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-full text-[10px] font-black tracking-wider uppercase">
-                          AUTO-DETECTED
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center px-3 py-0.5 bg-blue-50 text-blue-700 border border-blue-100 rounded-full text-[10px] font-black tracking-wider uppercase">
-                          MANUALLY MAPPED
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Right: Dropdown Selector & Preview */}
-                    <div className="md:w-5/12 flex flex-col items-start md:items-end">
-                      <div className="relative w-full max-w-sm">
+                    <div className="w-full md:w-80 space-y-1.5">
+                      <div className="relative">
                         <select
-                          value={currentVal}
+                          value={selectedColIndex}
                           onChange={(e) => handleS2ColChange(param, parseInt(e.target.value))}
-                          className="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-bold text-slate-800 shadow-2xs focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 cursor-pointer appearance-none pr-8"
+                          className="w-full appearance-none bg-slate-50 hover:bg-slate-100/80 border border-slate-200 rounded-xl px-3.5 py-2 text-xs font-bold text-slate-800 pr-8 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white shadow-2xs transition-all cursor-pointer"
                         >
+                          <option value={-1}>-- Not Available / Skip --</option>
                           {s2TotalOptions.map(opt => (
                             <option key={opt.idx} value={opt.idx}>
                               {opt.label}
                             </option>
                           ))}
                         </select>
-                        <ChevronDown className="w-4 h-4 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                       </div>
 
-                      <span className="text-[11px] font-mono text-slate-400 mt-1 block">
-                        Cell value preview: <span className="text-slate-600 font-semibold">{headerPreviewText}</span>
-                      </span>
+                      {/* Monospace Preview Below Selector */}
+                      <div className="flex items-center justify-between px-1 text-[11px] text-slate-500 font-mono">
+                        <span className="truncate">
+                          Cell value preview: "{headerPreviewText}"
+                        </span>
+                      </div>
                     </div>
                   </div>
                 );
               })
             )}
-          </div>
-
-          {/* Footer note */}
-          <div className="pt-3 border-t border-slate-150 flex items-center justify-between text-xs text-slate-400">
-            <span>Changes are automatically saved and applied in your active session.</span>
-            <span className="font-bold text-slate-600">Software 2: 12-Month Extended Coverage</span>
           </div>
 
         </div>
@@ -637,14 +762,14 @@ export default function ColumnMapper({
       {activeSheetTab === 'software1' && (
         <div className="p-6 space-y-6" id="software1-config-panel">
           
-          {/* Software 1 Header Row Index Selector */}
-          <div className="bg-blue-50/50 border border-blue-100 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          {/* Header Row Selector */}
+          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <label className="block text-xs font-bold text-blue-900 uppercase tracking-wider">
+              <label className="block text-xs font-bold text-slate-800 uppercase tracking-wider">
                 Software 1 Header Row Index
               </label>
-              <p className="text-xs text-blue-700 mt-0.5">
-                The spreadsheet row containing Software 1 column labels.
+              <p className="text-xs text-slate-500 mt-0.5">
+                Spreadsheet row defining primary column headers for Software 1 (Master Tab).
               </p>
             </div>
             <div className="flex items-center space-x-2 shrink-0">
@@ -652,7 +777,7 @@ export default function ColumnMapper({
               <input
                 type="number"
                 min="0"
-                max={Math.min(20, sheetRows.length - 1)}
+                max={Math.max(10, sheetRows.length - 1)}
                 value={headerRowIndex}
                 onChange={(e) => handleS1HeaderRowChange(parseInt(e.target.value) || 0)}
                 className="w-16 px-2.5 py-1.5 border border-slate-300 rounded-xl text-sm text-center font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white shadow-2xs"
@@ -663,61 +788,69 @@ export default function ColumnMapper({
             </div>
           </div>
 
-          {/* Software 1 Grouped Fields List */}
+          {/* Grouped Fields */}
           <div className="space-y-6">
             {s1FieldGroups.map((group, gIdx) => {
               const GroupIcon = group.icon;
               return (
-                <div key={gIdx} className="bg-slate-50/70 border border-slate-200 rounded-2xl p-5 space-y-4">
-                  <div className="flex items-center space-x-2.5 pb-2 border-b border-slate-200/80">
-                    <div className="p-1.5 bg-white text-blue-600 rounded-lg border border-slate-200 shadow-2xs">
-                      <GroupIcon className="w-4 h-4" />
-                    </div>
-                    <h3 className="text-xs font-extrabold text-slate-800 uppercase tracking-wider">
+                <div key={gIdx} className="space-y-3">
+                  <div className="flex items-center space-x-2 border-b border-slate-100 pb-2">
+                    <GroupIcon className="w-4 h-4 text-blue-600" />
+                    <h3 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider">
                       {group.groupTitle}
                     </h3>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {group.fields.map(({ label, field, desc }) => {
-                      const currentVal = mapping[field];
-                      const hasMapping = currentVal !== undefined && currentVal !== -1;
-                      const colLetter = hasMapping ? getColLetter(currentVal) : '';
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                    {group.fields.map((f) => {
+                      const currentVal = mapping[f.field];
+                      const currentHeader = s1HeaderRow[currentVal] || s1DefaultNameLookup[currentVal] || '';
 
                       return (
-                        <div key={field} className="bg-white border border-slate-200 rounded-xl p-3.5 space-y-2 flex flex-col justify-between shadow-2xs">
+                        <div
+                          key={String(f.field)}
+                          className="p-3.5 rounded-2xl border border-slate-200 bg-white hover:border-slate-300 shadow-2xs transition-all space-y-2"
+                        >
                           <div className="flex items-center justify-between">
-                            <label className="text-xs font-bold text-slate-800">{label}</label>
-                            {hasMapping ? (
-                              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-1.5 py-0.5 rounded">
-                                Col {colLetter} ({currentVal})
+                            <label className="text-xs font-bold text-slate-900">
+                              {f.label}
+                            </label>
+                            {currentVal >= 0 ? (
+                              <span className="text-[10px] font-black text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">
+                                Col {getColLetter(currentVal)} ({currentVal})
                               </span>
                             ) : (
-                              <span className="text-[10px] text-slate-400 italic">Unassigned</span>
+                              <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md">
+                                Unassigned
+                              </span>
                             )}
                           </div>
+                          
+                          <p className="text-[11px] text-slate-400">{f.desc}</p>
 
                           <div className="relative">
                             <select
-                              value={currentVal ?? -1}
-                              onChange={(e) => handleS1ColumnChange(field, parseInt(e.target.value))}
-                              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer appearance-none pr-7"
+                              value={currentVal}
+                              onChange={(e) => handleS1ColumnChange(f.field, parseInt(e.target.value))}
+                              className="w-full appearance-none bg-slate-50 hover:bg-slate-100/80 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 pr-8 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white shadow-2xs transition-all cursor-pointer"
                             >
-                              <option value="-1">-- Unassigned / Not in Sheet --</option>
-                              {s1HeaderRow.map((colName, idx) => {
-                                const letter = getColLetter(idx);
-                                const hText = colName ? String(colName).trim() : `(Column ${idx + 1})`;
+                              <option value={-1}>-- Not Mapped / Omit --</option>
+                              {s1HeaderRow.map((h, i) => {
+                                const letter = getColLetter(i);
+                                const headingText = h || s1DefaultNameLookup[i] || `Column ${i + 1}`;
                                 return (
-                                  <option key={idx} value={idx}>
-                                    Col {letter} [{idx}]: {hText}
+                                  <option key={i} value={i}>
+                                    Col {letter} ({i}): {headingText}
                                   </option>
                                 );
                               })}
                             </select>
-                            <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+                            <ChevronDown className="w-4 h-4 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                           </div>
 
-                          <p className="text-[10px] text-slate-400 leading-tight">{desc}</p>
+                          <div className="text-[11px] text-slate-400 font-mono truncate px-0.5">
+                            Cell value preview: "{currentHeader}"
+                          </div>
                         </div>
                       );
                     })}
@@ -725,12 +858,6 @@ export default function ColumnMapper({
                 </div>
               );
             })}
-          </div>
-
-          {/* Footer note */}
-          <div className="pt-3 border-t border-slate-150 flex items-center justify-between text-xs text-slate-400">
-            <span>Changes are automatically saved and applied in your active session.</span>
-            <span className="font-bold text-slate-600">Software 1: Master Projectwise Coverage</span>
           </div>
 
         </div>

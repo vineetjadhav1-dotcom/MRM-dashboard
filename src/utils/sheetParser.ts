@@ -1,5 +1,6 @@
-import { Project, ColumnMapping, DashboardMetrics, VPData, LeaderData, AreaData, Software2Project, MonthlyMetric, Software2Mapping } from '@/src/types';
-import { sortVpNames, sortLeaderItems } from '@/src/utils/customOrder';
+import { Project, ColumnMapping, DashboardMetrics, VPData, LeaderData, AreaData, Software2Project, MonthlyMetric, Software2Mapping, FiscalYearKey } from '@/src/types';
+import { sortVpNames, sortLeaderItems, isCompleteOrLostStage, isTempProject } from '@/src/utils/customOrder';
+import { getFiscalYearConfig, DEFAULT_FISCAL_YEAR } from '@/src/utils/fiscalYear';
 
 /**
  * Score a row to determine how likely it is the header row
@@ -593,38 +594,45 @@ export function computeDashboardMetrics(projects: Project[]): DashboardMetrics {
   let totalBudgetUnderManagement = 0;
   let totalBudgetUnderConstruction = 0;
   let projectsUnderConstructionCount = 0;
+  let activeProjectsCount = 0;
 
   projects.forEach((proj) => {
-    // Status count
-    const status = proj.status;
-    statusCounts[status] = (statusCounts[status] || 0) + 1;
+    const isTemp = isTempProject(proj.code);
+    const isCompletedOrLost = isCompleteOrLostStage(proj.projectStage);
 
     // Unique sets
     if (proj.vp && proj.vp !== 'Unassigned') vps.add(proj.vp);
     if (proj.leader && proj.leader !== 'Unassigned') leaders.add(proj.leader);
     if (proj.area && proj.area !== 'Unassigned') areas.add(proj.area);
 
-    const budgetVal = parseBudgetValue(proj.totalBudget);
-    totalBudgetUnderManagement += budgetVal;
+    // Do not count temp, complete, complete-old, lost for project count, area, budget, or status counts
+    if (!isTemp && !isCompletedOrLost) {
+      activeProjectsCount += 1;
+      const status = proj.status;
+      statusCounts[status] = (statusCounts[status] || 0) + 1;
 
-    let areaVal = 0;
-    if (proj.areaSqft) {
-      const val = parseFloat(String(proj.areaSqft).replace(/,/g, ''));
-      if (!isNaN(val)) {
-        areaVal = val;
-        totalAreaSqft += val;
+      const budgetVal = parseBudgetValue(proj.totalBudget);
+      let areaVal = 0;
+      if (proj.areaSqft) {
+        const val = parseFloat(String(proj.areaSqft).replace(/,/g, ''));
+        if (!isNaN(val)) {
+          areaVal = val;
+        }
       }
-    }
 
-    if (isUnderConstructionStage(proj.projectStage)) {
-      projectsUnderConstructionCount += 1;
-      totalAreaUnderConstruction += areaVal;
-      totalBudgetUnderConstruction += budgetVal;
+      totalBudgetUnderManagement += budgetVal;
+      totalAreaSqft += areaVal;
+
+      if (isUnderConstructionStage(proj.projectStage)) {
+        projectsUnderConstructionCount += 1;
+        totalAreaUnderConstruction += areaVal;
+        totalBudgetUnderConstruction += budgetVal;
+      }
     }
   });
 
   return {
-    totalProjects: projects.length,
+    totalProjects: activeProjectsCount,
     totalVPs: vps.size,
     totalLeaders: leaders.size,
     totalAreas: areas.size,
@@ -657,11 +665,16 @@ export function groupProjectsByVP(projects: Project[]): VPData[] {
     }
 
     const data = vpMap.get(vpName)!;
-    data.projectsCount += 1;
     data.projects.push(proj);
-    
-    // Status count
-    data.statusCounts[proj.status] = (data.statusCounts[proj.status] || 0) + 1;
+
+    const isTemp = isTempProject(proj.code);
+    const isCompletedOrLost = isCompleteOrLostStage(proj.projectStage);
+
+    // Only count active projects for projectsCount and statusCounts
+    if (!isTemp && !isCompletedOrLost) {
+      data.projectsCount += 1;
+      data.statusCounts[proj.status] = (data.statusCounts[proj.status] || 0) + 1;
+    }
     
     // Unique sub-elements
     if (proj.leader && proj.leader !== 'Unassigned') data.leaders.add(proj.leader);
@@ -691,11 +704,16 @@ export function groupProjectsByLeader(projects: Project[]): LeaderData[] {
     }
 
     const data = leaderMap.get(leaderName)!;
-    data.projectsCount += 1;
     data.projects.push(proj);
-    
-    // Status count
-    data.statusCounts[proj.status] = (data.statusCounts[proj.status] || 0) + 1;
+
+    const isTemp = isTempProject(proj.code);
+    const isCompletedOrLost = isCompleteOrLostStage(proj.projectStage);
+
+    // Only count active projects for projectsCount and statusCounts
+    if (!isTemp && !isCompletedOrLost) {
+      data.projectsCount += 1;
+      data.statusCounts[proj.status] = (data.statusCounts[proj.status] || 0) + 1;
+    }
     
     // Unique sub-elements
     if (proj.area && proj.area !== 'Unassigned') data.areas.add(proj.area);
@@ -729,11 +747,16 @@ export function groupProjectsByArea(projects: Project[]): AreaData[] {
     }
 
     const data = areaMap.get(areaName)!;
-    data.projectsCount += 1;
     data.projects.push(proj);
-    
-    // Status count
-    data.statusCounts[proj.status] = (data.statusCounts[proj.status] || 0) + 1;
+
+    const isTemp = isTempProject(proj.code);
+    const isCompletedOrLost = isCompleteOrLostStage(proj.projectStage);
+
+    // Only count active projects for projectsCount and statusCounts
+    if (!isTemp && !isCompletedOrLost) {
+      data.projectsCount += 1;
+      data.statusCounts[proj.status] = (data.statusCounts[proj.status] || 0) + 1;
+    }
     
     // Unique sub-elements
     if (proj.vp && proj.vp !== 'Unassigned') data.vps.add(proj.vp);
@@ -744,230 +767,236 @@ export function groupProjectsByArea(projects: Project[]): AreaData[] {
 }
 
 /**
- * Parses Software2 monthly spreadsheet tab into Software2Project structures for FY 26-27 (Apr-26 to Mar-27)
+ * Parses Software2 monthly spreadsheet tab into Software2Project structures for active FY
  */
 export function parseSoftware2Data(
   rows: string[][], 
   headerRowIndex: number = 3,
-  customMapping?: Partial<Software2Mapping>
+  customMapping?: Partial<Software2Mapping>,
+  fyKey?: string
 ): Software2Project[] {
   if (!rows || rows.length <= headerRowIndex) return [];
 
-  // Map of col index to parsed details
+  const fyConfig = getFiscalYearConfig(fyKey);
+  const activeMonths = fyConfig.months;
+
   // Map of col index to parsed details with canonical default Software2 coordinates
   const colMappings: { [idx: number]: { metric: 'vowd' | 'milestone' | 'labour' | 'ur' | 'uc' | 'spi' | 'quality' | 'safety' | 'qhse'; month: string; type: 'planR0' | 'planR1' | 'achievement' } } = {
     // VOWD
-    18: { metric: 'vowd', month: 'Apr-26', type: 'planR0' },
-    19: { metric: 'vowd', month: 'Apr-26', type: 'achievement' },
-    20: { metric: 'vowd', month: 'May-26', type: 'planR0' },
-    21: { metric: 'vowd', month: 'May-26', type: 'achievement' },
-    22: { metric: 'vowd', month: 'Jun-26', type: 'planR0' },
-    23: { metric: 'vowd', month: 'Jun-26', type: 'achievement' },
-    24: { metric: 'vowd', month: 'Jul-26', type: 'planR0' },
-    25: { metric: 'vowd', month: 'Jul-26', type: 'achievement' },
-    26: { metric: 'vowd', month: 'Aug-26', type: 'planR0' },
-    27: { metric: 'vowd', month: 'Aug-26', type: 'achievement' },
-    28: { metric: 'vowd', month: 'Sep-26', type: 'planR0' },
-    29: { metric: 'vowd', month: 'Sep-26', type: 'achievement' },
-    30: { metric: 'vowd', month: 'Oct-26', type: 'planR0' },
-    31: { metric: 'vowd', month: 'Oct-26', type: 'planR1' },
-    32: { metric: 'vowd', month: 'Oct-26', type: 'achievement' },
-    33: { metric: 'vowd', month: 'Nov-26', type: 'planR0' },
-    34: { metric: 'vowd', month: 'Nov-26', type: 'planR1' },
-    35: { metric: 'vowd', month: 'Nov-26', type: 'achievement' },
-    36: { metric: 'vowd', month: 'Dec-26', type: 'planR0' },
-    37: { metric: 'vowd', month: 'Dec-26', type: 'planR1' },
-    38: { metric: 'vowd', month: 'Dec-26', type: 'achievement' },
-    39: { metric: 'vowd', month: 'Jan-27', type: 'planR0' },
-    40: { metric: 'vowd', month: 'Jan-27', type: 'planR1' },
-    41: { metric: 'vowd', month: 'Jan-27', type: 'achievement' },
-    42: { metric: 'vowd', month: 'Feb-27', type: 'planR0' },
-    43: { metric: 'vowd', month: 'Feb-27', type: 'planR1' },
-    44: { metric: 'vowd', month: 'Feb-27', type: 'achievement' },
-    45: { metric: 'vowd', month: 'Mar-27', type: 'planR0' },
-    46: { metric: 'vowd', month: 'Mar-27', type: 'planR1' },
-    47: { metric: 'vowd', month: 'Mar-27', type: 'achievement' },
+    18: { metric: 'vowd', month: activeMonths[0].key, type: 'planR0' },
+    19: { metric: 'vowd', month: activeMonths[0].key, type: 'achievement' },
+    20: { metric: 'vowd', month: activeMonths[1].key, type: 'planR0' },
+    21: { metric: 'vowd', month: activeMonths[1].key, type: 'achievement' },
+    22: { metric: 'vowd', month: activeMonths[2].key, type: 'planR0' },
+    23: { metric: 'vowd', month: activeMonths[2].key, type: 'achievement' },
+    24: { metric: 'vowd', month: activeMonths[3].key, type: 'planR0' },
+    25: { metric: 'vowd', month: activeMonths[3].key, type: 'achievement' },
+    26: { metric: 'vowd', month: activeMonths[4].key, type: 'planR0' },
+    27: { metric: 'vowd', month: activeMonths[4].key, type: 'achievement' },
+    28: { metric: 'vowd', month: activeMonths[5].key, type: 'planR0' },
+    29: { metric: 'vowd', month: activeMonths[5].key, type: 'achievement' },
+    30: { metric: 'vowd', month: activeMonths[6].key, type: 'planR0' },
+    31: { metric: 'vowd', month: activeMonths[6].key, type: 'planR1' },
+    32: { metric: 'vowd', month: activeMonths[6].key, type: 'achievement' },
+    33: { metric: 'vowd', month: activeMonths[7].key, type: 'planR0' },
+    34: { metric: 'vowd', month: activeMonths[7].key, type: 'planR1' },
+    35: { metric: 'vowd', month: activeMonths[7].key, type: 'achievement' },
+    36: { metric: 'vowd', month: activeMonths[8].key, type: 'planR0' },
+    37: { metric: 'vowd', month: activeMonths[8].key, type: 'planR1' },
+    38: { metric: 'vowd', month: activeMonths[8].key, type: 'achievement' },
+    39: { metric: 'vowd', month: activeMonths[9].key, type: 'planR0' },
+    40: { metric: 'vowd', month: activeMonths[9].key, type: 'planR1' },
+    41: { metric: 'vowd', month: activeMonths[9].key, type: 'achievement' },
+    42: { metric: 'vowd', month: activeMonths[10].key, type: 'planR0' },
+    43: { metric: 'vowd', month: activeMonths[10].key, type: 'planR1' },
+    44: { metric: 'vowd', month: activeMonths[10].key, type: 'achievement' },
+    45: { metric: 'vowd', month: activeMonths[11].key, type: 'planR0' },
+    46: { metric: 'vowd', month: activeMonths[11].key, type: 'planR1' },
+    47: { metric: 'vowd', month: activeMonths[11].key, type: 'achievement' },
 
     // Milestones
-    57: { metric: 'milestone', month: 'Apr-26', type: 'planR0' },
-    58: { metric: 'milestone', month: 'Apr-26', type: 'achievement' },
-    59: { metric: 'milestone', month: 'May-26', type: 'planR0' },
-    60: { metric: 'milestone', month: 'May-26', type: 'achievement' },
-    61: { metric: 'milestone', month: 'Jun-26', type: 'planR0' },
-    62: { metric: 'milestone', month: 'Jun-26', type: 'achievement' },
-    63: { metric: 'milestone', month: 'Jul-26', type: 'planR0' },
-    64: { metric: 'milestone', month: 'Jul-26', type: 'achievement' },
-    65: { metric: 'milestone', month: 'Aug-26', type: 'planR0' },
-    66: { metric: 'milestone', month: 'Aug-26', type: 'achievement' },
-    67: { metric: 'milestone', month: 'Sep-26', type: 'planR0' },
-    68: { metric: 'milestone', month: 'Sep-26', type: 'achievement' },
-    69: { metric: 'milestone', month: 'Oct-26', type: 'planR0' },
-    70: { metric: 'milestone', month: 'Oct-26', type: 'planR1' },
-    71: { metric: 'milestone', month: 'Oct-26', type: 'achievement' },
-    72: { metric: 'milestone', month: 'Nov-26', type: 'planR0' },
-    73: { metric: 'milestone', month: 'Nov-26', type: 'planR1' },
-    74: { metric: 'milestone', month: 'Nov-26', type: 'achievement' },
-    75: { metric: 'milestone', month: 'Dec-26', type: 'planR0' },
-    76: { metric: 'milestone', month: 'Dec-26', type: 'planR1' },
-    77: { metric: 'milestone', month: 'Dec-26', type: 'achievement' },
-    78: { metric: 'milestone', month: 'Jan-27', type: 'planR0' },
-    79: { metric: 'milestone', month: 'Jan-27', type: 'planR1' },
-    80: { metric: 'milestone', month: 'Jan-27', type: 'achievement' },
-    81: { metric: 'milestone', month: 'Feb-27', type: 'planR0' },
-    82: { metric: 'milestone', month: 'Feb-27', type: 'planR1' },
-    83: { metric: 'milestone', month: 'Feb-27', type: 'achievement' },
-    84: { metric: 'milestone', month: 'Mar-27', type: 'planR0' },
-    85: { metric: 'milestone', month: 'Mar-27', type: 'planR1' },
-    86: { metric: 'milestone', month: 'Mar-27', type: 'achievement' },
+    57: { metric: 'milestone', month: activeMonths[0].key, type: 'planR0' },
+    58: { metric: 'milestone', month: activeMonths[0].key, type: 'achievement' },
+    59: { metric: 'milestone', month: activeMonths[1].key, type: 'planR0' },
+    60: { metric: 'milestone', month: activeMonths[1].key, type: 'achievement' },
+    61: { metric: 'milestone', month: activeMonths[2].key, type: 'planR0' },
+    62: { metric: 'milestone', month: activeMonths[2].key, type: 'achievement' },
+    63: { metric: 'milestone', month: activeMonths[3].key, type: 'planR0' },
+    64: { metric: 'milestone', month: activeMonths[3].key, type: 'achievement' },
+    65: { metric: 'milestone', month: activeMonths[4].key, type: 'planR0' },
+    66: { metric: 'milestone', month: activeMonths[4].key, type: 'achievement' },
+    67: { metric: 'milestone', month: activeMonths[5].key, type: 'planR0' },
+    68: { metric: 'milestone', month: activeMonths[5].key, type: 'achievement' },
+    69: { metric: 'milestone', month: activeMonths[6].key, type: 'planR0' },
+    70: { metric: 'milestone', month: activeMonths[6].key, type: 'planR1' },
+    71: { metric: 'milestone', month: activeMonths[6].key, type: 'achievement' },
+    72: { metric: 'milestone', month: activeMonths[7].key, type: 'planR0' },
+    73: { metric: 'milestone', month: activeMonths[7].key, type: 'planR1' },
+    74: { metric: 'milestone', month: activeMonths[7].key, type: 'achievement' },
+    75: { metric: 'milestone', month: activeMonths[8].key, type: 'planR0' },
+    76: { metric: 'milestone', month: activeMonths[8].key, type: 'planR1' },
+    77: { metric: 'milestone', month: activeMonths[8].key, type: 'achievement' },
+    78: { metric: 'milestone', month: activeMonths[9].key, type: 'planR0' },
+    79: { metric: 'milestone', month: activeMonths[9].key, type: 'planR1' },
+    80: { metric: 'milestone', month: activeMonths[9].key, type: 'achievement' },
+    81: { metric: 'milestone', month: activeMonths[10].key, type: 'planR0' },
+    82: { metric: 'milestone', month: activeMonths[10].key, type: 'planR1' },
+    83: { metric: 'milestone', month: activeMonths[10].key, type: 'achievement' },
+    84: { metric: 'milestone', month: activeMonths[11].key, type: 'planR0' },
+    85: { metric: 'milestone', month: activeMonths[11].key, type: 'planR1' },
+    86: { metric: 'milestone', month: activeMonths[11].key, type: 'achievement' },
 
     // Residential Delivery (UR)
-    95: { metric: 'ur', month: 'Apr-26', type: 'planR0' },
-    96: { metric: 'ur', month: 'Apr-26', type: 'achievement' },
-    97: { metric: 'ur', month: 'May-26', type: 'planR0' },
-    98: { metric: 'ur', month: 'May-26', type: 'achievement' },
-    99: { metric: 'ur', month: 'Jun-26', type: 'planR0' },
-    100: { metric: 'ur', month: 'Jun-26', type: 'achievement' },
-    101: { metric: 'ur', month: 'Jul-26', type: 'planR0' },
-    102: { metric: 'ur', month: 'Jul-26', type: 'achievement' },
-    103: { metric: 'ur', month: 'Aug-26', type: 'planR0' },
-    104: { metric: 'ur', month: 'Aug-26', type: 'achievement' },
-    105: { metric: 'ur', month: 'Sep-26', type: 'planR0' },
-    106: { metric: 'ur', month: 'Sep-26', type: 'achievement' },
-    107: { metric: 'ur', month: 'Oct-26', type: 'planR0' },
-    108: { metric: 'ur', month: 'Oct-26', type: 'planR1' },
-    109: { metric: 'ur', month: 'Oct-26', type: 'achievement' },
-    110: { metric: 'ur', month: 'Nov-26', type: 'planR0' },
-    111: { metric: 'ur', month: 'Nov-26', type: 'planR1' },
-    112: { metric: 'ur', month: 'Nov-26', type: 'achievement' },
-    113: { metric: 'ur', month: 'Dec-26', type: 'planR0' },
-    114: { metric: 'ur', month: 'Dec-26', type: 'planR1' },
-    115: { metric: 'ur', month: 'Dec-26', type: 'achievement' },
-    116: { metric: 'ur', month: 'Jan-27', type: 'planR0' },
-    117: { metric: 'ur', month: 'Jan-27', type: 'planR1' },
-    118: { metric: 'ur', month: 'Jan-27', type: 'achievement' },
-    119: { metric: 'ur', month: 'Feb-27', type: 'planR0' },
-    120: { metric: 'ur', month: 'Feb-27', type: 'planR1' },
-    121: { metric: 'ur', month: 'Feb-27', type: 'achievement' },
-    122: { metric: 'ur', month: 'Mar-27', type: 'planR0' },
-    123: { metric: 'ur', month: 'Mar-27', type: 'planR1' },
-    124: { metric: 'ur', month: 'Mar-27', type: 'achievement' },
+    95: { metric: 'ur', month: activeMonths[0].key, type: 'planR0' },
+    96: { metric: 'ur', month: activeMonths[0].key, type: 'achievement' },
+    97: { metric: 'ur', month: activeMonths[1].key, type: 'planR0' },
+    98: { metric: 'ur', month: activeMonths[1].key, type: 'achievement' },
+    99: { metric: 'ur', month: activeMonths[2].key, type: 'planR0' },
+    100: { metric: 'ur', month: activeMonths[2].key, type: 'achievement' },
+    101: { metric: 'ur', month: activeMonths[3].key, type: 'planR0' },
+    102: { metric: 'ur', month: activeMonths[3].key, type: 'achievement' },
+    103: { metric: 'ur', month: activeMonths[4].key, type: 'planR0' },
+    104: { metric: 'ur', month: activeMonths[4].key, type: 'achievement' },
+    105: { metric: 'ur', month: activeMonths[5].key, type: 'planR0' },
+    106: { metric: 'ur', month: activeMonths[5].key, type: 'achievement' },
+    107: { metric: 'ur', month: activeMonths[6].key, type: 'planR0' },
+    108: { metric: 'ur', month: activeMonths[6].key, type: 'planR1' },
+    109: { metric: 'ur', month: activeMonths[6].key, type: 'achievement' },
+    110: { metric: 'ur', month: activeMonths[7].key, type: 'planR0' },
+    111: { metric: 'ur', month: activeMonths[7].key, type: 'planR1' },
+    112: { metric: 'ur', month: activeMonths[7].key, type: 'achievement' },
+    113: { metric: 'ur', month: activeMonths[8].key, type: 'planR0' },
+    114: { metric: 'ur', month: activeMonths[8].key, type: 'planR1' },
+    115: { metric: 'ur', month: activeMonths[8].key, type: 'achievement' },
+    116: { metric: 'ur', month: activeMonths[9].key, type: 'planR0' },
+    117: { metric: 'ur', month: activeMonths[9].key, type: 'planR1' },
+    118: { metric: 'ur', month: activeMonths[9].key, type: 'achievement' },
+    119: { metric: 'ur', month: activeMonths[10].key, type: 'planR0' },
+    120: { metric: 'ur', month: activeMonths[10].key, type: 'planR1' },
+    121: { metric: 'ur', month: activeMonths[10].key, type: 'achievement' },
+    122: { metric: 'ur', month: activeMonths[11].key, type: 'planR0' },
+    123: { metric: 'ur', month: activeMonths[11].key, type: 'planR1' },
+    124: { metric: 'ur', month: activeMonths[11].key, type: 'achievement' },
 
     // Commercial Delivery (UC)
-    132: { metric: 'uc', month: 'Apr-26', type: 'planR0' },
-    133: { metric: 'uc', month: 'Apr-26', type: 'achievement' },
-    134: { metric: 'uc', month: 'May-26', type: 'planR0' },
-    135: { metric: 'uc', month: 'May-26', type: 'achievement' },
-    136: { metric: 'uc', month: 'Jun-26', type: 'planR0' },
-    137: { metric: 'uc', month: 'Jun-26', type: 'achievement' },
-    138: { metric: 'uc', month: 'Jul-26', type: 'planR0' },
-    139: { metric: 'uc', month: 'Jul-26', type: 'achievement' },
-    140: { metric: 'uc', month: 'Aug-26', type: 'planR0' },
-    141: { metric: 'uc', month: 'Aug-26', type: 'achievement' },
-    142: { metric: 'uc', month: 'Sep-26', type: 'planR0' },
-    143: { metric: 'uc', month: 'Sep-26', type: 'achievement' },
-    144: { metric: 'uc', month: 'Oct-26', type: 'planR0' },
-    145: { metric: 'uc', month: 'Oct-26', type: 'planR1' },
-    146: { metric: 'uc', month: 'Oct-26', type: 'achievement' },
-    147: { metric: 'uc', month: 'Nov-26', type: 'planR0' },
-    148: { metric: 'uc', month: 'Nov-26', type: 'planR1' },
-    149: { metric: 'uc', month: 'Nov-26', type: 'achievement' },
-    150: { metric: 'uc', month: 'Dec-26', type: 'planR0' },
-    151: { metric: 'uc', month: 'Dec-26', type: 'planR1' },
-    152: { metric: 'uc', month: 'Dec-26', type: 'achievement' },
-    153: { metric: 'uc', month: 'Jan-27', type: 'planR0' },
-    154: { metric: 'uc', month: 'Jan-27', type: 'planR1' },
-    155: { metric: 'uc', month: 'Jan-27', type: 'achievement' },
-    156: { metric: 'uc', month: 'Feb-27', type: 'planR0' },
-    157: { metric: 'uc', month: 'Feb-27', type: 'planR1' },
-    158: { metric: 'uc', month: 'Feb-27', type: 'achievement' },
-    159: { metric: 'uc', month: 'Mar-27', type: 'planR0' },
-    160: { metric: 'uc', month: 'Mar-27', type: 'planR1' },
-    161: { metric: 'uc', month: 'Mar-27', type: 'achievement' },
+    132: { metric: 'uc', month: activeMonths[0].key, type: 'planR0' },
+    133: { metric: 'uc', month: activeMonths[0].key, type: 'achievement' },
+    134: { metric: 'uc', month: activeMonths[1].key, type: 'planR0' },
+    135: { metric: 'uc', month: activeMonths[1].key, type: 'achievement' },
+    136: { metric: 'uc', month: activeMonths[2].key, type: 'planR0' },
+    137: { metric: 'uc', month: activeMonths[2].key, type: 'achievement' },
+    138: { metric: 'uc', month: activeMonths[3].key, type: 'planR0' },
+    139: { metric: 'uc', month: activeMonths[3].key, type: 'achievement' },
+    140: { metric: 'uc', month: activeMonths[4].key, type: 'planR0' },
+    141: { metric: 'uc', month: activeMonths[4].key, type: 'achievement' },
+    142: { metric: 'uc', month: activeMonths[5].key, type: 'planR0' },
+    143: { metric: 'uc', month: activeMonths[5].key, type: 'achievement' },
+    144: { metric: 'uc', month: activeMonths[6].key, type: 'planR0' },
+    145: { metric: 'uc', month: activeMonths[6].key, type: 'planR1' },
+    146: { metric: 'uc', month: activeMonths[6].key, type: 'achievement' },
+    147: { metric: 'uc', month: activeMonths[7].key, type: 'planR0' },
+    148: { metric: 'uc', month: activeMonths[7].key, type: 'planR1' },
+    149: { metric: 'uc', month: activeMonths[7].key, type: 'achievement' },
+    150: { metric: 'uc', month: activeMonths[8].key, type: 'planR0' },
+    151: { metric: 'uc', month: activeMonths[8].key, type: 'planR1' },
+    152: { metric: 'uc', month: activeMonths[8].key, type: 'achievement' },
+    153: { metric: 'uc', month: activeMonths[9].key, type: 'planR0' },
+    154: { metric: 'uc', month: activeMonths[9].key, type: 'planR1' },
+    155: { metric: 'uc', month: activeMonths[9].key, type: 'achievement' },
+    156: { metric: 'uc', month: activeMonths[10].key, type: 'planR0' },
+    157: { metric: 'uc', month: activeMonths[10].key, type: 'planR1' },
+    158: { metric: 'uc', month: activeMonths[10].key, type: 'achievement' },
+    159: { metric: 'uc', month: activeMonths[11].key, type: 'planR0' },
+    160: { metric: 'uc', month: activeMonths[11].key, type: 'planR1' },
+    161: { metric: 'uc', month: activeMonths[11].key, type: 'achievement' },
 
-    // Labour
-    228: { metric: 'labour', month: 'Apr-26', type: 'planR0' },
-    229: { metric: 'labour', month: 'Apr-26', type: 'achievement' },
-    230: { metric: 'labour', month: 'May-26', type: 'planR0' },
-    231: { metric: 'labour', month: 'May-26', type: 'achievement' },
-    232: { metric: 'labour', month: 'Jun-26', type: 'planR0' },
-    233: { metric: 'labour', month: 'Jun-26', type: 'achievement' },
-    234: { metric: 'labour', month: 'Jul-26', type: 'planR0' },
-    235: { metric: 'labour', month: 'Jul-26', type: 'achievement' },
-    236: { metric: 'labour', month: 'Aug-26', type: 'planR0' },
-    237: { metric: 'labour', month: 'Aug-26', type: 'achievement' },
-    238: { metric: 'labour', month: 'Sep-26', type: 'planR0' },
-    239: { metric: 'labour', month: 'Sep-26', type: 'achievement' },
-    241: { metric: 'labour', month: 'Oct-26', type: 'planR0' },
-    242: { metric: 'labour', month: 'Oct-26', type: 'planR1' },
-    243: { metric: 'labour', month: 'Oct-26', type: 'achievement' },
-    244: { metric: 'labour', month: 'Nov-26', type: 'planR0' },
-    245: { metric: 'labour', month: 'Nov-26', type: 'planR1' },
-    246: { metric: 'labour', month: 'Nov-26', type: 'achievement' },
-    247: { metric: 'labour', month: 'Dec-26', type: 'planR0' },
-    248: { metric: 'labour', month: 'Dec-26', type: 'planR1' },
-    249: { metric: 'labour', month: 'Dec-26', type: 'achievement' },
-    250: { metric: 'labour', month: 'Jan-27', type: 'planR0' },
-    251: { metric: 'labour', month: 'Jan-27', type: 'planR1' },
-    252: { metric: 'labour', month: 'Jan-27', type: 'achievement' },
-    253: { metric: 'labour', month: 'Feb-27', type: 'planR0' },
-    254: { metric: 'labour', month: 'Feb-27', type: 'planR1' },
-    255: { metric: 'labour', month: 'Feb-27', type: 'achievement' },
-    256: { metric: 'labour', month: 'Mar-27', type: 'planR0' },
-    257: { metric: 'labour', month: 'Mar-27', type: 'planR1' },
-    258: { metric: 'labour', month: 'Mar-27', type: 'achievement' },
+    // Labour (H1: Apr-Sep with R0 Plan, Ach; H2: Oct-Mar with R0 Plan, R1 Plan, Ach) - Col HV (229) to Col IY (258)
+    229: { metric: 'labour', month: activeMonths[0].key, type: 'planR0' },
+    230: { metric: 'labour', month: activeMonths[0].key, type: 'achievement' },
+    231: { metric: 'labour', month: activeMonths[1].key, type: 'planR0' },
+    232: { metric: 'labour', month: activeMonths[1].key, type: 'achievement' },
+    233: { metric: 'labour', month: activeMonths[2].key, type: 'planR0' },
+    234: { metric: 'labour', month: activeMonths[2].key, type: 'achievement' },
+    235: { metric: 'labour', month: activeMonths[3].key, type: 'planR0' },
+    236: { metric: 'labour', month: activeMonths[3].key, type: 'achievement' },
+    237: { metric: 'labour', month: activeMonths[4].key, type: 'planR0' },
+    238: { metric: 'labour', month: activeMonths[4].key, type: 'achievement' },
+    239: { metric: 'labour', month: activeMonths[5].key, type: 'planR0' },
+    240: { metric: 'labour', month: activeMonths[5].key, type: 'achievement' },
+    241: { metric: 'labour', month: activeMonths[6].key, type: 'planR0' },
+    242: { metric: 'labour', month: activeMonths[6].key, type: 'planR1' },
+    243: { metric: 'labour', month: activeMonths[6].key, type: 'achievement' },
+    244: { metric: 'labour', month: activeMonths[7].key, type: 'planR0' },
+    245: { metric: 'labour', month: activeMonths[7].key, type: 'planR1' },
+    246: { metric: 'labour', month: activeMonths[7].key, type: 'achievement' },
+    247: { metric: 'labour', month: activeMonths[8].key, type: 'planR0' },
+    248: { metric: 'labour', month: activeMonths[8].key, type: 'planR1' },
+    249: { metric: 'labour', month: activeMonths[8].key, type: 'achievement' },
+    250: { metric: 'labour', month: activeMonths[9].key, type: 'planR0' },
+    251: { metric: 'labour', month: activeMonths[9].key, type: 'planR1' },
+    252: { metric: 'labour', month: activeMonths[9].key, type: 'achievement' },
+    253: { metric: 'labour', month: activeMonths[10].key, type: 'planR0' },
+    254: { metric: 'labour', month: activeMonths[10].key, type: 'planR1' },
+    255: { metric: 'labour', month: activeMonths[10].key, type: 'achievement' },
+    256: { metric: 'labour', month: activeMonths[11].key, type: 'planR0' },
+    257: { metric: 'labour', month: activeMonths[11].key, type: 'planR1' },
+    258: { metric: 'labour', month: activeMonths[11].key, type: 'achievement' },
 
-    // SPI FY25
-    284: { metric: 'spi', month: 'Apr-25', type: 'achievement' },
-    285: { metric: 'spi', month: 'May-25', type: 'achievement' },
-    286: { metric: 'spi', month: 'Jun-25', type: 'achievement' },
-    287: { metric: 'spi', month: 'Jul-25', type: 'achievement' },
-    288: { metric: 'spi', month: 'Aug-25', type: 'achievement' },
-    289: { metric: 'spi', month: 'Sep-25', type: 'achievement' },
-    290: { metric: 'spi', month: 'Oct-25', type: 'achievement' },
-    292: { metric: 'spi', month: 'Nov-25', type: 'achievement' },
-    293: { metric: 'spi', month: 'Dec-25', type: 'achievement' },
-    294: { metric: 'spi', month: 'Jan-26', type: 'achievement' },
-    295: { metric: 'spi', month: 'Feb-26', type: 'achievement' },
-    296: { metric: 'spi', month: 'Mar-26', type: 'achievement' },
+    // SPI (12 Months Achievement only) - Columns 284 to 295
+    284: { metric: 'spi', month: activeMonths[0].key, type: 'achievement' },
+    285: { metric: 'spi', month: activeMonths[1].key, type: 'achievement' },
+    286: { metric: 'spi', month: activeMonths[2].key, type: 'achievement' },
+    287: { metric: 'spi', month: activeMonths[3].key, type: 'achievement' },
+    288: { metric: 'spi', month: activeMonths[4].key, type: 'achievement' },
+    289: { metric: 'spi', month: activeMonths[5].key, type: 'achievement' },
+    290: { metric: 'spi', month: activeMonths[6].key, type: 'achievement' },
+    291: { metric: 'spi', month: activeMonths[7].key, type: 'achievement' },
+    292: { metric: 'spi', month: activeMonths[8].key, type: 'achievement' },
+    293: { metric: 'spi', month: activeMonths[9].key, type: 'achievement' },
+    294: { metric: 'spi', month: activeMonths[10].key, type: 'achievement' },
+    295: { metric: 'spi', month: activeMonths[11].key, type: 'achievement' },
 
-    // Quality (Qua) FY25
-    298: { metric: 'quality', month: 'Apr-25', type: 'achievement' },
-    299: { metric: 'quality', month: 'May-25', type: 'achievement' },
-    300: { metric: 'quality', month: 'Jun-25', type: 'achievement' },
-    301: { metric: 'quality', month: 'Jul-25', type: 'achievement' },
-    302: { metric: 'quality', month: 'Aug-25', type: 'achievement' },
-    303: { metric: 'quality', month: 'Sep-25', type: 'achievement' },
-    304: { metric: 'quality', month: 'Oct-25', type: 'achievement' },
-    306: { metric: 'quality', month: 'Nov-25', type: 'achievement' },
-    307: { metric: 'quality', month: 'Dec-25', type: 'achievement' },
-    308: { metric: 'quality', month: 'Jan-26', type: 'achievement' },
-    309: { metric: 'quality', month: 'Feb-26', type: 'achievement' },
+    // Quality Rating (12 Months Achievement only) - Columns 298 to 309
+    298: { metric: 'quality', month: activeMonths[0].key, type: 'achievement' },
+    299: { metric: 'quality', month: activeMonths[1].key, type: 'achievement' },
+    300: { metric: 'quality', month: activeMonths[2].key, type: 'achievement' },
+    301: { metric: 'quality', month: activeMonths[3].key, type: 'achievement' },
+    302: { metric: 'quality', month: activeMonths[4].key, type: 'achievement' },
+    303: { metric: 'quality', month: activeMonths[5].key, type: 'achievement' },
+    304: { metric: 'quality', month: activeMonths[6].key, type: 'achievement' },
+    305: { metric: 'quality', month: activeMonths[7].key, type: 'achievement' },
+    306: { metric: 'quality', month: activeMonths[8].key, type: 'achievement' },
+    307: { metric: 'quality', month: activeMonths[9].key, type: 'achievement' },
+    308: { metric: 'quality', month: activeMonths[10].key, type: 'achievement' },
+    309: { metric: 'quality', month: activeMonths[11].key, type: 'achievement' },
 
-    // Safety (Saf) FY25
-    311: { metric: 'safety', month: 'Apr-25', type: 'achievement' },
-    312: { metric: 'safety', month: 'May-25', type: 'achievement' },
-    313: { metric: 'safety', month: 'Jun-25', type: 'achievement' },
-    314: { metric: 'safety', month: 'Jul-25', type: 'achievement' },
-    315: { metric: 'safety', month: 'Aug-25', type: 'achievement' },
-    316: { metric: 'safety', month: 'Sep-25', type: 'achievement' },
-    317: { metric: 'safety', month: 'Oct-25', type: 'achievement' },
-    319: { metric: 'safety', month: 'Nov-25', type: 'achievement' },
-    320: { metric: 'safety', month: 'Dec-25', type: 'achievement' },
-    321: { metric: 'safety', month: 'Jan-26', type: 'achievement' },
-    322: { metric: 'safety', month: 'Feb-26', type: 'achievement' },
+    // Safety Rating (12 Months Achievement only) - Columns 311 to 322
+    311: { metric: 'safety', month: activeMonths[0].key, type: 'achievement' },
+    312: { metric: 'safety', month: activeMonths[1].key, type: 'achievement' },
+    313: { metric: 'safety', month: activeMonths[2].key, type: 'achievement' },
+    314: { metric: 'safety', month: activeMonths[3].key, type: 'achievement' },
+    315: { metric: 'safety', month: activeMonths[4].key, type: 'achievement' },
+    316: { metric: 'safety', month: activeMonths[5].key, type: 'achievement' },
+    317: { metric: 'safety', month: activeMonths[6].key, type: 'achievement' },
+    318: { metric: 'safety', month: activeMonths[7].key, type: 'achievement' },
+    319: { metric: 'safety', month: activeMonths[8].key, type: 'achievement' },
+    320: { metric: 'safety', month: activeMonths[9].key, type: 'achievement' },
+    321: { metric: 'safety', month: activeMonths[10].key, type: 'achievement' },
+    322: { metric: 'safety', month: activeMonths[11].key, type: 'achievement' },
 
-    // Avg QHSE (Avg) FY25
-    324: { metric: 'qhse', month: 'Apr-25', type: 'achievement' },
-    325: { metric: 'qhse', month: 'May-25', type: 'achievement' },
-    326: { metric: 'qhse', month: 'Jun-25', type: 'achievement' },
-    327: { metric: 'qhse', month: 'Jul-25', type: 'achievement' },
-    328: { metric: 'qhse', month: 'Aug-25', type: 'achievement' },
-    329: { metric: 'qhse', month: 'Sep-25', type: 'achievement' },
-    330: { metric: 'qhse', month: 'Oct-25', type: 'achievement' },
-    332: { metric: 'qhse', month: 'Nov-25', type: 'achievement' },
-    333: { metric: 'qhse', month: 'Dec-25', type: 'achievement' },
-    334: { metric: 'qhse', month: 'Jan-26', type: 'achievement' },
-    335: { metric: 'qhse', month: 'Feb-26', type: 'achievement' }
+    // Avg QHSE Rating (12 Months Achievement only) - Columns 324 to 335
+    324: { metric: 'qhse', month: activeMonths[0].key, type: 'achievement' },
+    325: { metric: 'qhse', month: activeMonths[1].key, type: 'achievement' },
+    326: { metric: 'qhse', month: activeMonths[2].key, type: 'achievement' },
+    327: { metric: 'qhse', month: activeMonths[3].key, type: 'achievement' },
+    328: { metric: 'qhse', month: activeMonths[4].key, type: 'achievement' },
+    329: { metric: 'qhse', month: activeMonths[5].key, type: 'achievement' },
+    330: { metric: 'qhse', month: activeMonths[6].key, type: 'achievement' },
+    331: { metric: 'qhse', month: activeMonths[7].key, type: 'achievement' },
+    332: { metric: 'qhse', month: activeMonths[8].key, type: 'achievement' },
+    333: { metric: 'qhse', month: activeMonths[9].key, type: 'achievement' },
+    334: { metric: 'qhse', month: activeMonths[10].key, type: 'achievement' },
+    335: { metric: 'qhse', month: activeMonths[11].key, type: 'achievement' }
   };
   
   // Basic metadata indexes
@@ -982,37 +1011,29 @@ export function parseSoftware2Data(
   let safetyRatingIndex = 9;  // Column J - Safety Rating
   let avgQhseRatingIndex = 10; // Column K - Avg QHSE Rating
 
-  // Fiscal Year 25-26 months
-  const fy25Months = [
-    { key: 'Apr-25', regex: /\bapr(il)?\b.*25|apr25|apr\-25|apr\'25/i },
-    { key: 'May-25', regex: /\bmay\b.*25|may25|may\-25|may\'25/i },
-    { key: 'Jun-25', regex: /\bjun(e)?\b.*25|jun25|jun\-25|jun\'25/i },
-    { key: 'Jul-25', regex: /\bjul(y)?\b.*25|jul25|jul\-25|jul\'25/i },
-    { key: 'Aug-25', regex: /\baug(ust)?\b.*25|aug25|aug\-25|aug\'25/i },
-    { key: 'Sep-25', regex: /\bsep(t)?(ember)?\b.*25|sep25|sep\-25|sep\'25/i },
-    { key: 'Oct-25', regex: /\boct(ober)?\b.*25|oct25|oct\-25|oct\'25/i },
-    { key: 'Nov-25', regex: /\bnov(ember)?\b.*25|nov25|nov\-25|nov\'25/i },
-    { key: 'Dec-25', regex: /\bdec(ember)?\b.*25|dec25|dec\-25|dec\'25/i },
-    { key: 'Jan-26', regex: /\bjan(uary)?\b.*26|jan26|jan\-26|jan\'26/i },
-    { key: 'Feb-26', regex: /\bfeb(ruary)?\b.*26|feb26|feb\-26|feb\'26/i },
-    { key: 'Mar-26', regex: /\bmar(ch)?\b.*26|mar26|mar\-26|mar\'26/i }
+  // Month regex matchers for auto-detecting months in header text
+  const MONTH_MATCHERS: Array<{ shortName: string; regex: RegExp }> = [
+    { shortName: 'Apr', regex: /\bapr|\bapril/i },
+    { shortName: 'May', regex: /\bmay/i },
+    { shortName: 'Jun', regex: /\bjun|\bjune/i },
+    { shortName: 'Jul', regex: /\bjul|\bjuly/i },
+    { shortName: 'Aug', regex: /\baug|\baugust/i },
+    { shortName: 'Sep', regex: /\bsep|\bsept|\bseptember/i },
+    { shortName: 'Oct', regex: /\boct|\boctober/i },
+    { shortName: 'Nov', regex: /\bnov|\bnovember/i },
+    { shortName: 'Dec', regex: /\bdec|\bdecember/i },
+    { shortName: 'Jan', regex: /\bjan|\bjanuary/i },
+    { shortName: 'Feb', regex: /\bfeb|\bfebruary/i },
+    { shortName: 'Mar', regex: /\bmar|\bmarch/i },
   ];
 
-  // Fiscal Year 26-27 months with precise word-boundaries to avoid false-positives (e.g. Approved -> Apr)
-  const fyMonths = [
-    { key: 'Apr-26', regex: /\bapr(il)?\b|apr26|apr\-26|apr\'26/i },
-    { key: 'May-26', regex: /\bmay\b|may26|may\-26|may\'26/i },
-    { key: 'Jun-26', regex: /\bjun(e)?\b|jun26|jun\-26|jun\'26/i },
-    { key: 'Jul-26', regex: /\bjul(y)?\b|jul26|jul\-26|jul\'26/i },
-    { key: 'Aug-26', regex: /\baug(ust)?\b|aug26|aug\-26|aug\'26/i },
-    { key: 'Sep-26', regex: /\bsep(t)?(ember)?\b|sep26|sep\-26|sep\'26/i },
-    { key: 'Oct-26', regex: /\boct(ober)?\b|oct26|oct\-26|oct\'26/i },
-    { key: 'Nov-26', regex: /\bnov(ember)?\b|nov26|nov\-26|nov\'26/i },
-    { key: 'Dec-26', regex: /\bdec(ember)?\b|dec26|dec\-26|dec\'26/i },
-    { key: 'Jan-27', regex: /\bjan(uary)?\b|jan27|jan\-27|jan\'27/i },
-    { key: 'Feb-27', regex: /\bfeb(ruary)?\b|feb27|feb\-27|feb\'27/i },
-    { key: 'Mar-27', regex: /\bmar(ch)?\b|mar27|mar\-27|mar\'27/i }
-  ];
+  const fyMonths = activeMonths.map(m => {
+    const matcher = MONTH_MATCHERS.find(mm => mm.shortName === m.shortName);
+    return {
+      ...m,
+      regex: matcher ? matcher.regex : new RegExp(m.shortName, 'i')
+    };
+  });
 
   const headerRow = rows[headerRowIndex] || [];
   const parentRow = headerRowIndex > 0 ? rows[headerRowIndex - 1] : undefined;
@@ -1126,9 +1147,9 @@ export function parseSoftware2Data(
         };
       }
     } else {
-      // Check for FY25 months (SPI, Quality, Safety, QHSE)
-      const month25Obj = fy25Months.find(m => m.regex.test(fullText));
-      if (month25Obj) {
+      // Check for SPI, Quality, Safety, QHSE (12 achievement months in active FY)
+      const monthObj = fyMonths.find(m => m.regex.test(fullText));
+      if (monthObj) {
         let metric25: 'spi' | 'quality' | 'safety' | 'qhse' | null = null;
         if (/\bspi\b/i.test(fullText)) {
           metric25 = 'spi';
@@ -1143,7 +1164,7 @@ export function parseSoftware2Data(
         if (metric25) {
           colMappings[idx] = {
             metric: metric25,
-            month: month25Obj.key,
+            month: monthObj.key,
             type: 'achievement'
           };
         }
@@ -1243,9 +1264,6 @@ export function parseSoftware2Data(
       labourMap[m.key] = { month: m.key, plan: 0, planR0: 0, planR1: undefined, achievement: 0 };
       urMap[m.key] = { month: m.key, plan: 0, planR0: 0, planR1: undefined, achievement: 0 };
       ucMap[m.key] = { month: m.key, plan: 0, planR0: 0, planR1: undefined, achievement: 0 };
-    });
-
-    fy25Months.forEach(m => {
       spiMap[m.key] = { month: m.key, plan: 0, planR0: 0, achievement: 0 };
       qualityMap[m.key] = { month: m.key, plan: 0, planR0: 0, achievement: 0 };
       safetyMap[m.key] = { month: m.key, plan: 0, planR0: 0, achievement: 0 };

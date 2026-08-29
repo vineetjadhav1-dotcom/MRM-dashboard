@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { VPData, Project } from '@/src/types';
-import { isCompleteOrLostStage } from '@/src/utils/customOrder';
+import { isCompleteOrLostStage, isTempProject } from '@/src/utils/customOrder';
 import { 
   Users, 
   ChevronDown, 
@@ -162,7 +162,7 @@ export default function VPList({ vpDataList, onProjectSelect }: VPListProps) {
                     {/* Project list under VP */}
                     <div className="lg:col-span-2 space-y-2.5">
                       {(() => {
-                        const cardProjects = vp.projects.filter(p => !isCompleteOrLostStage(p.projectStage));
+                        const cardProjects = vp.projects.filter(p => !isTempProject(p.code) && !isCompleteOrLostStage(p.projectStage));
                         return (
                           <>
                             <span className="text-xs font-bold text-slate-700 uppercase tracking-wider block">

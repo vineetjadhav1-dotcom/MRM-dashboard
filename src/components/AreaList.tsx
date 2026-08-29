@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { AreaData, Project } from '@/src/types';
-import { isCompleteOrLostStage } from '@/src/utils/customOrder';
+import { isCompleteOrLostStage, isTempProject } from '@/src/utils/customOrder';
 import { 
   Layers, 
   ChevronDown, 
@@ -119,7 +119,7 @@ export default function AreaList({ areaDataList, onProjectSelect }: AreaListProp
                     Projects under {area.name} focus:
                   </span>
                   <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1" id="area-project-scroll">
-                    {area.projects.filter(p => !isCompleteOrLostStage(p.projectStage)).map((proj) => (
+                    {area.projects.filter(p => !isTempProject(p.code) && !isCompleteOrLostStage(p.projectStage)).map((proj) => (
                       <div 
                         key={proj.code}
                         onClick={() => onProjectSelect(proj)}

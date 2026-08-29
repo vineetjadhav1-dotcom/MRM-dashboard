@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Project, Software2Project } from '@/src/types';
+import { isTempProject } from '@/src/utils/customOrder';
 import { 
   AlertTriangle, 
   TrendingDown, 
@@ -35,7 +36,7 @@ export interface CriticalProjectAnalysis {
   criticalScore: number;
   spiVal: number;
   status: string;
-  laggingParams: ('VOWD' | 'Labour' | 'Milestone' | 'Residential UR' | 'Commercial UC')[];
+  laggingParams: ('VOWD' | 'Labour' | 'Milestone' | 'Unit Delivery - Residential' | 'Unit Delivery - Commercial')[];
   
   // April 2026 to date cumulative metrics
   vowd: { plan: number; ach: number; pct: number; gap: number; isLagging: boolean };
@@ -60,7 +61,11 @@ export default function AttentionNeededProjects({
 }: AttentionNeededProjectsProps) {
   const [selectedFilter, setSelectedFilter] = useState<'ALL' | 'VOWD' | 'LABOUR' | 'MILESTONE' | 'UR' | 'UC'>('ALL');
   const [isExpanded, setIsExpanded] = useState<boolean>(true);
-  const [expandedProjectId, setExpandedProjectId] = useState<string | null>(null);
+  const [expandedProjectCode, setExpandedProjectCode] = useState<string | null>(null);
+
+  const toggleExpand = (code: string) => {
+    setExpandedProjectCode(prev => prev === code ? null : code);
+  };
 
   // Determine the last completed month across all software2Projects / metrics (e.g. Jul-26 or Aug-26)
   const lastCompletedMonthIndex = useMemo(() => {
@@ -92,6 +97,7 @@ export default function AttentionNeededProjects({
 
     // Filter by active VP / Leader scope if specified
     const scopedProjects = projects.filter(p => {
+      if (isTempProject(p.code)) return false;
       const matchVP = selectedVP === 'all' || (p.vp && p.vp.trim().toLowerCase() === selectedVP.trim().toLowerCase());
       const matchLeader = selectedLeader === 'all' || (p.leader && p.leader.trim().toLowerCase() === selectedLeader.trim().toLowerCase());
       return matchVP && matchLeader;
@@ -169,12 +175,12 @@ export default function AttentionNeededProjects({
       const isLaggingUc = ucData.plan > 0 && (ucPct < 85 || ucGap >= 5);
 
       // Compile Lagging Parameters
-      const laggingParams: ('VOWD' | 'Labour' | 'Milestone' | 'Residential UR' | 'Commercial UC')[] = [];
+      const laggingParams: ('VOWD' | 'Labour' | 'Milestone' | 'Unit Delivery - Residential' | 'Unit Delivery - Commercial')[] = [];
       if (isLaggingVowd) laggingParams.push('VOWD');
       if (isLaggingLabour) laggingParams.push('Labour');
       if (isLaggingMilestone) laggingParams.push('Milestone');
-      if (isLaggingUr) laggingParams.push('Residential UR');
-      if (isLaggingUc) laggingParams.push('Commercial UC');
+      if (isLaggingUr) laggingParams.push('Unit Delivery - Residential');
+      if (isLaggingUc) laggingParams.push('Unit Delivery - Commercial');
 
       // SPI calculation
       const rawSpi = p.spi || s2?.spi || '1.0';
@@ -326,8 +332,8 @@ export default function AttentionNeededProjects({
               { id: 'VOWD', label: `VOWD Lag (${criticalAnalysisList.filter(p => p.vowd.isLagging).length})`, color: 'bg-blue-600 text-white' },
               { id: 'LABOUR', label: `Labour Lag (${criticalAnalysisList.filter(p => p.labour.isLagging).length})`, color: 'bg-purple-600 text-white' },
               { id: 'MILESTONE', label: `Milestones Lag (${criticalAnalysisList.filter(p => p.milestone.isLagging).length})`, color: 'bg-emerald-600 text-white' },
-              { id: 'UR', label: `Residential UR (${criticalAnalysisList.filter(p => p.ur.isLagging).length})`, color: 'bg-orange-600 text-white' },
-              { id: 'UC', label: `Commercial UC (${criticalAnalysisList.filter(p => p.uc.isLagging).length})`, color: 'bg-amber-600 text-white' }
+              { id: 'UR', label: `Unit Delivery - Res (${criticalAnalysisList.filter(p => p.ur.isLagging).length})`, color: 'bg-orange-600 text-white' },
+              { id: 'UC', label: `Unit Delivery - Comm (${criticalAnalysisList.filter(p => p.uc.isLagging).length})`, color: 'bg-amber-600 text-white' }
             ].map(tab => (
               <button
                 key={tab.id}
@@ -346,64 +352,53 @@ export default function AttentionNeededProjects({
           {/* Top 7 Critical Projects Cards List */}
           <div className="space-y-4" id="attention-needed-project-cards">
             {filteredCriticalProjects.map((item) => {
-              const isCardDetailsOpen = expandedProjectId === item.project.code;
-              const p = item.project;
+              const isExpanded = expandedProjectCode === item.code;
 
               return (
                 <div 
-                  key={p.code} 
-                  className={`border rounded-2xl transition-all ${
-                    item.rank <= 3
-                      ? 'border-rose-300 bg-rose-50/20 shadow-xs'
-                      : 'border-slate-200 bg-white hover:border-slate-300'
+                  key={item.code}
+                  className={`bg-white border rounded-3xl p-5 shadow-xs transition-all ${
+                    isExpanded ? 'border-indigo-400 ring-2 ring-indigo-50 shadow-md' : 'border-slate-200 hover:border-slate-300'
                   }`}
                 >
-                  {/* Primary Row Header */}
-                  <div className="p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                  {/* Card Header */}
+                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                     
-                    {/* Left: Rank Badge + Project Details */}
-                    <div className="flex items-start space-x-3.5 flex-1 min-w-0">
-                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-sm shrink-0 ${
-                        item.rank === 1 ? 'bg-rose-600 text-white shadow-xs' :
-                        item.rank === 2 ? 'bg-rose-500 text-white' :
-                        item.rank === 3 ? 'bg-rose-400 text-white' :
-                        'bg-slate-800 text-white'
-                      }`}>
+                    {/* Left: Rank, Code, Name, VP & Leader */}
+                    <div className="flex items-start space-x-3.5">
+                      <div className="w-8 h-8 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 flex items-center justify-center font-black text-xs shrink-0 mt-0.5">
                         #{item.rank}
                       </div>
 
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-mono font-bold text-xs text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
-                            {p.code}
+                      <div className="space-y-1">
+                        <div className="flex items-center space-x-2">
+                          <span className="px-2 py-0.5 rounded-md bg-slate-100 text-[10px] font-mono font-bold text-slate-700">
+                            {item.code}
                           </span>
-                          <h4 
-                            onClick={() => onSelectProject && onSelectProject(p)}
-                            className="text-sm font-extrabold text-slate-900 truncate hover:text-blue-600 cursor-pointer"
-                            title={p.name}
-                          >
-                            {p.name}
-                          </h4>
-                          <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md border ${
-                            item.status.toLowerCase() === 'red' ? 'bg-rose-100 text-rose-800 border-rose-300' :
-                            item.status.toLowerCase() === 'amber' ? 'bg-amber-100 text-amber-800 border-amber-300' :
-                            'bg-emerald-100 text-emerald-800 border-emerald-300'
+                          <span className="font-extrabold text-sm text-slate-900">
+                            {item.name}
+                          </span>
+                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold ${
+                            item.status.toLowerCase() === 'red' ? 'bg-rose-100 text-rose-800' :
+                            item.status.toLowerCase() === 'amber' ? 'bg-amber-100 text-amber-800' :
+                            'bg-emerald-100 text-emerald-800'
                           }`}>
-                            {item.status} Status
+                            {item.status}
                           </span>
                         </div>
 
-                        <div className="flex items-center gap-4 text-xs text-slate-500 mt-1.5 flex-wrap">
-                          <span>Lead: <strong className="text-slate-700">{p.leader || 'Unassigned'}</strong></span>
-                          <span>VP: <strong className="text-slate-700">{p.vp || 'Unassigned'}</strong></span>
-                          {p.projectStage && <span>Stage: <strong className="text-slate-700">{p.projectStage}</strong></span>}
-                          <span>SPI: <strong className={item.spiVal < 0.85 ? 'text-rose-600' : item.spiVal < 1.0 ? 'text-amber-600' : 'text-emerald-600'}>{item.spiVal.toFixed(2)}</strong></span>
+                        <div className="flex items-center space-x-4 text-xs text-slate-500 font-medium">
+                          <span>VP: <strong className="text-slate-700">{item.vp}</strong></span>
+                          <span>•</span>
+                          <span>Lead: <strong className="text-slate-700">{item.leader}</strong></span>
+                          <span>•</span>
+                          <span>Stage: <strong className="text-slate-700">{item.stage}</strong></span>
                         </div>
                       </div>
                     </div>
 
-                    {/* Middle: Lagging Parameters Highlight Pills */}
-                    <div className="flex flex-wrap items-center gap-2 lg:max-w-[420px]">
+                    {/* Right: Key Variance Indicators & Action Button */}
+                    <div className="flex flex-wrap items-center gap-2.5">
                       {item.laggingParams.map(param => {
                         if (param === 'VOWD') {
                           return (
@@ -417,7 +412,7 @@ export default function AttentionNeededProjects({
                           return (
                             <span key={param} className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-purple-50 text-purple-700 border border-purple-200">
                               <Users className="w-3 h-3 mr-1 text-purple-600" />
-                              Labour: {item.labour.pct.toFixed(0)}% (-{item.labour.gap}W)
+                              Labour: {item.labour.pct.toFixed(0)}% (-{item.labour.gap} Pax)
                             </span>
                           );
                         }
@@ -429,19 +424,19 @@ export default function AttentionNeededProjects({
                             </span>
                           );
                         }
-                        if (param === 'Residential UR') {
+                        if (param === 'Unit Delivery - Residential') {
                           return (
                             <span key={param} className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-orange-50 text-orange-700 border border-orange-200">
                               <Home className="w-3 h-3 mr-1 text-orange-600" />
-                              UR Delivery: {item.ur.pct.toFixed(0)}% (-{item.ur.gap}U)
+                              Unit Del. (Res): {item.ur.pct.toFixed(0)}% (-{item.ur.gap}U)
                             </span>
                           );
                         }
-                        if (param === 'Commercial UC') {
+                        if (param === 'Unit Delivery - Commercial') {
                           return (
                             <span key={param} className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
                               <Briefcase className="w-3 h-3 mr-1 text-amber-600" />
-                              UC Delivery: {item.uc.pct.toFixed(0)}% (-{item.uc.gap}U)
+                              Unit Del. (Comm): {item.uc.pct.toFixed(0)}% (-{item.uc.gap}U)
                             </span>
                           );
                         }
@@ -453,95 +448,72 @@ export default function AttentionNeededProjects({
                           Near Threshold Variance (SPI: {item.spiVal.toFixed(2)})
                         </span>
                       )}
-                    </div>
 
-                    {/* Right: Actions */}
-                    <div className="flex items-center space-x-2 shrink-0">
                       <button
-                        onClick={() => setExpandedProjectId(isCardDetailsOpen ? null : p.code)}
-                        className="p-2 text-slate-500 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-all cursor-pointer"
-                        title={isCardDetailsOpen ? 'Hide Analysis' : 'Show Detailed Analysis'}
+                        type="button"
+                        onClick={() => toggleExpand(item.code)}
+                        className="px-3 py-1.5 rounded-xl text-xs font-extrabold bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors flex items-center space-x-1 cursor-pointer"
                       >
-                        {isCardDetailsOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                        <span>{isExpanded ? 'Hide Details' : 'Analyze'}</span>
+                        <ChevronRight className={`w-3.5 h-3.5 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
                       </button>
-
-                      {onSelectProject && (
-                        <button
-                          onClick={() => onSelectProject(p)}
-                          className="px-3 py-1.5 bg-slate-900 hover:bg-blue-600 text-white rounded-xl text-xs font-bold transition-all flex items-center space-x-1 cursor-pointer"
-                        >
-                          <span>Inspect</span>
-                          <ChevronRight className="w-3.5 h-3.5" />
-                        </button>
-                      )}
                     </div>
 
                   </div>
 
-                  {/* Expanded Diagnosis Section */}
-                  {isCardDetailsOpen && (
-                    <div className="px-5 pb-5 pt-2 border-t border-slate-100 space-y-4 bg-slate-50/50 rounded-b-2xl animate-in fade-in duration-150">
+                  {/* Expanded Breakdown Pane */}
+                  {isExpanded && (
+                    <div className="mt-4 pt-4 border-t border-slate-150 space-y-4 animate-in fade-in duration-200">
                       
-                      {/* Critical Findings Box */}
-                      <div className="p-4 bg-rose-50/80 border border-rose-200 rounded-xl text-xs space-y-1.5">
-                        <div className="flex items-center space-x-2 text-rose-900 font-extrabold">
-                          <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
-                          <span>Critical Findings (Apr 2026 to {lastCompletedMonthName} Analysis)</span>
-                        </div>
-                        <p className="text-slate-700 leading-relaxed pl-6">
-                          {item.criticalFindings}
-                        </p>
-                      </div>
-
-                      {/* Recommended Intervention */}
-                      <div className="p-4 bg-blue-50/80 border border-blue-200 rounded-xl text-xs space-y-1.5">
-                        <div className="flex items-center space-x-2 text-blue-900 font-extrabold">
-                          <Sparkles className="w-4 h-4 text-blue-600 shrink-0" />
-                          <span>Recommended Action Plan</span>
-                        </div>
-                        <p className="text-slate-700 leading-relaxed pl-6">
-                          {item.recommendedAction}
-                        </p>
-                      </div>
-
-                      {/* Parameter Matrix Grid */}
-                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-1">
+                      {/* Metric Comparison Mini-Grid */}
+                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                         {/* VOWD */}
                         <div className={`p-3 rounded-xl border ${item.vowd.isLagging ? 'bg-rose-50/50 border-rose-200' : 'bg-white border-slate-200'}`}>
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 block mb-1">VOWD (Cr.)</span>
-                          <span className="text-sm font-black text-slate-900 block">{item.vowd.ach.toFixed(1)} <span className="text-[10px] text-slate-400 font-normal">/ {item.vowd.plan.toFixed(1)}</span></span>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 block mb-1">VOWD Value</span>
+                          <span className="text-sm font-black text-slate-900 block">₹{item.vowd.ach.toFixed(1)} <span className="text-[10px] text-slate-400 font-normal">/ {item.vowd.plan.toFixed(1)} Cr</span></span>
                           <span className={`text-[10px] font-extrabold ${item.vowd.pct >= 90 ? 'text-emerald-600' : 'text-rose-600'}`}>{item.vowd.pct.toFixed(0)}% Achieved</span>
                         </div>
 
                         {/* Labour */}
                         <div className={`p-3 rounded-xl border ${item.labour.isLagging ? 'bg-rose-50/50 border-rose-200' : 'bg-white border-slate-200'}`}>
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-purple-700 block mb-1">Labour (Headcount)</span>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-purple-700 block mb-1">Labour Force</span>
                           <span className="text-sm font-black text-slate-900 block">{item.labour.ach.toLocaleString()} <span className="text-[10px] text-slate-400 font-normal">/ {item.labour.plan.toLocaleString()}</span></span>
                           <span className={`text-[10px] font-extrabold ${item.labour.pct >= 90 ? 'text-emerald-600' : 'text-rose-600'}`}>{item.labour.pct.toFixed(0)}% Deployed</span>
                         </div>
 
-                        {/* Milestones */}
+                        {/* Milestone */}
                         <div className={`p-3 rounded-xl border ${item.milestone.isLagging ? 'bg-rose-50/50 border-rose-200' : 'bg-white border-slate-200'}`}>
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 block mb-1">Milestones (Qty)</span>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 block mb-1">Milestones</span>
                           <span className="text-sm font-black text-slate-900 block">{item.milestone.ach} <span className="text-[10px] text-slate-400 font-normal">/ {item.milestone.plan}</span></span>
                           <span className={`text-[10px] font-extrabold ${item.milestone.pct >= 90 ? 'text-emerald-600' : 'text-rose-600'}`}>{item.milestone.pct.toFixed(0)}% Completed</span>
                         </div>
 
-                        {/* Residential UR */}
+                        {/* Unit Delivery - Residential */}
                         <div className={`p-3 rounded-xl border ${item.ur.isLagging ? 'bg-rose-50/50 border-rose-200' : 'bg-white border-slate-200'}`}>
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-orange-700 block mb-1">Residential UR</span>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-orange-700 block mb-1">Unit Delivery - Residential</span>
                           <span className="text-sm font-black text-slate-900 block">{item.ur.ach} <span className="text-[10px] text-slate-400 font-normal">/ {item.ur.plan}</span></span>
                           <span className={`text-[10px] font-extrabold ${item.ur.pct >= 90 ? 'text-emerald-600' : 'text-rose-600'}`}>{item.ur.pct.toFixed(0)}% Handed Over</span>
                         </div>
 
-                        {/* Commercial UC */}
+                        {/* Unit Delivery - Commercial */}
                         <div className={`p-3 rounded-xl border ${item.uc.isLagging ? 'bg-rose-50/50 border-rose-200' : 'bg-white border-slate-200'}`}>
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 block mb-1">Commercial UC</span>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 block mb-1">Unit Delivery - Commercial</span>
                           <span className="text-sm font-black text-slate-900 block">{item.uc.ach} <span className="text-[10px] text-slate-400 font-normal">/ {item.uc.plan}</span></span>
                           <span className={`text-[10px] font-extrabold ${item.uc.pct >= 90 ? 'text-emerald-600' : 'text-rose-600'}`}>{item.uc.pct.toFixed(0)}% Handed Over</span>
                         </div>
                       </div>
 
+                      {/* Findings & Actions */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="p-4 bg-rose-50/50 border border-rose-100 rounded-xl">
+                          <h5 className="text-[10px] font-black uppercase text-rose-700 mb-2">Executive Findings</h5>
+                          <p className="text-xs text-slate-700 leading-relaxed">{item.criticalFindings}</p>
+                        </div>
+                        <div className="p-4 bg-blue-50/50 border border-blue-100 rounded-xl">
+                          <h5 className="text-[10px] font-black uppercase text-blue-700 mb-2">Recommended Recovery</h5>
+                          <p className="text-xs text-slate-700 leading-relaxed">{item.recommendedAction}</p>
+                        </div>
+                      </div>
                     </div>
                   )}
 

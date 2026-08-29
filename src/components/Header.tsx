@@ -1,7 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
-import { User } from 'firebase/auth';
 import PlanedgeLogo from './PlanedgeLogo';
-import { Project, Software2Project, ActiveTab } from '@/src/types';
+import { Project, Software2Project, ActiveTab, AppUser, UserPermissions, FiscalYearKey } from '@/src/types';
+import { 
+  getFiscalYearConfig, 
+  getStoredFiscalYear, 
+  setStoredFiscalYear, 
+  FISCAL_YEAR_KEYS 
+} from '@/src/utils/fiscalYear';
 import { 
   RefreshCw, 
   LogOut, 
@@ -17,16 +22,20 @@ import {
   TableProperties, 
   SlidersHorizontal, 
   Check, 
-  ChevronRight 
+  ChevronRight,
+  ChevronDown,
+  ShieldCheck,
+  Calendar
 } from 'lucide-react';
 
 interface HeaderProps {
-  user: User | null;
+  currentUser: AppUser | null;
+  permissions: UserPermissions;
   isUsingDemo: boolean;
   isLoading: boolean;
   onLogout: () => void;
   onRefresh: () => void;
-  onToggleDemo: (useDemo: boolean) => void;
+  onToggleDemo?: (useDemo: boolean) => void;
   projectsCount: number;
   projects?: Project[];
   software2Projects?: Software2Project[];
@@ -43,7 +52,7 @@ interface NavMenuItem {
   icon: any;
 }
 
-const NAV_MENU_ITEMS: NavMenuItem[] = [
+const ALL_NAV_MENU_ITEMS: NavMenuItem[] = [
   {
     id: 'projectDashboard',
     label: 'PROJECT DASHBOARD',
@@ -85,11 +94,18 @@ const NAV_MENU_ITEMS: NavMenuItem[] = [
     label: 'DATA CONFIGURATION',
     subtitle: 'Column mapping, header rows & spreadsheet source parameters',
     icon: SlidersHorizontal
+  },
+  {
+    id: 'userAccess',
+    label: 'USER ACCESS',
+    subtitle: 'Manage user accounts, roles, navigation tabs & portfolio scoping',
+    icon: ShieldCheck
   }
 ];
 
 export default function Header({
-  user,
+  currentUser,
+  permissions,
   isLoading,
   onLogout,
   onRefresh,
@@ -98,10 +114,35 @@ export default function Header({
   onSelectTab
 }: HeaderProps) {
   const [isNavOpen, setIsNavOpen] = useState(false);
+  const [activeFiscalYear, setActiveFiscalYear] = useState<FiscalYearKey>(() => getStoredFiscalYear());
   const navContainerRef = useRef<HTMLDivElement | null>(null);
 
-  const activeMenuItem = NAV_MENU_ITEMS.find(item => item.id === activeTab) || NAV_MENU_ITEMS[0];
+  const isAdmin = currentUser?.role === 'admin';
+
+  useEffect(() => {
+    const handleFyChanged = () => setActiveFiscalYear(getStoredFiscalYear());
+    window.addEventListener('mrm-fiscal-year-changed', handleFyChanged);
+    return () => window.removeEventListener('mrm-fiscal-year-changed', handleFyChanged);
+  }, []);
+
+  const handleFiscalYearChange = (newFy: FiscalYearKey) => {
+    setActiveFiscalYear(newFy);
+    setStoredFiscalYear(newFy);
+  };
+
+  // Filter navigation items according to permissions
+  const visibleNavItems = ALL_NAV_MENU_ITEMS.filter(item => {
+    if (isAdmin) return true;
+    if (item.id === 'userAccess') return false; // Only admin sees User Access tab
+    return permissions.allowedNavTabs.includes(item.id);
+  });
+
+  const activeMenuItem = ALL_NAV_MENU_ITEMS.find(item => item.id === activeTab) || ALL_NAV_MENU_ITEMS[0];
   const ActiveIcon = activeMenuItem.icon;
+
+  // Permissions
+  const canViewSourceSheet = isAdmin || permissions.showSourceSheet;
+  const canSyncSheet = isAdmin || permissions.canSyncSheet !== false;
 
   // Close nav on click outside or escape key
   useEffect(() => {
@@ -135,16 +176,16 @@ export default function Header({
   return (
     <div className="sticky top-0 z-50 bg-white" ref={navContainerRef}>
       {/* Top Header Bar */}
-      <header className="border-b border-slate-200 px-4 sm:px-6 lg:px-8 py-3.5 bg-white font-sans relative z-30" id="app-header">
-        <div className="max-w-[1536px] mx-auto flex items-center justify-between gap-3 sm:gap-4">
+      <header className="border-b border-slate-200 px-3 sm:px-6 lg:px-8 py-3 bg-white font-sans relative z-30" id="app-header">
+        <div className="max-w-[1536px] mx-auto flex items-center justify-between gap-2.5 sm:gap-4 flex-wrap">
           
           {/* Left Side: Logo + Full Header Title */}
-          <div className="flex items-center space-x-3.5 shrink-0" id="header-title-container">
+          <div className="flex items-center space-x-3 shrink-0" id="header-title-container">
             <PlanedgeLogo size="md" />
 
             <div>
               <div className="flex items-center space-x-2">
-                <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
+                <h1 className="text-lg sm:text-2xl font-bold text-slate-900 tracking-tight">
                   Planedge Dashboard
                 </h1>
 
@@ -156,72 +197,101 @@ export default function Header({
             </div>
           </div>
 
-          {/* Right Side: Active Option Name + Sync Sheet + Source Sheet + User + Hamburger Button */}
-          <div className="flex items-center space-x-2 sm:space-x-3 shrink-0" id="header-top-right-corner">
+          {/* Right Side: Active Option Name + Direct Sync + Source Sheet + User Profile + Menu */}
+          <div className="flex items-center space-x-2 sm:space-x-2.5 shrink-0 ml-auto" id="header-top-right-corner">
             
-            {/* Active Selected Option Indicator (Clickable to open menu) */}
+            {/* Fiscal Year Switcher Dropdown Control */}
+            <div 
+              className="relative flex items-center bg-gradient-to-r from-blue-50 via-indigo-50 to-blue-50 hover:from-blue-100 hover:to-indigo-100 border border-indigo-200 hover:border-indigo-300 rounded-xl px-2.5 sm:px-3 py-1.5 shadow-2xs transition-all group cursor-pointer"
+              id="header-fiscal-year-selector"
+              title="Select Active Reporting Fiscal Year Range"
+            >
+              <Calendar className="w-3.5 h-3.5 text-indigo-600 shrink-0 mr-1.5" />
+              <span className="hidden sm:inline text-[10px] font-black text-indigo-600 uppercase tracking-wider mr-1.5">
+                FY Range:
+              </span>
+              <select
+                value={activeFiscalYear}
+                onChange={(e) => handleFiscalYearChange(e.target.value as FiscalYearKey)}
+                aria-label="Select Fiscal Year"
+                className="bg-transparent text-xs font-black text-indigo-950 focus:outline-none cursor-pointer pr-4 appearance-none hover:text-indigo-700 font-sans"
+              >
+                {FISCAL_YEAR_KEYS.map((fy) => {
+                  const cfg = getFiscalYearConfig(fy);
+                  return (
+                    <option key={fy} value={fy} className="text-slate-900 bg-white font-bold py-1">
+                      {cfg.label} ({cfg.startMonthKey}–{cfg.endMonthKey})
+                    </option>
+                  );
+                })}
+              </select>
+              <ChevronDown className="w-3.5 h-3.5 text-indigo-600 pointer-events-none absolute right-2.5 shrink-0 group-hover:translate-y-0.5 transition-transform" />
+            </div>
+
+            {/* Active Selected Option Indicator (Clickable to open dropdown) */}
             <button 
               type="button"
               onClick={() => setIsNavOpen(prev => !prev)}
-              className="flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100/80 border border-blue-200 text-blue-900 shadow-2xs transition-colors cursor-pointer"
+              className="flex items-center space-x-2 px-2.5 sm:px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100/80 border border-blue-200 text-blue-900 shadow-2xs transition-colors cursor-pointer"
               id="active-option-indicator"
               title={`Current View: ${activeMenuItem.label} (Click to switch view)`}
             >
-              <ActiveIcon className="w-4 h-4 text-blue-600 shrink-0" />
-              <span className="text-xs font-bold tracking-wide uppercase truncate max-w-[130px] sm:max-w-[220px]">
+              <ActiveIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-600 shrink-0" />
+              <span className="text-xs font-bold tracking-wide uppercase truncate max-w-[110px] sm:max-w-[180px] md:max-w-[220px]">
                 {activeMenuItem.label}
               </span>
             </button>
 
-            {/* Direct Synchronize Spreadsheet Data Button (Immediate direct refresh) */}
-            <button
-              type="button"
-              onClick={onRefresh}
-              disabled={isLoading}
-              className="inline-flex items-center px-3 sm:px-3.5 py-1.5 border border-blue-200 rounded-xl text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 transition-colors cursor-pointer shadow-2xs disabled:opacity-60"
-              title="Synchronize Live Spreadsheet Data directly from Google Sheets"
-              id="sync-spreadsheet-btn"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 mr-1.5 text-blue-600 ${isLoading ? 'animate-spin' : ''}`} />
-              <span>{isLoading ? 'Syncing...' : 'Sync Sheet'}</span>
-            </button>
+            {/* Direct Synchronize Spreadsheet Data Button */}
+            {canSyncSheet && (
+              <button
+                type="button"
+                onClick={onRefresh}
+                disabled={isLoading}
+                className="inline-flex items-center px-2.5 sm:px-3.5 py-1.5 border border-blue-200 rounded-xl text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 transition-colors cursor-pointer shadow-2xs disabled:opacity-60"
+                title="Synchronize Live Spreadsheet Data directly from Google Sheets"
+                id="sync-spreadsheet-btn"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 mr-1 text-blue-600 ${isLoading ? 'animate-spin' : ''}`} />
+                <span>{isLoading ? 'Syncing...' : 'Sync Sheet'}</span>
+              </button>
+            )}
 
             {/* Source Sheet Link */}
-            <a
-              href="https://docs.google.com/spreadsheets/d/1BDEpLJk9tIo9Y-CxJYksR2GRjaCuQalr1p2ZNTI5AJA/edit?gid=0#gid=0"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hidden md:inline-flex items-center px-3 py-1.5 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer shadow-2xs"
-              id="view-sheet-header-link"
-              title="Open Google Sheet in new tab"
-            >
-              <span>Source Sheet</span>
-              <ExternalLink className="w-3.5 h-3.5 ml-1.5 text-slate-400" />
-            </a>
+            {canViewSourceSheet && (
+              <a
+                href="https://docs.google.com/spreadsheets/d/1BDEpLJk9tIo9Y-CxJYksR2GRjaCuQalr1p2ZNTI5AJA/edit?gid=0#gid=0"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hidden lg:inline-flex items-center px-3 py-1.5 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer shadow-2xs"
+                id="view-sheet-header-link"
+                title="Open Google Sheet in new tab"
+              >
+                <span>Source Sheet</span>
+                <ExternalLink className="w-3.5 h-3.5 ml-1 text-slate-400" />
+              </a>
+            )}
 
             {/* User Profile Widget */}
-            {user ? (
-              <div className="flex items-center space-x-2 bg-slate-50/80 border border-slate-200/90 rounded-xl px-2.5 py-1 sm:px-3 sm:py-1.5 shadow-2xs" id="user-profile-widget">
-                <div className="flex items-center space-x-2">
-                  {user.photoURL ? (
-                    <img
-                      src={user.photoURL}
-                      alt={user.displayName || 'User'}
-                      className="w-7 h-7 sm:w-8 sm:h-8 rounded-full border border-slate-200 object-cover"
-                      referrerPolicy="no-referrer"
-                    />
-                  ) : (
-                    <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-[#8b6559] text-white flex items-center justify-center text-xs sm:text-sm font-bold uppercase shadow-2xs shrink-0">
-                      {user.displayName?.charAt(0) || user.email?.charAt(0) || 'U'}
-                    </div>
-                  )}
-                  <div className="text-left hidden lg:block">
-                    <p className="text-xs font-extrabold text-slate-800 tracking-tight truncate max-w-[110px] md:max-w-[140px]">
-                      {user.displayName || 'User'}
+            {currentUser && (
+              <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-xl px-2 sm:px-2.5 py-1 shadow-2xs" id="user-profile-widget">
+                <div 
+                  className="w-7 h-7 rounded-full text-white flex items-center justify-center text-xs font-bold uppercase shadow-2xs shrink-0"
+                  style={{ backgroundColor: currentUser.avatarBg || (isAdmin ? '#6366f1' : '#0284c7') }}
+                >
+                  {currentUser.username.charAt(0).toUpperCase()}
+                </div>
+                
+                <div className="text-left hidden sm:block">
+                  <div className="flex items-center space-x-1">
+                    <p className="text-xs font-extrabold text-slate-800 tracking-tight truncate max-w-[90px] md:max-w-[120px]">
+                      {currentUser.displayName}
                     </p>
-                    <p className="text-[10px] text-slate-400 font-medium truncate max-w-[110px] md:max-w-[140px]">
-                      {user.email || ''}
-                    </p>
+                    <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded ${
+                      isAdmin ? 'bg-purple-100 text-purple-800' : 'bg-sky-100 text-sky-800'
+                    }`}>
+                      {isAdmin ? 'Admin' : 'User'}
+                    </span>
                   </div>
                 </div>
                 
@@ -230,12 +300,12 @@ export default function Header({
                   id="logout-btn"
                   onClick={onLogout}
                   title="Sign Out"
-                  className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 rounded-lg transition-colors cursor-pointer"
+                  className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
                 >
-                  <LogOut className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  <LogOut className="w-3.5 h-3.5" />
                 </button>
               </div>
-            ) : null}
+            )}
 
             {/* Attachment Style Hamburger Menu Toggle Button */}
             <button
@@ -262,21 +332,22 @@ export default function Header({
       {/* Dimmed Backdrop Overlay (Behind the dropdown panel) */}
       {isNavOpen && (
         <div 
-          className="fixed inset-0 top-[65px] bg-slate-950/25 backdrop-blur-[1px] z-30 transition-opacity"
+          className="fixed inset-0 top-[60px] bg-slate-950/25 backdrop-blur-[1px] z-30 transition-opacity"
           onClick={() => setIsNavOpen(false)} 
         />
       )}
 
-      {/* Downward Expanding Dropdown Navigation Menu (Sample Attachment Style) */}
+      {/* Downward Expanding Dropdown Navigation Menu */}
       {isNavOpen && (
         <div 
           id="dropdown-navigation-menu-panel"
           className="relative z-40 w-full bg-white border-b border-slate-200 shadow-2xl animate-in fade-in slide-in-from-top-2 duration-150"
         >
           <div className="max-w-[1536px] mx-auto divide-y divide-slate-200">
-            {NAV_MENU_ITEMS.map((item) => {
+            {visibleNavItems.map((item) => {
               const Icon = item.icon;
               const isActive = activeTab === item.id;
+              const isUserAccessTab = item.id === 'userAccess';
 
               return (
                 <button
@@ -287,25 +358,42 @@ export default function Header({
                     e.stopPropagation();
                     handleSelectOption(item.id);
                   }}
-                  className={`w-full text-left px-5 sm:px-8 py-4 sm:py-4.5 transition-colors cursor-pointer flex items-center justify-between group ${
+                  className={`w-full text-left px-5 sm:px-8 py-3.5 sm:py-4 transition-colors cursor-pointer flex items-center justify-between group ${
                     isActive 
                       ? 'bg-blue-50/70 text-blue-900 font-bold border-l-4 border-blue-600' 
-                      : 'bg-white hover:bg-slate-50 text-slate-800 hover:text-slate-900'
+                      : isUserAccessTab
+                        ? 'bg-purple-50/40 hover:bg-purple-50 text-slate-800 hover:text-purple-900'
+                        : 'bg-white hover:bg-slate-50 text-slate-800 hover:text-slate-900'
                   }`}
                 >
                   <div className="flex items-center space-x-4">
                     <div className={`p-2 rounded-xl transition-colors shrink-0 ${
-                      isActive ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 group-hover:bg-slate-200'
+                      isActive 
+                        ? 'bg-blue-600 text-white' 
+                        : isUserAccessTab
+                          ? 'bg-purple-100 text-purple-700 group-hover:bg-purple-200'
+                          : 'bg-slate-100 text-slate-600 group-hover:bg-slate-200'
                     }`}>
                       <Icon className="w-4 h-4" />
                     </div>
 
                     <div>
-                      <span className={`text-sm sm:text-base font-extrabold tracking-wide uppercase block ${
-                        isActive ? 'text-blue-900' : 'text-slate-800 group-hover:text-slate-900'
-                      }`}>
-                        {item.label}
-                      </span>
+                      <div className="flex items-center space-x-2">
+                        <span className={`text-sm sm:text-base font-extrabold tracking-wide uppercase block ${
+                          isActive 
+                            ? 'text-blue-900' 
+                            : isUserAccessTab
+                              ? 'text-purple-900 group-hover:text-purple-950'
+                              : 'text-slate-800 group-hover:text-slate-900'
+                        }`}>
+                          {item.label}
+                        </span>
+                        {isUserAccessTab && (
+                          <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-purple-100 text-purple-800 uppercase tracking-wider">
+                            Admin Only
+                          </span>
+                        )}
+                      </div>
                       <span className="text-xs text-slate-500 font-normal mt-0.5 block">
                         {item.subtitle}
                       </span>
@@ -331,7 +419,11 @@ export default function Header({
           {/* Bottom Bar inside Dropdown */}
           <div className="px-5 sm:px-8 py-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500">
             <span>Tracking <strong className="text-slate-800 font-bold">{projectsCount}</strong> Projects in Master Sheet</span>
-            <span className="text-[11px] text-slate-400">Click any option to switch dashboard view</span>
+            {isAdmin && (
+              <span className="text-[11px] text-purple-600 font-bold">
+                Administrator Mode Active
+              </span>
+            )}
           </div>
         </div>
       )}

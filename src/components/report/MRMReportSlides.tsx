@@ -1,6 +1,7 @@
 import React from 'react';
 import { Project } from '@/src/types';
 import PlanedgePdfLogo from './PlanedgePdfLogo';
+import { getFiscalYearConfig, getStoredFiscalYear } from '@/src/utils/fiscalYear';
 import { 
   Building, 
   Briefcase, 
@@ -27,6 +28,7 @@ export interface LeaderStats {
   totalBudgetUnderManagement?: number;
   totalBudgetUnderConstruction?: number;
   projectsUnderConstructionCount?: number;
+  activeProjectsCount?: number;
   avgSpi: number | null;
   milestones: { plan: number; ach: number; pct: number; fr: number };
   vowd: { plan: number; ach: number; pct: number; fr: number };
@@ -108,12 +110,12 @@ const getPercent = (pct: string | undefined, plan: string | undefined, ach: stri
   return '0%';
 };
 
-const METRIC_CONFIGS: Record<string, { label: string; shortLabel: string; isCurrency: boolean; colorPlan: string; colorAch: string }> = {
-  vowd: { label: 'VOWD', shortLabel: 'VOWD', isCurrency: true, colorPlan: '#818cf8', colorAch: '#4f46e5' },
-  milestone: { label: 'Milestones', shortLabel: 'Milestones', isCurrency: false, colorPlan: '#38bdf8', colorAch: '#0284c7' },
-  labour: { label: 'Labour', shortLabel: 'Labour', isCurrency: false, colorPlan: '#c084fc', colorAch: '#7e22ce' },
-  ur: { label: 'Unit Delivery (Residential)', shortLabel: 'Residential Delivery', isCurrency: false, colorPlan: '#fb923c', colorAch: '#c2410c' },
-  uc: { label: 'Unit Delivery (Commercial)', shortLabel: 'Commercial Delivery', isCurrency: false, colorPlan: '#fcd34d', colorAch: '#b45309' }
+const METRIC_CONFIGS: Record<string, { label: string; shortLabel: string; isCurrency: boolean; unit: string; colorPlan: string; colorAch: string }> = {
+  vowd: { label: 'VOWD', shortLabel: 'VOWD', isCurrency: true, unit: 'Cr.', colorPlan: '#818cf8', colorAch: '#4f46e5' },
+  milestone: { label: 'Milestones', shortLabel: 'Milestones', isCurrency: false, unit: 'Nos.', colorPlan: '#38bdf8', colorAch: '#0284c7' },
+  labour: { label: 'Labour', shortLabel: 'Labour', isCurrency: false, unit: 'Workers', colorPlan: '#c084fc', colorAch: '#7e22ce' },
+  ur: { label: 'Unit Delivery - Residential', shortLabel: 'Unit Delivery - Residential', isCurrency: false, unit: 'Units', colorPlan: '#fb923c', colorAch: '#c2410c' },
+  uc: { label: 'Unit Delivery - Commercial', shortLabel: 'Unit Delivery - Commercial', isCurrency: false, unit: 'Sqft', colorPlan: '#fcd34d', colorAch: '#b45309' }
 };
 
 /* -------------------------------------------------------------
@@ -710,40 +712,66 @@ export function ProgressCurveSlide({
 
   const lastCompletedMonthIndex = React.useMemo(() => {
     for (let i = monthlyData.length - 1; i >= 0; i--) {
-      if (monthlyData[i].Achievement !== null && monthlyData[i].Achievement !== undefined) {
+      if (monthlyData[i] && monthlyData[i].Achievement !== null && monthlyData[i].Achievement !== undefined && monthlyData[i].Achievement > 0) {
+        return i;
+      }
+    }
+    for (let i = monthlyData.length - 1; i >= 0; i--) {
+      if (monthlyData[i] && monthlyData[i].Achievement !== null && monthlyData[i].Achievement !== undefined) {
         return i;
       }
     }
     return 3;
   }, [monthlyData]);
 
-  // Render Bar Plan Label
+  // Render Bar Plan Label (R0/R1)
   const renderBarPlanLabel = (props: any) => {
     const { x, y, width, value } = props;
     if (value === undefined || value === null || value === 0) return null;
     const formatted = typeof value === 'number' ? (value % 1 === 0 ? value : value.toFixed(1)) : value;
-    const cx = x + (width ? width / 2 : 0);
+    const cx = (x ?? 0) + (width ? width / 2 : 0);
+    const cy = (y ?? 0) - 5;
     return (
-      <text x={cx} y={y - 4} fill="#475569" fontSize={9.5} fontWeight={800} textAnchor="middle">
+      <text
+        x={cx}
+        y={cy}
+        fill="#475569"
+        fontSize={10}
+        fontWeight={800}
+        textAnchor="middle"
+      >
         {formatted}
       </text>
     );
   };
 
-  // Render Bar Ach Label
+  // Render Bar Ach Label with percentage badge format
   const renderBarAchLabel = (props: any) => {
-    const { x, y, width, value } = props;
+    const { x, y, width, value, index } = props;
     if (value === undefined || value === null || value === 0) return null;
     const formatted = typeof value === 'number' ? (value % 1 === 0 ? value : value.toFixed(1)) : value;
-    const cx = x + (width ? width / 2 : 0);
+    let text = String(formatted);
+    const row = monthlyData[index];
+    if (row && row['Achievement %'] !== null && row['Achievement %'] !== undefined && row['Achievement %'] > 0) {
+      text = `${formatted} (${row['Achievement %']}%)`;
+    }
+    const cx = (x ?? 0) + (width ? width / 2 : 0);
+    const cy = (y ?? 0) - 5;
     return (
-      <text x={cx} y={y - 4} fill={config.colorAch} fontSize={9.5} fontWeight={800} textAnchor="middle">
-        {formatted}
+      <text
+        x={cx}
+        y={cy}
+        fill={config.colorAch}
+        fontSize={10}
+        fontWeight={800}
+        textAnchor="middle"
+      >
+        {text}
       </text>
     );
   };
 
-  // Render Cum Plan Label
+  // Render Cum Plan Label (Mar 27 & Last Completed Month)
   const renderCumPlanLineLabel = (props: any) => {
     const { x, y, value, index } = props;
     if (value === undefined || value === null || value === 0) return null;
@@ -752,17 +780,35 @@ export function ProgressCurveSlide({
     if (!isLastCompleted && !isMar27) return null;
 
     const formatted = typeof value === 'number' ? (value % 1 === 0 ? value : value.toFixed(1)) : value;
+    const posX = x ?? 0;
+    const posY = y ?? 0;
     return (
       <g>
-        <rect x={x - 22} y={y - 20} width={44} height={16} rx={3} fill="#ffffff" stroke="#94a3b8" strokeWidth={1.5} />
-        <text x={x} y={y - 8} fill="#1e293b" fontSize={9.5} fontWeight={800} textAnchor="middle">
+        <rect
+          x={posX - 24}
+          y={posY - 24}
+          width={48}
+          height={18}
+          rx={4}
+          fill="#ffffff"
+          stroke="#94a3b8"
+          strokeWidth={1.5}
+        />
+        <text
+          x={posX}
+          y={posY - 11}
+          fill="#1e293b"
+          fontSize={10}
+          fontWeight={800}
+          textAnchor="middle"
+        >
           {formatted}
         </text>
       </g>
     );
   };
 
-  // Render Cum Ach Label
+  // Render Cum Ach Label with cumulative percentage
   const renderCumAchLineLabel = (props: any) => {
     const { x, y, value, index } = props;
     if (value === undefined || value === null || value === 0) return null;
@@ -772,12 +818,30 @@ export function ProgressCurveSlide({
     const formatted = typeof value === 'number' ? (value % 1 === 0 ? value : value.toFixed(1)) : value;
     const row = monthlyData[index];
     const pct = row ? row['CumAchievement %'] : 0;
-    const labelText = pct ? `${formatted} (${pct}%)` : `${formatted}`;
+    const labelText = pct && pct > 0 ? `${formatted} (${pct}%)` : `${formatted}`;
 
+    const posX = x ?? 0;
+    const posY = y ?? 0;
     return (
       <g>
-        <rect x={x - 34} y={y - 22} width={68} height={18} rx={4} fill="#1e1b4b" stroke="#4f46e5" strokeWidth={1.5} />
-        <text x={x} y={y - 9} fill="#ffffff" fontSize={9.5} fontWeight={800} textAnchor="middle">
+        <rect
+          x={posX - 38}
+          y={posY + 8}
+          width={76}
+          height={20}
+          rx={5}
+          fill="#1e1b4b"
+          stroke="#4f46e5"
+          strokeWidth={1.5}
+        />
+        <text
+          x={posX}
+          y={posY + 22}
+          fill="#ffffff"
+          fontSize={10}
+          fontWeight={800}
+          textAnchor="middle"
+        >
           {labelText}
         </text>
       </g>
@@ -795,7 +859,7 @@ export function ProgressCurveSlide({
           <div>
             <h4 className="text-base font-black flex items-center gap-1.5" style={{ color: '#0f172a' }}>
               <TrendingUp className="w-4 h-4" style={{ color: '#4f46e5' }} />
-              <span>FY 26-27 Monthly Progress Curve</span>
+              <span>{getFiscalYearConfig(getStoredFiscalYear()).label} Monthly Progress Curve</span>
             </h4>
             <p className="text-[11px] mt-0.5" style={{ color: '#94a3b8' }}>
               Aggregated monthly progress and cumulative S-curve trend across selected portfolio ({projectsCount} projects)
@@ -811,8 +875,8 @@ export function ProgressCurveSlide({
               { id: 'vowd', label: 'VOWD' },
               { id: 'milestone', label: 'Milestones' },
               { id: 'labour', label: 'Labour' },
-              { id: 'ur', label: 'Unit Delivery (Residential)' },
-              { id: 'uc', label: 'Unit Delivery (Commercial)' }
+              { id: 'ur', label: 'Unit Delivery - Residential' },
+              { id: 'uc', label: 'Unit Delivery - Commercial' }
             ].map((tab) => {
               const isActive = tab.id === metricKey;
               return (
@@ -893,10 +957,23 @@ export function ProgressCurveSlide({
         <div className="flex items-center justify-end gap-5 text-[9.5px] font-bold px-2">
           <div className="flex items-center gap-2">
             <span className="uppercase tracking-wider text-[8px] font-black" style={{ color: '#94a3b8' }}>Monthly Bars:</span>
-            <div className="flex items-center space-x-1">
-              <span className="w-2.5 h-2.5 rounded" style={{ backgroundColor: config.colorPlan }} />
-              <span style={{ color: '#475569' }}>{baselinePlan.toUpperCase()} Plan</span>
-            </div>
+            {baselinePlan === 'both' ? (
+              <>
+                <div className="flex items-center space-x-1">
+                  <span className="w-2.5 h-2.5 rounded" style={{ backgroundColor: '#94a3b8' }} />
+                  <span style={{ color: '#475569' }}>R0 Plan</span>
+                </div>
+                <div className="flex items-center space-x-1">
+                  <span className="w-2.5 h-2.5 rounded" style={{ backgroundColor: config.colorPlan }} />
+                  <span style={{ color: '#475569' }}>R1 Plan</span>
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center space-x-1">
+                <span className="w-2.5 h-2.5 rounded" style={{ backgroundColor: config.colorPlan }} />
+                <span style={{ color: '#475569' }}>{baselinePlan.toUpperCase()} Plan</span>
+              </div>
+            )}
             <div className="flex items-center space-x-1">
               <span className="w-2.5 h-2.5 rounded" style={{ backgroundColor: config.colorAch }} />
               <span style={{ color: '#475569' }}>Actual</span>
@@ -905,10 +982,23 @@ export function ProgressCurveSlide({
 
           <div className="flex items-center gap-2 border-l pl-4" style={{ borderColor: '#e2e8f0' }}>
             <span className="uppercase tracking-wider text-[8px] font-black" style={{ color: '#94a3b8' }}>S-Curve Lines:</span>
-            <div className="flex items-center space-x-1">
-              <span className="inline-block w-4 h-0.5 border-t-2 border-solid" style={{ borderColor: config.colorPlan }} />
-              <span style={{ color: '#475569' }}>Cum {baselinePlan.toUpperCase()}</span>
-            </div>
+            {baselinePlan === 'both' ? (
+              <>
+                <div className="flex items-center space-x-1">
+                  <span className="inline-block w-4 h-0.5 border-t-2 border-dashed" style={{ borderColor: '#94a3b8' }} />
+                  <span style={{ color: '#475569' }}>Cum R0</span>
+                </div>
+                <div className="flex items-center space-x-1">
+                  <span className="inline-block w-4 h-0.5 border-t-2 border-solid" style={{ borderColor: config.colorPlan }} />
+                  <span style={{ color: '#475569' }}>Cum R1</span>
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center space-x-1">
+                <span className="inline-block w-4 h-0.5 border-t-2 border-solid" style={{ borderColor: config.colorPlan }} />
+                <span style={{ color: '#475569' }}>Cum {baselinePlan.toUpperCase()}</span>
+              </div>
+            )}
             <div className="flex items-center space-x-1">
               <span className="inline-block w-4 h-0.5 border-t-2 border-solid" style={{ borderColor: config.colorAch }} />
               <span style={{ color: '#475569' }}>Cum Actual</span>
@@ -916,33 +1006,59 @@ export function ProgressCurveSlide({
           </div>
         </div>
 
-        {/* Recharts Chart Canvas */}
-        <div className="h-[430px] w-full pt-2">
-          <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart
-              data={monthlyData}
-              margin={{ top: 20, right: 35, left: -5, bottom: 5 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-              <XAxis dataKey="month" stroke="#94a3b8" fontSize={9.5} fontWeight={700} tickLine={false} dy={5} />
-              <YAxis yAxisId="left" stroke="#94a3b8" fontSize={9.5} fontWeight={700} tickLine={false} tickFormatter={(v) => formatValue(v, config.isCurrency)} />
-              <YAxis yAxisId="right" orientation="right" stroke="#94a3b8" fontSize={9.5} fontWeight={700} tickLine={false} tickFormatter={(v) => formatValue(v, config.isCurrency)} />
+        {/* Recharts Chart Canvas with explicit pixel dimensions for pristine PDF rendering */}
+        <div className="h-[430px] w-full pt-2 flex justify-center">
+          <ComposedChart
+            width={1050}
+            height={420}
+            data={monthlyData}
+            margin={{ top: 25, right: 35, left: -5, bottom: 5 }}
+          >
+            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+            <XAxis dataKey="month" stroke="#94a3b8" fontSize={9.5} fontWeight={700} tickLine={false} dy={5} />
+            <YAxis yAxisId="left" stroke="#94a3b8" fontSize={9.5} fontWeight={700} tickLine={false} tickFormatter={(v) => formatValue(v, config.isCurrency)} />
+            <YAxis yAxisId="right" orientation="right" stroke="#94a3b8" fontSize={9.5} fontWeight={700} tickLine={false} tickFormatter={(v) => formatValue(v, config.isCurrency)} />
 
-              <Bar yAxisId="left" dataKey="Plan" name="Plan" fill={config.colorPlan} radius={[3, 3, 0, 0]} maxBarSize={22}>
-                <LabelList dataKey="Plan" content={renderBarPlanLabel} />
-              </Bar>
-              <Bar yAxisId="left" dataKey="Achievement" name="Actual" fill={config.colorAch} radius={[3, 3, 0, 0]} maxBarSize={22}>
-                <LabelList dataKey="Achievement" content={renderBarAchLabel} />
-              </Bar>
+            {baselinePlan === 'both' ? (
+              <>
+                <Bar isAnimationActive={false} yAxisId="left" dataKey="PlanR0" name="R0 Plan" fill="#94a3b8" radius={[3, 3, 0, 0]} maxBarSize={15}>
+                  <LabelList dataKey="PlanR0" content={renderBarPlanLabel} />
+                </Bar>
+                <Bar isAnimationActive={false} yAxisId="left" dataKey="PlanR1" name="R1 Plan" fill={config.colorPlan} radius={[3, 3, 0, 0]} maxBarSize={15}>
+                  <LabelList dataKey="PlanR1" content={renderBarPlanLabel} />
+                </Bar>
+                <Bar isAnimationActive={false} yAxisId="left" dataKey="Achievement" name="Actual" fill={config.colorAch} radius={[3, 3, 0, 0]} maxBarSize={15}>
+                  <LabelList dataKey="Achievement" content={renderBarAchLabel} />
+                </Bar>
 
-              <Line yAxisId="right" type="monotone" dataKey="CumPlan" name="Cum Plan" stroke={config.colorPlan} strokeWidth={2.5} dot={false}>
-                <LabelList dataKey="CumPlan" content={renderCumPlanLineLabel} />
-              </Line>
-              <Line yAxisId="right" type="monotone" dataKey="CumAchievement" name="Cum Actual" stroke={config.colorAch} strokeWidth={3} dot={{ r: 3.5, fill: config.colorAch }}>
-                <LabelList dataKey="CumAchievement" content={renderCumAchLineLabel} />
-              </Line>
-            </ComposedChart>
-          </ResponsiveContainer>
+                <Line isAnimationActive={false} yAxisId="right" type="monotone" dataKey="CumPlanR0" name="Cum R0 Plan" stroke="#94a3b8" strokeWidth={2} strokeDasharray="4 4" dot={{ r: 3 }}>
+                  <LabelList dataKey="CumPlanR0" content={renderCumPlanLineLabel} />
+                </Line>
+                <Line isAnimationActive={false} yAxisId="right" type="monotone" dataKey="CumPlanR1" name="Cum R1 Plan" stroke={config.colorPlan} strokeWidth={2.5} dot={{ r: 3 }}>
+                  <LabelList dataKey="CumPlanR1" content={renderCumPlanLineLabel} />
+                </Line>
+                <Line isAnimationActive={false} yAxisId="right" type="monotone" dataKey="CumAchievement" name="Cum Actual" stroke={config.colorAch} strokeWidth={3} dot={{ r: 4, fill: config.colorAch }}>
+                  <LabelList dataKey="CumAchievement" content={renderCumAchLineLabel} />
+                </Line>
+              </>
+            ) : (
+              <>
+                <Bar isAnimationActive={false} yAxisId="left" dataKey="Plan" name="Plan" fill={config.colorPlan} radius={[3, 3, 0, 0]} maxBarSize={22}>
+                  <LabelList dataKey="Plan" content={renderBarPlanLabel} />
+                </Bar>
+                <Bar isAnimationActive={false} yAxisId="left" dataKey="Achievement" name="Actual" fill={config.colorAch} radius={[3, 3, 0, 0]} maxBarSize={22}>
+                  <LabelList dataKey="Achievement" content={renderBarAchLabel} />
+                </Bar>
+
+                <Line isAnimationActive={false} yAxisId="right" type="monotone" dataKey="CumPlan" name="Cum Plan" stroke={config.colorPlan} strokeWidth={2.5} dot={{ r: 3 }}>
+                  <LabelList dataKey="CumPlan" content={renderCumPlanLineLabel} />
+                </Line>
+                <Line isAnimationActive={false} yAxisId="right" type="monotone" dataKey="CumAchievement" name="Cum Actual" stroke={config.colorAch} strokeWidth={3} dot={{ r: 4, fill: config.colorAch }}>
+                  <LabelList dataKey="CumAchievement" content={renderCumAchLineLabel} />
+                </Line>
+              </>
+            )}
+          </ComposedChart>
         </div>
       </div>
 

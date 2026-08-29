@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Project, ColumnMapping, Software2Project, Software2Mapping } from '@/src/types';
+import { Project, ColumnMapping, Software2Project, Software2Mapping, FiscalYearKey } from '@/src/types';
 import { getAccessToken, initAuth } from '@/src/lib/firebase';
 import { scoreHeaderRow, detectColumnMapping, parseSheetData, parseSoftware2Data } from '@/src/utils/sheetParser';
 import { fetchPublicGoogleSheet, TARGET_SPREADSHEET_ID, TAB_SOFTWARE_1, TAB_SOFTWARE_2 } from '@/src/utils/googleSheetsApi';
+import { getFiscalYearConfig, getStoredFiscalYear } from '@/src/utils/fiscalYear';
 
 const SPREADSHEET_ID = TARGET_SPREADSHEET_ID;
 const SHEET_NAME = TAB_SOFTWARE_1;
@@ -280,9 +281,10 @@ export const DEMO_PROJECTS: Project[] = [
   }
 ];
 
-function generateMonthlyMetrics(basePlan: number, variance: number, seed: number) {
-  const months = ["Apr-26", "May-26", "Jun-26", "Jul-26", "Aug-26", "Sep-26", "Oct-26", "Nov-26", "Dec-26", "Jan-27", "Feb-27", "Mar-27"];
-  const h2Months = ["Oct-26", "Nov-26", "Dec-26", "Jan-27", "Feb-27", "Mar-27"];
+function generateMonthlyMetrics(basePlan: number, variance: number, seed: number, fyKey?: string) {
+  const fyConfig = getFiscalYearConfig(fyKey);
+  const months = fyConfig.months.map(m => m.key);
+  const h2Months = fyConfig.months.filter(m => m.hasR1).map(m => m.key);
   return months.map((month, idx) => {
     // Deterministic pseudo-random generation based on seed and idx
     const sin1 = Math.sin(seed + idx);
@@ -312,9 +314,10 @@ function generateMonthlyMetrics(basePlan: number, variance: number, seed: number
   });
 }
 
-function generateHistoryMetrics(baseValue: number, variance: number, seed: number) {
-  const months25 = ["Apr-25", "May-25", "Jun-25", "Jul-25", "Aug-25", "Sep-25", "Oct-25", "Nov-25", "Dec-25", "Jan-26", "Feb-26", "Mar-26"];
-  return months25.map((month, idx) => {
+function generateHistoryMetrics(baseValue: number, variance: number, seed: number, fyKey?: string) {
+  const fyConfig = getFiscalYearConfig(fyKey);
+  const months = fyConfig.months.map(m => m.key);
+  return months.map((month, idx) => {
     const sinValue = Math.sin(seed + idx);
     const val = baseValue + sinValue * variance;
     return {
@@ -651,7 +654,7 @@ export function useGoogleSheets() {
           }
         }
         
-        const parsed2 = parseSoftware2Data(rows2, s2HeaderIdx, s2Mapping);
+        const parsed2 = parseSoftware2Data(rows2, s2HeaderIdx, s2Mapping, getStoredFiscalYear());
         if (parsed2 && parsed2.length > 0) {
           setSoftware2Projects(parsed2);
         } else {
@@ -711,12 +714,27 @@ export function useGoogleSheets() {
     localStorage.setItem('software2Mapping', JSON.stringify(newMapping));
     
     if (software2SheetRows && software2SheetRows.length > 0) {
-      const parsed = parseSoftware2Data(software2SheetRows, newHeaderIdx, newMapping);
+      const parsed = parseSoftware2Data(software2SheetRows, newHeaderIdx, newMapping, getStoredFiscalYear());
       if (parsed && parsed.length > 0) {
         setSoftware2Projects(parsed);
       }
     }
   }, [software2SheetRows]);
+
+  // Listen for Fiscal Year changes from ColumnMapper / Header
+  useEffect(() => {
+    const handleFyChange = () => {
+      if (software2SheetRows && software2SheetRows.length > 0) {
+        const parsed = parseSoftware2Data(software2SheetRows, software2HeaderRowIndex, software2Mapping, getStoredFiscalYear());
+        if (parsed && parsed.length > 0) {
+          setSoftware2Projects(parsed);
+        }
+      }
+    };
+
+    window.addEventListener('mrm-fiscal-year-changed', handleFyChange);
+    return () => window.removeEventListener('mrm-fiscal-year-changed', handleFyChange);
+  }, [software2SheetRows, software2HeaderRowIndex, software2Mapping]);
 
   const loadCustomData = useCallback((rows: string[][], rows2?: string[][]) => {
     if (!rows || rows.length === 0) return;
@@ -751,7 +769,7 @@ export function useGoogleSheets() {
       setSoftware2SheetRows(rows2);
       const savedS2Idx = localStorage.getItem('software2HeaderRowIndex');
       const s2HeaderIdx = savedS2Idx !== null ? parseInt(savedS2Idx, 10) : 3;
-      const parsed2 = parseSoftware2Data(rows2, s2HeaderIdx, software2Mapping);
+      const parsed2 = parseSoftware2Data(rows2, s2HeaderIdx, software2Mapping, getStoredFiscalYear());
       setSoftware2Projects(parsed2);
     }
   }, [software2Mapping]);

@@ -339,8 +339,8 @@ export default function MilestoneSlideDrawer({
                 { id: 'milestone', label: 'Milestones (Cols 57-86)', color: 'text-blue-700 bg-blue-50 border-blue-200' },
                 { id: 'vowd', label: 'VOWD (Cols 18-47)', color: 'text-violet-700 bg-violet-50 border-violet-200' },
                 { id: 'labour', label: 'Labour (Cols 228-258)', color: 'text-emerald-700 bg-emerald-50 border-emerald-200' },
-                { id: 'ur', label: 'Residential UR (Cols 95-124)', color: 'text-orange-700 bg-orange-50 border-orange-200' },
-                { id: 'uc', label: 'Commercial UC (Cols 132-161)', color: 'text-amber-700 bg-amber-50 border-amber-200' },
+                { id: 'ur', label: 'Unit Delivery - Residential (Cols 95-124)', color: 'text-orange-700 bg-orange-50 border-orange-200' },
+                { id: 'uc', label: 'Unit Delivery - Commercial (Cols 132-161)', color: 'text-amber-700 bg-amber-50 border-amber-200' },
                 { id: 'meta', label: 'Metadata (Project ID, Name, Leader, VP, Stage)', color: 'text-purple-700 bg-purple-50 border-purple-200' },
                 { id: 'all', label: 'All Google Sheet Headers', color: 'text-slate-700 bg-white border-slate-200' },
               ].map((tab) => {

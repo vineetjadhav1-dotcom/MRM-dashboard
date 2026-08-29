@@ -1,16 +1,21 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useGoogleSheets } from '@/src/hooks/useGoogleSheets';
 import Login from '@/src/components/Login';
 import Header from '@/src/components/Header';
 import Dashboard from '@/src/components/Dashboard';
-import { logout } from '@/src/lib/firebase';
 import { RefreshCw } from 'lucide-react';
-import { ActiveTab } from '@/src/types';
+import { ActiveTab, AppUser, UserManagementSettings } from '@/src/types';
+import { 
+  getStoredUser, 
+  setStoredUser, 
+  getUserManagementSettings, 
+  getUserEffectivePermissions,
+  filterProjectsByPermissions,
+  filterSoftware2ProjectsByPermissions
+} from '@/src/utils/userManagement';
 
 export default function App() {
   const {
-    isAuthenticated,
-    user,
     isLoading,
     error,
     projects,
@@ -29,46 +34,50 @@ export default function App() {
     toggleUseDemo
   } = useGoogleSheets();
 
-  // Default to entering the dashboard immediately with full access
-  const [hasEntered, setHasEntered] = useState<boolean>(true);
+  // Authentication State
+  const [currentUser, setCurrentUser] = useState<AppUser | null>(getStoredUser);
+  const [userSettings, setUserSettings] = useState<UserManagementSettings>(getUserManagementSettings);
   const [activeTab, setActiveTab] = useState<ActiveTab>('projectDashboard');
+
+  // Compute effective permissions for the logged in user
+  const permissions = useMemo(() => {
+    return getUserEffectivePermissions(currentUser, userSettings);
+  }, [currentUser, userSettings]);
+
+  // Filter projects by user permissions (VP, Leader, Project Code scoping)
+  const filteredProjects = useMemo(() => {
+    if (!currentUser || currentUser.role === 'admin') return projects;
+    return filterProjectsByPermissions(projects, permissions);
+  }, [projects, permissions, currentUser]);
+
+  const filteredSoftware2Projects = useMemo(() => {
+    if (!currentUser || currentUser.role === 'admin') return software2Projects;
+    return filterSoftware2ProjectsByPermissions(software2Projects, permissions);
+  }, [software2Projects, permissions, currentUser]);
 
   // Set document title
   useEffect(() => {
-    document.title = 'Planedge Dashboard';
+    document.title = 'Planedge Executive Dashboard Portal';
   }, []);
 
-  // If already authenticated on load, let them enter the dashboard automatically
+  // Ensure activeTab is always one of the permitted tabs for standard users
   useEffect(() => {
-    if (isAuthenticated) {
-      setHasEntered(true);
-      // Automatically fetch spreadsheet data once authenticated
-      fetchSpreadsheetData();
+    if (currentUser && currentUser.role !== 'admin') {
+      if (!permissions.allowedNavTabs.includes(activeTab)) {
+        setActiveTab(permissions.allowedNavTabs[0] || 'projectDashboard');
+      }
     }
-  }, [isAuthenticated, fetchSpreadsheetData]);
+  }, [permissions, activeTab, currentUser]);
 
-  const handleLoginSuccess = (token: string) => {
-    setHasEntered(true);
-    fetchSpreadsheetData(token);
+  const handleLoginSuccess = (user: AppUser) => {
+    setCurrentUser(user);
+    setStoredUser(user);
+    fetchSpreadsheetData();
   };
 
-  const handleCustomDataLoaded = (rows: string[][], rows2?: string[][]) => {
-    loadCustomData(rows, rows2);
-    setHasEntered(true);
-  };
-
-  const handleViewDemo = () => {
-    toggleUseDemo(true);
-    setHasEntered(true);
-  };
-
-  const handleLogout = async () => {
-    try {
-      await logout();
-      setHasEntered(false);
-    } catch (err) {
-      console.error('Logout error:', err);
-    }
+  const handleLogout = () => {
+    setStoredUser(null);
+    setCurrentUser(null);
   };
 
   const handleRefresh = () => {
@@ -79,13 +88,15 @@ export default function App() {
     toggleUseDemo(useDemo);
   };
 
-  // Render Login screen if user has not entered the dashboard yet
-  if (!hasEntered) {
+  const handleSaveUserSettings = (newSettings: UserManagementSettings) => {
+    setUserSettings(newSettings);
+  };
+
+  // Render Login screen if user is not authenticated
+  if (!currentUser) {
     return (
       <Login 
         onLoginSuccess={handleLoginSuccess} 
-        onViewDemo={handleViewDemo} 
-        onLoadData={handleCustomDataLoaded}
       />
     );
   }
@@ -104,17 +115,17 @@ export default function App() {
 
       {/* Corporate Dashboard Header with Dropdown Navigation Menu */}
       <Header
-        user={user}
+        currentUser={currentUser}
+        permissions={permissions}
         isUsingDemo={isUsingDemo}
         isLoading={isLoading}
         onLogout={handleLogout}
         onRefresh={handleRefresh}
         onToggleDemo={handleToggleDemoSetting}
-        projectsCount={projects.length}
-        projects={projects}
-        software2Projects={software2Projects}
-        onLoadCustomData={handleCustomDataLoaded}
-        onOpenLogin={() => setHasEntered(false)}
+        projectsCount={filteredProjects.length}
+        projects={filteredProjects}
+        software2Projects={filteredSoftware2Projects}
+        onLoadCustomData={loadCustomData}
         activeTab={activeTab}
         onSelectTab={setActiveTab}
       />
@@ -124,8 +135,10 @@ export default function App() {
         <Dashboard
           activeTab={activeTab}
           onSelectTab={setActiveTab}
-          projects={projects}
-          software2Projects={software2Projects}
+          projects={filteredProjects}
+          software2Projects={filteredSoftware2Projects}
+          allProjects={projects}
+          allSoftware2Projects={software2Projects}
           isUsingDemo={isUsingDemo}
           isLoading={isLoading}
           error={error}
@@ -138,13 +151,15 @@ export default function App() {
           onUpdateMapping={updateMappingAndParse}
           onUpdateSoftware2Mapping={updateSoftware2MappingAndParse}
           onToggleDemo={handleToggleDemoSetting}
+          userSettings={userSettings}
+          onSaveUserSettings={handleSaveUserSettings}
+          currentUser={currentUser}
         />
       </main>
 
-
       {/* Footnote */}
       <footer className="py-6 border-t border-slate-200 bg-white text-center text-[10px] font-medium text-slate-400 mt-12">
-        <p>Monthly Review Meeting Dashboard • Secure Sandbox Environment</p>
+        <p>Monthly Review Meeting Dashboard • Planedge Corporate Portal</p>
       </footer>
     </div>
   );

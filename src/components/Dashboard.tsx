@@ -1,5 +1,13 @@
 import { useState, useMemo } from 'react';
-import { Project, ColumnMapping, Software2Project, Software2Mapping, ActiveTab } from '@/src/types';
+import { 
+  Project, 
+  ColumnMapping, 
+  Software2Project, 
+  Software2Mapping, 
+  ActiveTab, 
+  AppUser, 
+  UserManagementSettings 
+} from '@/src/types';
 import { 
   computeDashboardMetrics, 
   groupProjectsByVP, 
@@ -15,32 +23,14 @@ import ProjectDetailsModal from './ProjectDetailsModal';
 import ProjectDashboard from './ProjectDashboard';
 import Leaderboard from './Leaderboard';
 import KeyInsights from './KeyInsights';
-import { 
-  ResponsiveContainer, 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  Tooltip, 
-  PieChart, 
-  Pie, 
-  Cell, 
-  Legend 
-} from 'recharts';
-import { 
-  Users, 
-  TableProperties, 
-  Sparkles, 
-  Building2,
-  SlidersHorizontal,
-  Trophy,
-  Lightbulb,
-  Info
-} from 'lucide-react';
+import UserManagementView from './UserManagementView';
+import { Info } from 'lucide-react';
 
 interface DashboardProps {
   projects: Project[];
   software2Projects: Software2Project[];
+  allProjects?: Project[];
+  allSoftware2Projects?: Software2Project[];
   isUsingDemo: boolean;
   isLoading: boolean;
   error: string | null;
@@ -55,11 +45,16 @@ interface DashboardProps {
   onToggleDemo: (useDemo: boolean) => void;
   activeTab?: ActiveTab;
   onSelectTab?: (tab: ActiveTab) => void;
+  userSettings?: UserManagementSettings;
+  onSaveUserSettings?: (newSettings: UserManagementSettings) => void;
+  currentUser?: AppUser | null;
 }
 
 export default function Dashboard({
   projects,
   software2Projects,
+  allProjects = [],
+  allSoftware2Projects = [],
   isUsingDemo,
   isLoading,
   error,
@@ -73,36 +68,18 @@ export default function Dashboard({
   onUpdateSoftware2Mapping,
   onToggleDemo,
   activeTab = 'projectDashboard',
-  onSelectTab
+  onSelectTab,
+  userSettings,
+  onSaveUserSettings,
+  currentUser = null
 }: DashboardProps) {
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
 
-  // Compute all grouped data
+  // Compute all grouped data (using filtered projects)
   const metrics = useMemo(() => computeDashboardMetrics(projects), [projects]);
   const vpData = useMemo(() => groupProjectsByVP(projects), [projects]);
   const leaderData = useMemo(() => groupProjectsByLeader(projects), [projects]);
   const areaData = useMemo(() => groupProjectsByArea(projects), [projects]);
-
-  // Transform status counts for Recharts Pie Chart
-  const pieChartData = useMemo(() => {
-    return [
-      { name: 'Green (On Track)', value: metrics.statusCounts['Green'] || 0, color: '#10b981' },
-      { name: 'Amber (At Risk)', value: metrics.statusCounts['Amber'] || 0, color: '#f59e0b' },
-      { name: 'Red (Critical)', value: metrics.statusCounts['Red'] || 0, color: '#f43f5e' },
-      { name: 'Gray (Other)', value: metrics.statusCounts['Gray'] || 0, color: '#94a3b8' }
-    ].filter(d => d.value > 0);
-  }, [metrics]);
-
-  // Transform area data for Recharts Bar Chart (Top 6 areas by count)
-  const barChartData = useMemo(() => {
-    return areaData
-      .slice(0, 6)
-      .map(area => ({
-        name: area.name.length > 15 ? `${area.name.substring(0, 12)}...` : area.name,
-        'Project Count': area.projectsCount,
-        'Green Projects': area.statusCounts['Green'] || 0
-      }));
-  }, [areaData]);
 
   return (
     <div className="max-w-[1536px] mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-5 font-sans space-y-4" id="dashboard-main-container">
@@ -126,7 +103,7 @@ export default function Dashboard({
       <div className="w-full min-w-0" id="dashboard-main-content-area">
         <div className="min-h-[500px]" id="dashboard-tab-panel">
         
-          {/* DATA CONFIGURATION TAB (ONLY CONFIGURATION) */}
+          {/* DATA CONFIGURATION TAB */}
           {activeTab === 'overview' && (
             <div className="w-full" id="data-configuration-panel">
               <ColumnMapper
@@ -139,6 +116,19 @@ export default function Dashboard({
                 software2Mapping={software2Mapping}
                 onUpdateSoftware2Mapping={onUpdateSoftware2Mapping}
                 isUsingDemo={isUsingDemo}
+              />
+            </div>
+          )}
+
+          {/* USER ACCESS & MANAGEMENT TAB (ADMIN ONLY) */}
+          {activeTab === 'userAccess' && userSettings && onSaveUserSettings && (
+            <div className="w-full" id="user-access-panel">
+              <UserManagementView
+                settings={userSettings}
+                onSaveSettings={onSaveUserSettings}
+                projects={allProjects.length > 0 ? allProjects : projects}
+                software2Projects={allSoftware2Projects.length > 0 ? allSoftware2Projects : software2Projects}
+                currentUser={currentUser}
               />
             </div>
           )}

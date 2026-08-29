@@ -183,3 +183,13 @@ export function getStageRankForBlankSpi(stageStr?: string): number {
   return 99;
 }
 
+/**
+ * Helper to identify if a project ID/code starts with 'temp' (case-insensitive, e.g. 'temp', 'TEMP', 'Temp-123', 'TEMP_ABC').
+ * If true, this project must not be counted in any stage, project count, area, or budget.
+ */
+export function isTempProject(code?: string): boolean {
+  if (!code) return false;
+  return code.trim().toLowerCase().startsWith('temp');
+}
+
+

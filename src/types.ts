@@ -180,6 +180,8 @@ export interface Software2Mapping {
   metricOverrides?: { [key: string]: number };
 }
 
+export type FiscalYearKey = 'FY26-27' | 'FY27-28' | 'FY28-29' | 'FY29-30' | 'FY30-31';
+
 export type ActiveTab = 
   | 'projectDashboard' 
   | 'leader' 
@@ -187,6 +189,37 @@ export type ActiveTab =
   | 'insights' 
   | 'vp' 
   | 'all' 
-  | 'overview';
+  | 'overview'
+  | 'userAccess';
+
+export type UserRole = 'admin' | 'user';
+
+export interface AppUser {
+  id: string;
+  username: string;
+  password?: string;
+  displayName: string;
+  role: UserRole;
+  avatarBg?: string;
+  createdAt?: string;
+}
+
+export interface UserPermissions {
+  allowedNavTabs: ActiveTab[];
+  showSourceSheet: boolean;
+  canSyncSheet?: boolean;
+  canExportReport?: boolean;
+  canEditConfig?: boolean;
+  allowedVPs?: string[]; // Empty or ['all'] for all VPs
+  allowedLeaders?: string[]; // Empty or ['all'] for all leaders
+  allowedProjectCodes?: string[]; // Empty or ['all'] for all projects
+}
+
+export interface UserManagementSettings {
+  users: AppUser[];
+  userPermissions: Record<string, UserPermissions>;
+}
+
+
 
 

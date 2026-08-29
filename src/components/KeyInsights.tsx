@@ -1,5 +1,7 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
-import { Project, Software2Project } from '@/src/types';
+import { Project, Software2Project, FiscalYearKey } from '@/src/types';
+import { isTempProject } from '@/src/utils/customOrder';
+import { getFiscalYearConfig, getStoredFiscalYear } from '@/src/utils/fiscalYear';
 import { 
   ResponsiveContainer, 
   ComposedChart, 
@@ -52,11 +54,6 @@ interface KeyInsightsProps {
 type MetricType = 'vowd' | 'milestone' | 'labour' | 'ur' | 'uc';
 type ForecastScenario = 'all' | 'optimistic' | 'mostLikely' | 'pessimistic';
 
-const FY_MONTHS = [
-  "Apr-26", "May-26", "Jun-26", "Jul-26", "Aug-26", "Sep-26", 
-  "Oct-26", "Nov-26", "Dec-26", "Jan-27", "Feb-27", "Mar-27"
-];
-
 const METRIC_CONFIGS: Record<MetricType, {
   label: string;
   fullName: string;
@@ -88,7 +85,7 @@ const METRIC_CONFIGS: Record<MetricType, {
   milestone: {
     label: 'Milestones',
     fullName: 'Key Milestone Deliveries',
-    unit: 'Qty',
+    unit: 'Nos.',
     color: '#10b981',
     colorAch: '#047857',
     colorOpt: '#059669',
@@ -130,7 +127,7 @@ const METRIC_CONFIGS: Record<MetricType, {
   uc: {
     label: 'Commercial (UC)',
     fullName: 'Commercial Units Delivery (UC)',
-    unit: 'Units',
+    unit: 'Sqft',
     color: '#d97706',
     colorAch: '#b45309',
     colorOpt: '#10b981',
@@ -148,6 +145,17 @@ export default function KeyInsights({
   allProjects = [],
   onSelectProject
 }: KeyInsightsProps) {
+  const [activeFy, setActiveFy] = useState<FiscalYearKey>(() => getStoredFiscalYear());
+
+  useEffect(() => {
+    const handleFyChanged = () => setActiveFy(getStoredFiscalYear());
+    window.addEventListener('mrm-fiscal-year-changed', handleFyChanged);
+    return () => window.removeEventListener('mrm-fiscal-year-changed', handleFyChanged);
+  }, []);
+
+  const fyConfig = useMemo(() => getFiscalYearConfig(activeFy), [activeFy]);
+  const FY_MONTHS = useMemo(() => fyConfig.months.map(m => m.key), [fyConfig]);
+
   // 3 Layers of Filter States
   const [selectedVP, setSelectedVP] = useState<string>('all');
   const [selectedLeader, setSelectedLeader] = useState<string>('all');
@@ -178,7 +186,7 @@ export default function KeyInsights({
   const vpList = useMemo(() => {
     const vps = new Set<string>();
     projects.forEach(p => {
-      if (p.vp) vps.add(String(p.vp).trim());
+      if (!isTempProject(p.code) && p.vp) vps.add(String(p.vp).trim());
     });
     return Array.from(vps).sort();
   }, [projects]);
@@ -186,6 +194,7 @@ export default function KeyInsights({
   const leaderList = useMemo(() => {
     const leaders = new Set<string>();
     projects.forEach(p => {
+      if (isTempProject(p.code)) return;
       const matchVP = selectedVP === 'all' || (p.vp && String(p.vp).trim() === selectedVP);
       if (matchVP && p.leader) {
         leaders.add(String(p.leader).trim());
@@ -196,6 +205,7 @@ export default function KeyInsights({
 
   const projectList = useMemo(() => {
     return projects.filter(p => {
+      if (isTempProject(p.code)) return false;
       const matchVP = selectedVP === 'all' || (p.vp && String(p.vp).trim() === selectedVP);
       const matchLeader = selectedLeader === 'all' || (p.leader && String(p.leader).trim() === selectedLeader);
       return matchVP && matchLeader;
@@ -224,6 +234,7 @@ export default function KeyInsights({
   // Selected Scope Projects
   const scopedProjects = useMemo(() => {
     return projects.filter(p => {
+      if (isTempProject(p.code)) return false;
       const matchVP = selectedVP === 'all' || (p.vp && String(p.vp).trim() === selectedVP);
       const matchLeader = selectedLeader === 'all' || (p.leader && String(p.leader).trim() === selectedLeader);
       const matchProject = selectedProjectCode === 'all' || (p.code && String(p.code).trim() === selectedProjectCode);
@@ -768,7 +779,7 @@ export default function KeyInsights({
           </div>
 
           <p className="text-[11px] text-slate-500 italic bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-            Diagnosis: From April 2026 to {lastCompletedMonthName}, {scopedProjects.length} scoped project(s) achieved {performanceToDate.achPctToDate}% of cumulative baseline milestones.
+            Diagnosis: From {fyConfig.startMonthKey} to {lastCompletedMonthName}, {scopedProjects.length} scoped project(s) achieved {performanceToDate.achPctToDate}% of cumulative baseline milestones.
           </p>
         </div>
 
@@ -779,7 +790,7 @@ export default function KeyInsights({
               <div>
                 <span className="text-[10px] font-extrabold uppercase text-slate-400 tracking-wider block">Target Recovery Roadmap</span>
                 <h4 className="text-base font-black text-slate-900 flex items-center gap-1.5 mt-0.5">
-                  <span>How to Achieve Target (Mar 2027)</span>
+                  <span>How to Achieve Target ({fyConfig.endMonthKey})</span>
                 </h4>
               </div>
               <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-purple-50 text-purple-800 border border-purple-200">
@@ -924,11 +935,11 @@ export default function KeyInsights({
           <div>
             <div className="flex items-center gap-2">
               <h3 className="text-base font-black text-slate-900 tracking-tight">
-                {currentCfg.fullName} — FY 26-27 Forecast Projection Curves
+                {currentCfg.fullName} — {fyConfig.label} Forecast Projection Curves
               </h3>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
-              Solid line represents completed monthly actuals; dashed trajectories project the 3 scenarios through March 2027
+              Solid line represents completed monthly actuals; dashed trajectories project the 3 scenarios through {fyConfig.endMonthKey}
             </p>
           </div>
 
@@ -1054,10 +1065,10 @@ export default function KeyInsights({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
           <div>
             <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
-              <span>Month-by-Month Forecast Table — FY 26-27</span>
+              <span>Month-by-Month Forecast Table — {fyConfig.label}</span>
             </h3>
             <p className="text-xs text-slate-500 mt-0.5">
-              Completed actual achievements vs 3 scenario monthly projections through March 2027
+              Completed actual achievements vs 3 scenario monthly projections through {fyConfig.endMonthKey}
             </p>
           </div>
           <span className="px-3 py-1 bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-full text-xs font-bold">

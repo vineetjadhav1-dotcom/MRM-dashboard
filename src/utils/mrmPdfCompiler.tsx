@@ -15,6 +15,7 @@ import {
   sortVpNames, 
   sortLeaderItems, 
   isCompleteOrLostStage, 
+  isTempProject,
   parseSpiNumeric, 
   getStageRankForBlankSpi 
 } from '@/src/utils/customOrder';
@@ -107,10 +108,13 @@ export function calculateEntityStats(projects: Project[]): LeaderStats {
   let totalBudgetUnderManagement = 0;
   let totalBudgetUnderConstruction = 0;
   let projectsUnderConstructionCount = 0;
+  let activeProjectsCount = 0;
 
   projects.forEach((p) => {
+    if (!p) return;
+    const isTemp = isTempProject(p.code);
+    const isCompletedOrLost = isCompleteOrLostStage(p.projectStage);
     const budgetVal = parseBudgetValue(p.totalBudget);
-    totalBudgetUnderManagement += budgetVal;
 
     // Spatial area
     let parsedArea = 0;
@@ -118,20 +122,63 @@ export function calculateEntityStats(projects: Project[]): LeaderStats {
       const parsed = parseFloat(String(p.areaSqft).replace(/,/g, ''));
       if (!isNaN(parsed) && parsed > 0) {
         parsedArea = parsed;
-        totalArea += parsed;
       }
     }
 
-    if (isUnderConstructionStage(p.projectStage)) {
-      projectsUnderConstructionCount += 1;
-      areaUnderConstruction += parsedArea;
-      totalBudgetUnderConstruction += budgetVal;
+    // 1. Under Management, Under Construction & Stages:
+    // Only count active non-temp projects
+    if (!isTemp && !isCompletedOrLost) {
+      activeProjectsCount++;
+      totalArea += parsedArea;
+      totalBudgetUnderManagement += budgetVal;
+
+      if (isUnderConstructionStage(p.projectStage)) {
+        projectsUnderConstructionCount += 1;
+        areaUnderConstruction += parsedArea;
+        totalBudgetUnderConstruction += budgetVal;
+      }
+
+      // Health Standing / Status
+      if (p.status?.toLowerCase() === 'green') {
+        onTrackCount++;
+      }
+
+      // Stages classification
+      const st = (p.projectStage || '').toLowerCase();
+      const projName = p.name || p.code || 'Unnamed';
+
+      if (st.includes('upcom') || st.includes('pipeline')) {
+        stageCounts.upcoming++;
+        upcomingProjectNames.push(projName);
+      } else if (st.includes('design') || st.includes('drawing')) {
+        stageCounts.design++;
+        designProjectNames.push(projName);
+      } else if (st.includes('excav')) {
+        stageCounts.excavation++;
+        excavationProjectNames.push(projName);
+      } else if (st.includes('start') || st.includes('commenc')) {
+        stageCounts.constructionStart++;
+        constructionStartProjectNames.push(projName);
+      } else if (st.includes('finish') || st.includes('interior')) {
+        stageCounts.finishing++;
+        finishingProjectNames.push(projName);
+      } else if (st.includes('near') || st.includes('closure')) {
+        stageCounts.nearingCompletion++;
+        nearingCompletionProjectNames.push(projName);
+      } else if (st.includes('handover') || st.includes('possession')) {
+        stageCounts.handover++;
+        handoverProjectNames.push(projName);
+      } else if (st.includes('hold') || st.includes('stop') || st.includes('delay')) {
+        stageCounts.hold++;
+        holdProjectNames.push(projName);
+      } else {
+        stageCounts.ongoing++;
+        ongoingProjectNames.push(projName);
+      }
     }
 
-    // Health Standing / Status
-    if (p.status?.toLowerCase() === 'green') {
-      onTrackCount++;
-    }
+    // 2. Parameters: VOWD, Labour, Milestone, SPI, QHSE:
+    // ALWAYS consider for all projects (including temp and complete/lost)
 
     // SPI
     if (p.spi) {
@@ -143,18 +190,18 @@ export function calculateEntityStats(projects: Project[]): LeaderStats {
     }
 
     // Milestones
-    if (p.milestonePlan) msPlan += parseFloat(p.milestonePlan) || 0;
-    if (p.milestoneAch) msAch += parseFloat(p.milestoneAch) || 0;
-    if (p.milestoneFr) msFr += parseFloat(p.milestoneFr) || 0;
+    if (p.milestonePlan) msPlan += parseFloat(String(p.milestonePlan).replace(/,/g, '')) || 0;
+    if (p.milestoneAch) msAch += parseFloat(String(p.milestoneAch).replace(/,/g, '')) || 0;
+    if (p.milestoneFr) msFr += parseFloat(String(p.milestoneFr).replace(/,/g, '')) || 0;
 
     // VOWD
-    if (p.vowdPlan) vowdPlan += parseFloat(p.vowdPlan.replace(/[$,\s]/g, '')) || 0;
-    if (p.vowdAch) vowdAch += parseFloat(p.vowdAch.replace(/[$,\s]/g, '')) || 0;
+    if (p.vowdPlan) vowdPlan += parseFloat(String(p.vowdPlan).replace(/[$,\s]/g, '')) || 0;
+    if (p.vowdAch) vowdAch += parseFloat(String(p.vowdAch).replace(/[$,\s]/g, '')) || 0;
     if (p.vowdFr) vowdFr += parseFloat(String(p.vowdFr).replace(/[$,\s]/g, '')) || 0;
 
     // Labour
-    if (p.labourPlan) labPlan += parseFloat(p.labourPlan.replace(/,/g, '')) || 0;
-    if (p.labourAch) labAch += parseFloat(p.labourAch.replace(/,/g, '')) || 0;
+    if (p.labourPlan) labPlan += parseFloat(String(p.labourPlan).replace(/,/g, '')) || 0;
+    if (p.labourAch) labAch += parseFloat(String(p.labourAch).replace(/,/g, '')) || 0;
     if (p.labourFr) labFr += parseFloat(String(p.labourFr).replace(/,/g, '')) || 0;
 
     // QHSE Ratings
@@ -180,40 +227,6 @@ export function calculateEntityStats(projects: Project[]): LeaderStats {
         safetyCount++;
       }
     }
-
-    // Stages classification
-    const st = (p.projectStage || '').toLowerCase();
-    const projName = p.name || p.code || 'Unnamed';
-
-    if (st.includes('upcom') || st.includes('pipeline')) {
-      stageCounts.upcoming++;
-      upcomingProjectNames.push(projName);
-    } else if (st.includes('design') || st.includes('drawing')) {
-      stageCounts.design++;
-      designProjectNames.push(projName);
-    } else if (st.includes('excav')) {
-      stageCounts.excavation++;
-      excavationProjectNames.push(projName);
-    } else if (st.includes('start') || st.includes('commenc')) {
-      stageCounts.constructionStart++;
-      constructionStartProjectNames.push(projName);
-    } else if (st.includes('finish') || st.includes('interior')) {
-      stageCounts.finishing++;
-      finishingProjectNames.push(projName);
-    } else if (st.includes('near') || st.includes('closure')) {
-      stageCounts.nearingCompletion++;
-      nearingCompletionProjectNames.push(projName);
-    } else if (st.includes('handover') || st.includes('possession') || st.includes('completed')) {
-      stageCounts.handover++;
-      handoverProjectNames.push(projName);
-    } else if (st.includes('hold') || st.includes('stop') || st.includes('delay')) {
-      stageCounts.hold++;
-      holdProjectNames.push(projName);
-    } else {
-      // Default to ongoing
-      stageCounts.ongoing++;
-      ongoingProjectNames.push(projName);
-    }
   });
 
   // Calculate secondary KPIs
@@ -229,6 +242,7 @@ export function calculateEntityStats(projects: Project[]): LeaderStats {
     totalBudgetUnderManagement,
     totalBudgetUnderConstruction,
     projectsUnderConstructionCount,
+    activeProjectsCount,
     avgSpi: spiCount > 0 ? spiSum / spiCount : null,
     milestones: {
       plan: msPlan,
@@ -360,7 +374,7 @@ export function calculateMonthlyCurveData(
  */
 export function sortProjectsForSlides(projects: Project[]): Project[] {
   return [...projects]
-    .filter((p) => !isCompleteOrLostStage(p.projectStage))
+    .filter((p) => !isTempProject(p.code) && !isCompleteOrLostStage(p.projectStage))
     .sort((a, b) => {
       const spiA = parseSpiNumeric(a.spi);
       const spiB = parseSpiNumeric(b.spi);
@@ -441,14 +455,15 @@ export async function generateFullMRMReport(options: MRMReportExportOptions): Pr
 
     // 1.2 VP Summary Slide
     const vpStats = calculateEntityStats(vpProjects);
+    const vpActiveCount = vpStats.activeProjectsCount || 0;
     slides.push({
       type: 'summary',
       label: `VP: ${vpLabel} Summary`,
       element: (
         <SummarySlide
           title={`VP: ${vpLabel} Summary`}
-          subtitle={`Overseeing a collection of ${vpProjects.length} operational projects under ${vpLabel}.`}
-          projectsCount={vpProjects.length}
+          subtitle={`Overseeing a collection of ${vpActiveCount} active operational projects under ${vpLabel}.`}
+          projectsCount={vpActiveCount}
           onTrackCount={vpStats.onTrackCount}
           stats={vpStats}
         />
@@ -464,7 +479,7 @@ export async function generateFullMRMReport(options: MRMReportExportOptions): Pr
         label: `VP ${vpLabel} - ${mKey.toUpperCase()} Curve`,
         element: (
           <ProgressCurveSlide
-            projectsCount={vpProjects.length}
+            projectsCount={vpActiveCount}
             metricKey={mKey}
             baselinePlan={baselinePlan}
             monthlyData={curveData}
@@ -481,6 +496,7 @@ export async function generateFullMRMReport(options: MRMReportExportOptions): Pr
     const leaderProjects = leader.projects || [];
     const sortedActive = sortProjectsForSlides(leaderProjects);
     const leaderStats = calculateEntityStats(leaderProjects);
+    const leaderActiveCount = leaderStats.activeProjectsCount || 0;
 
     // 2.1 Leader Cover Slide
     slides.push({
@@ -496,8 +512,8 @@ export async function generateFullMRMReport(options: MRMReportExportOptions): Pr
       element: (
         <SummarySlide
           title={`Leader: ${leader.name} Portfolio`}
-          subtitle={`Detailed operational overview of ${leader.name}'s ${leaderProjects.length} assigned projects.`}
-          projectsCount={leaderProjects.length}
+          subtitle={`Detailed operational overview of ${leader.name}'s ${leaderActiveCount} active projects.`}
+          projectsCount={leaderActiveCount}
           onTrackCount={leaderStats.onTrackCount}
           stats={leaderStats}
         />
@@ -513,7 +529,7 @@ export async function generateFullMRMReport(options: MRMReportExportOptions): Pr
         label: `Leader ${leader.name} - ${mKey.toUpperCase()} Curve`,
         element: (
           <ProgressCurveSlide
-            projectsCount={leaderProjects.length}
+            projectsCount={leaderActiveCount}
             metricKey={mKey}
             baselinePlan={baselinePlan}
             monthlyData={curveData}
@@ -585,7 +601,7 @@ export async function generateFullMRMReport(options: MRMReportExportOptions): Pr
       root.render(slide.element);
 
       // Brief delay for React 18 DOM flush, Recharts layout, and SVG rendering
-      await new Promise((resolve) => setTimeout(resolve, 250));
+      await new Promise((resolve) => setTimeout(resolve, 400));
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
       // Native browser SVG foreignObject rendering via html-to-image

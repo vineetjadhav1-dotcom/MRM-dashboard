@@ -1,5 +1,8 @@
-import React, { useState, useMemo, useCallback } from 'react';
-import { Project, Software2Project, VPData, LeaderData } from '@/src/types';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import { Project, Software2Project, VPData, LeaderData, FiscalYearKey } from '@/src/types';
+import { isTempProject } from '@/src/utils/customOrder';
+import { getFiscalYearConfig, getStoredFiscalYear } from '@/src/utils/fiscalYear';
+import { isUnderConstructionStage } from '@/src/utils/sheetParser';
 import { 
   Trophy, 
   Award, 
@@ -84,21 +87,6 @@ interface LeaderboardRow {
   rawProject?: Project;
 }
 
-const FY_MONTHS = [
-  { key: 'Apr-26', label: 'Apr 26', short: 'Apr' },
-  { key: 'May-26', label: 'May 26', short: 'May' },
-  { key: 'Jun-26', label: 'Jun 26', short: 'Jun' },
-  { key: 'Jul-26', label: 'Jul 26', short: 'Jul' },
-  { key: 'Aug-26', label: 'Aug 26', short: 'Aug' },
-  { key: 'Sep-26', label: 'Sep 26', short: 'Sep' },
-  { key: 'Oct-26', label: 'Oct 26', short: 'Oct' },
-  { key: 'Nov-26', label: 'Nov 26', short: 'Nov' },
-  { key: 'Dec-26', label: 'Dec 26', short: 'Dec' },
-  { key: 'Jan-27', label: 'Jan 27', short: 'Jan' },
-  { key: 'Feb-27', label: 'Feb 27', short: 'Feb' },
-  { key: 'Mar-27', label: 'Mar 27', short: 'Mar' }
-];
-
 export default function Leaderboard({
   projects,
   software2Projects = [],
@@ -106,14 +94,33 @@ export default function Leaderboard({
   leaderData = [],
   onSelectProject
 }: LeaderboardProps) {
+  const [activeFy, setActiveFy] = useState<FiscalYearKey>(() => getStoredFiscalYear());
+
+  useEffect(() => {
+    const handleFyChanged = () => setActiveFy(getStoredFiscalYear());
+    window.addEventListener('mrm-fiscal-year-changed', handleFyChanged);
+    return () => window.removeEventListener('mrm-fiscal-year-changed', handleFyChanged);
+  }, []);
+
+  const fyConfig = useMemo(() => getFiscalYearConfig(activeFy), [activeFy]);
+  const FY_MONTHS = fyConfig.months;
+
   const [activeCategory, setActiveCategory] = useState<LeaderboardCategory>('VP');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortField, setSortField] = useState<keyof LeaderboardRow>('compositeScore');
   const [sortAsc, setSortAsc] = useState<boolean>(false);
 
-  // Month Range filter state: Default is Apr 26 to Aug 26
-  const [startMonth, setStartMonth] = useState<string>('Apr-26');
-  const [toMonth, setToMonth] = useState<string>('Aug-26');
+  // Month Range filter state: Default is Month 0 to Month 4
+  const [startMonth, setStartMonth] = useState<string>(() => fyConfig.months[0]?.key || 'Apr-26');
+  const [toMonth, setToMonth] = useState<string>(() => fyConfig.months[4]?.key || 'Aug-26');
+
+  // Update default selected months if FY changes
+  useEffect(() => {
+    if (fyConfig.months.length >= 5) {
+      setStartMonth(fyConfig.months[0].key);
+      setToMonth(fyConfig.months[4].key);
+    }
+  }, [fyConfig]);
 
   // Compute active month keys within selected [startMonth, toMonth] range
   const activeMonthKeys = useMemo(() => {
@@ -122,7 +129,7 @@ export default function Leaderboard({
     const min = Math.min(sIdx !== -1 ? sIdx : 0, tIdx !== -1 ? tIdx : 4);
     const max = Math.max(sIdx !== -1 ? sIdx : 0, tIdx !== -1 ? tIdx : 4);
     return FY_MONTHS.slice(min, max + 1).map(m => m.key);
-  }, [startMonth, toMonth]);
+  }, [startMonth, toMonth, FY_MONTHS]);
 
   const elapsedMonthsCount = Math.max(1, activeMonthKeys.length);
 
@@ -231,7 +238,7 @@ export default function Leaderboard({
     const vps = Array.from(new Set(projects.map(p => p.vp).filter(Boolean)));
 
     return vps.map(vpName => {
-      const vpProjects = projects.filter(p => p.vp === vpName);
+      const vpProjects = projects.filter(p => !isTempProject(p.code) && p.vp === vpName);
       let vowdPlan = 0, vowdAch = 0;
       let milestonePlan = 0, milestoneAch = 0;
       let labourPlan = 0, labourAch = 0;
@@ -239,6 +246,9 @@ export default function Leaderboard({
       let ucPlan = 0, ucAch = 0;
       let totalArea = 0;
       let totalSpi = 0;
+
+      let vowdAchUnderConstruction = 0;
+      let areaUnderConstruction = 0;
 
       vpProjects.forEach(p => {
         const m = extractProjectMetrics(p);
@@ -254,6 +264,11 @@ export default function Leaderboard({
         ucAch += m.uc.ach;
         totalArea += m.areaSqft;
         totalSpi += m.avgSPI;
+
+        if (isUnderConstructionStage(p.projectStage)) {
+          vowdAchUnderConstruction += m.vowd.ach;
+          areaUnderConstruction += m.areaSqft;
+        }
       });
 
       const count = vpProjects.length || 1;
@@ -264,11 +279,18 @@ export default function Leaderboard({
       const ucPct = ucPlan > 0 ? (ucAch / ucPlan) * 100 : 0;
       const avgSPI = count > 0 ? totalSpi / count : 1.0;
 
-      const labourProductivity = labourAch > 0 ? ((vowdAch * 100) / (labourAch / count)) : 0;
-      const labourEfficiency = labourPct > 0 ? (vowdPct / labourPct) : 1.0;
-      const speedOfConstruction = count > 0 ? (totalArea / count) / elapsedMonthsCount : 0;
+      // Labour productivity = achieved VOWD for all projects / total number of labours for all projects (Unit: Rs./Lab./Day)
+      const labourProductivity = labourAch > 0 ? ((vowdAch / labourAch) * 10000000) : 0;
 
-      const compositeScore = (vowdPct * 0.35) + (milestonePct * 0.25) + (avgSPI * 100 * 0.20) + (labourEfficiency * 100 * 0.10) + (Math.min(100, labourProductivity * 10) * 0.10);
+      // Labour efficiency = labour productivity * 26 * 100 / 10^7 (Unit: Cr. per 100 labours)
+      const labourEfficiency = (labourProductivity * 26 * 100) / 10000000;
+
+      // Speed of construction in leaderboard = achieved VOWD of projects under construction / area of projects under construction / no. of elapsed months from Apr
+      const speedOfConstruction = (areaUnderConstruction > 0 && elapsedMonthsCount > 0)
+        ? ((vowdAchUnderConstruction * 10000000) / (areaUnderConstruction * elapsedMonthsCount))
+        : 0;
+
+      const compositeScore = (vowdPct * 0.35) + (milestonePct * 0.25) + (avgSPI * 100 * 0.20) + (Math.min(100, (labourEfficiency / 2) * 100) * 0.10) + (Math.min(100, (speedOfConstruction / 50) * 100) * 0.10);
 
       return {
         id: `vp-${vpName}`,
@@ -305,7 +327,7 @@ export default function Leaderboard({
     const leaders = Array.from(new Set(projects.map(p => p.leader).filter(Boolean)));
 
     return leaders.map(leaderName => {
-      const leaderProjects = projects.filter(p => p.leader === leaderName);
+      const leaderProjects = projects.filter(p => !isTempProject(p.code) && p.leader === leaderName);
       const vpName = leaderProjects[0]?.vp || 'Unassigned';
       let vowdPlan = 0, vowdAch = 0;
       let milestonePlan = 0, milestoneAch = 0;
@@ -314,6 +336,9 @@ export default function Leaderboard({
       let ucPlan = 0, ucAch = 0;
       let totalArea = 0;
       let totalSpi = 0;
+
+      let vowdAchUnderConstruction = 0;
+      let areaUnderConstruction = 0;
 
       leaderProjects.forEach(p => {
         const m = extractProjectMetrics(p);
@@ -329,6 +354,11 @@ export default function Leaderboard({
         ucAch += m.uc.ach;
         totalArea += m.areaSqft;
         totalSpi += m.avgSPI;
+
+        if (isUnderConstructionStage(p.projectStage)) {
+          vowdAchUnderConstruction += m.vowd.ach;
+          areaUnderConstruction += m.areaSqft;
+        }
       });
 
       const count = leaderProjects.length || 1;
@@ -339,10 +369,18 @@ export default function Leaderboard({
       const ucPct = ucPlan > 0 ? (ucAch / ucPlan) * 100 : 0;
       const avgSPI = count > 0 ? totalSpi / count : 1.0;
 
-      const labourProductivity = labourAch > 0 ? ((vowdAch * 100) / (labourAch / count)) : 0;
-      const labourEfficiency = labourPct > 0 ? (vowdPct / labourPct) : 1.0;
-      const speedOfConstruction = count > 0 ? (totalArea / count) / elapsedMonthsCount : 0;
-      const compositeScore = (vowdPct * 0.35) + (milestonePct * 0.25) + (avgSPI * 100 * 0.20) + (labourEfficiency * 100 * 0.10) + (Math.min(100, labourProductivity * 10) * 0.10);
+      // Labour productivity = achieved VOWD for all projects / total number of labours for all projects (Unit: Rs./Lab./Day)
+      const labourProductivity = labourAch > 0 ? ((vowdAch / labourAch) * 10000000) : 0;
+
+      // Labour efficiency = labour productivity * 26 * 100 / 10^7 (Unit: Cr. per 100 labours)
+      const labourEfficiency = (labourProductivity * 26 * 100) / 10000000;
+
+      // Speed of construction in leaderboard = achieved VOWD of projects under construction / area of projects under construction / no. of elapsed months from Apr
+      const speedOfConstruction = (areaUnderConstruction > 0 && elapsedMonthsCount > 0)
+        ? ((vowdAchUnderConstruction * 10000000) / (areaUnderConstruction * elapsedMonthsCount))
+        : 0;
+
+      const compositeScore = (vowdPct * 0.35) + (milestonePct * 0.25) + (avgSPI * 100 * 0.20) + (Math.min(100, (labourEfficiency / 2) * 100) * 0.10) + (Math.min(100, (speedOfConstruction / 50) * 100) * 0.10);
 
       return {
         id: `leader-${leaderName}`,
@@ -385,10 +423,20 @@ export default function Leaderboard({
       const ucPct = m.uc.plan > 0 ? (m.uc.ach / m.uc.plan) * 100 : 0;
       const avgSPI = m.avgSPI;
 
-      const labourProductivity = m.labour.ach > 0 ? ((m.vowd.ach * 100) / m.labour.ach) : 0;
-      const labourEfficiency = labourPct > 0 ? (vowdPct / labourPct) : 1.0;
-      const speedOfConstruction = m.areaSqft > 0 ? m.areaSqft / elapsedMonthsCount : 0;
-      const compositeScore = (vowdPct * 0.35) + (milestonePct * 0.25) + (avgSPI * 100 * 0.20) + (labourEfficiency * 100 * 0.10) + (Math.min(100, labourProductivity * 10) * 0.10);
+      const isUnderConstruction = isUnderConstructionStage(p.projectStage);
+
+      // Labour productivity = achieved VOWD / labour headcount (Unit: Rs./Lab./Day)
+      const labourProductivity = m.labour.ach > 0 ? ((m.vowd.ach / m.labour.ach) * 10000000) : 0;
+
+      // Labour efficiency = labour productivity * 26 * 100 / 10^7 (Unit: Cr. per 100 labours)
+      const labourEfficiency = (labourProductivity * 26 * 100) / 10000000;
+
+      // Speed of construction for project = (VOWD ach * 10^7) / (Area * elapsedMonthsCount) if under construction
+      const speedOfConstruction = (isUnderConstruction && m.areaSqft > 0 && elapsedMonthsCount > 0)
+        ? ((m.vowd.ach * 10000000) / (m.areaSqft * elapsedMonthsCount))
+        : 0;
+
+      const compositeScore = (vowdPct * 0.35) + (milestonePct * 0.25) + (avgSPI * 100 * 0.20) + (Math.min(100, (labourEfficiency / 2) * 100) * 0.10) + (Math.min(100, (speedOfConstruction / 50) * 100) * 0.10);
 
       return {
         id: `proj-${p.code}`,
@@ -479,7 +527,7 @@ export default function Leaderboard({
             <div className="flex items-center gap-2">
               <h2 className="text-lg font-extrabold text-slate-900">Executive Performance Leaderboard</h2>
               <span className="bg-amber-100 text-amber-800 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-amber-200">
-                FY 26-27 Benchmarking
+                {fyConfig.label} Benchmarking
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
@@ -571,34 +619,49 @@ export default function Leaderboard({
           {/* Quick Presets */}
           <div className="flex items-center gap-1.5 pl-1">
             <button
-              onClick={() => { setStartMonth('Apr-26'); setToMonth('Aug-26'); }}
+              onClick={() => { 
+                if (FY_MONTHS.length >= 5) {
+                  setStartMonth(FY_MONTHS[0].key); 
+                  setToMonth(FY_MONTHS[4].key); 
+                }
+              }}
               className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                startMonth === 'Apr-26' && toMonth === 'Aug-26'
+                FY_MONTHS.length >= 5 && startMonth === FY_MONTHS[0].key && toMonth === FY_MONTHS[4].key
                   ? 'bg-slate-900 text-white shadow-xs'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
-              Apr–Aug (YTD)
+              {FY_MONTHS[0]?.short}–{FY_MONTHS[4]?.short} (YTD)
             </button>
             <button
-              onClick={() => { setStartMonth('Apr-26'); setToMonth('Jun-26'); }}
+              onClick={() => { 
+                if (FY_MONTHS.length >= 3) {
+                  setStartMonth(FY_MONTHS[0].key); 
+                  setToMonth(FY_MONTHS[2].key); 
+                }
+              }}
               className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                startMonth === 'Apr-26' && toMonth === 'Jun-26'
+                FY_MONTHS.length >= 3 && startMonth === FY_MONTHS[0].key && toMonth === FY_MONTHS[2].key
                   ? 'bg-slate-900 text-white shadow-xs'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
-              Q1 (Apr–Jun)
+              Q1 ({FY_MONTHS[0]?.short}–{FY_MONTHS[2]?.short})
             </button>
             <button
-              onClick={() => { setStartMonth('Apr-26'); setToMonth('Mar-27'); }}
+              onClick={() => { 
+                if (FY_MONTHS.length >= 12) {
+                  setStartMonth(FY_MONTHS[0].key); 
+                  setToMonth(FY_MONTHS[11].key); 
+                }
+              }}
               className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                startMonth === 'Apr-26' && toMonth === 'Mar-27'
+                FY_MONTHS.length >= 12 && startMonth === FY_MONTHS[0].key && toMonth === FY_MONTHS[11].key
                   ? 'bg-slate-900 text-white shadow-xs'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
-              Full FY26-27
+              Full {fyConfig.label}
             </button>
           </div>
         </div>
@@ -687,19 +750,19 @@ export default function Leaderboard({
                   Labour
                 </th>
                 <th className="py-3 px-3 text-right cursor-pointer" onClick={() => handleSort('urPct')}>
-                  Res. UR
+                  Unit Del. (Res.)
                 </th>
                 <th className="py-3 px-3 text-right cursor-pointer" onClick={() => handleSort('ucPct')}>
-                  Comm. UC
+                  Unit Del. (Comm.)
                 </th>
                 <th className="py-3 px-3 text-right cursor-pointer" onClick={() => handleSort('labourProductivity')}>
-                  Labour Prod.
+                  Labour Productivity
                 </th>
                 <th className="py-3 px-3 text-right cursor-pointer" onClick={() => handleSort('labourEfficiency')}>
-                  Labour Eff.
+                  Labour Efficiency
                 </th>
                 <th className="py-3 px-3 text-right cursor-pointer" onClick={() => handleSort('speedOfConstruction')}>
-                  Speed (Sqft/Mo)
+                  Speed (₹/Sqft/Mo)
                 </th>
                 <th className="py-3 px-3 text-right cursor-pointer" onClick={() => handleSort('avgSPI')}>
                   Avg SPI ({startMonth}–{toMonth})
@@ -792,45 +855,48 @@ export default function Leaderboard({
                       </div>
                     </td>
 
-                    {/* 4. Residential UR */}
+                    {/* 4. Unit Delivery - Residential */}
                     <td className="py-3.5 px-3 text-right whitespace-nowrap">
                       <div className="font-extrabold text-slate-900 font-mono">
                         {row.urPct.toFixed(0)}%
                       </div>
                       <div className="text-[10px] text-slate-400 font-medium">
-                        {row.urAch} / {row.urPlan} U
+                        {row.urAch} / {row.urPlan} Units
                       </div>
                     </td>
 
-                    {/* 5. Commercial UC */}
+                    {/* 5. Unit Delivery - Commercial */}
                     <td className="py-3.5 px-3 text-right whitespace-nowrap">
                       <div className="font-extrabold text-slate-900 font-mono">
                         {row.ucPct.toFixed(0)}%
                       </div>
                       <div className="text-[10px] text-slate-400 font-medium">
-                        {row.ucAch} / {row.ucPlan} U
+                        {row.ucAch} / {row.ucPlan} Units
                       </div>
                     </td>
 
                     {/* 6. Labour Productivity */}
                     <td className="py-3.5 px-3 text-right whitespace-nowrap font-mono">
                       <span className="font-bold text-slate-800">
-                        ₹{row.labourProductivity > 0 ? row.labourProductivity.toFixed(2) : '0.00'} L
+                        ₹{row.labourProductivity > 0 ? Math.round(row.labourProductivity).toLocaleString() : '0'}
                       </span>
+                      <span className="text-[9px] text-slate-400 block font-normal">/Lab./Day</span>
                     </td>
 
                     {/* 7. Labour Efficiency */}
                     <td className="py-3.5 px-3 text-right whitespace-nowrap font-mono">
-                      <span className={`font-bold ${row.labourEfficiency >= 1.0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                        {row.labourEfficiency.toFixed(2)}x
+                      <span className={`font-bold ${row.labourEfficiency >= 1.0 ? 'text-emerald-600' : 'text-slate-800'}`}>
+                        {row.labourEfficiency > 0 ? row.labourEfficiency.toFixed(2) : '0.00'}
                       </span>
+                      <span className="text-[9px] text-slate-400 block font-normal">Cr./100 Lab.</span>
                     </td>
 
                     {/* 8. Speed of Construction */}
                     <td className="py-3.5 px-3 text-right whitespace-nowrap font-mono">
-                      <span className="font-semibold text-slate-700">
-                        {row.speedOfConstruction > 0 ? Math.round(row.speedOfConstruction).toLocaleString() : '-'}
+                      <span className="font-bold text-slate-800">
+                        {row.speedOfConstruction > 0 ? `₹${Math.round(row.speedOfConstruction).toLocaleString()}` : '-'}
                       </span>
+                      <span className="text-[9px] text-slate-400 block font-normal">/Sqft/Mo</span>
                     </td>
 
                     {/* 9. Avg SPI */}
