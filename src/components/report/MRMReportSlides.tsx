@@ -113,7 +113,7 @@ const getPercent = (pct: string | undefined, plan: string | undefined, ach: stri
 const METRIC_CONFIGS: Record<string, { label: string; shortLabel: string; isCurrency: boolean; unit: string; colorPlan: string; colorAch: string }> = {
   vowd: { label: 'VOWD', shortLabel: 'VOWD', isCurrency: true, unit: 'Cr.', colorPlan: '#818cf8', colorAch: '#4f46e5' },
   milestone: { label: 'Milestones', shortLabel: 'Milestones', isCurrency: false, unit: 'Nos.', colorPlan: '#38bdf8', colorAch: '#0284c7' },
-  labour: { label: 'Labour', shortLabel: 'Labour', isCurrency: false, unit: 'Workers', colorPlan: '#c084fc', colorAch: '#7e22ce' },
+  labour: { label: 'Labour', shortLabel: 'Labour', isCurrency: false, unit: 'Labours', colorPlan: '#c084fc', colorAch: '#7e22ce' },
   ur: { label: 'Unit Delivery - Residential', shortLabel: 'Unit Delivery - Residential', isCurrency: false, unit: 'Units', colorPlan: '#fb923c', colorAch: '#c2410c' },
   uc: { label: 'Unit Delivery - Commercial', shortLabel: 'Unit Delivery - Commercial', isCurrency: false, unit: 'Sqft', colorPlan: '#fcd34d', colorAch: '#b45309' }
 };

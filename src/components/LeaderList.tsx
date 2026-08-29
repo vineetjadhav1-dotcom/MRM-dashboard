@@ -694,7 +694,7 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
     labour: {
       label: 'Labour Headcount',
       shortLabel: 'Labour',
-      unit: 'Workers',
+      unit: 'Labours',
       colorPlan: '#c084fc',
       colorAch: '#7e22ce',
       isCurrency: false

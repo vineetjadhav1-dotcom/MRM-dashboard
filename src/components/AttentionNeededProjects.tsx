@@ -211,7 +211,7 @@ export default function AttentionNeededProjects({
         findingsParts.push(`milestone delivery is trailing with ${milestoneData.ach}/${milestoneData.plan} milestones achieved (${milestonePct.toFixed(0)}%)`);
       }
       if (isLaggingLabour) {
-        findingsParts.push(`active labour deployment is running at ${labourPct.toFixed(1)}% of required manpower (${labourData.ach.toLocaleString()} vs ${labourData.plan.toLocaleString()} planned workers)`);
+        findingsParts.push(`active labour deployment is running at ${labourPct.toFixed(1)}% of required manpower (${labourData.ach.toLocaleString()} vs ${labourData.plan.toLocaleString()} planned labours)`);
       }
       if (isLaggingUr) {
         findingsParts.push(`residential unit handovers are delayed (${urData.ach}/${urData.plan} units, gap of ${urGap} units)`);
@@ -412,7 +412,7 @@ export default function AttentionNeededProjects({
                           return (
                             <span key={param} className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-purple-50 text-purple-700 border border-purple-200">
                               <Users className="w-3 h-3 mr-1 text-purple-600" />
-                              Labour: {item.labour.pct.toFixed(0)}% (-{item.labour.gap} Pax)
+                              Labour: {item.labour.pct.toFixed(0)}% (-{item.labour.gap} Labours)
                             </span>
                           );
                         }

@@ -99,7 +99,7 @@ const METRIC_CONFIGS: Record<MetricType, {
   labour: {
     label: 'Labour',
     fullName: 'Active Labour Deployment',
-    unit: 'Workers',
+    unit: 'Labours',
     color: '#8b5cf6',
     colorAch: '#6d28d9',
     colorOpt: '#10b981',

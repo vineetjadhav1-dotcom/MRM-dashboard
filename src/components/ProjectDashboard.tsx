@@ -245,7 +245,7 @@ export default function ProjectDashboard({
     labour: {
       label: 'Labour Headcount & Deployment',
       shortLabel: 'Labour Deployment',
-      unit: 'Workers',
+      unit: 'Labours',
       isCurrency: false,
       colorPlan: '#c4b5fd', // purple-300
       colorAch: '#6d28d9',  // purple-700
@@ -950,7 +950,7 @@ export default function ProjectDashboard({
     <div className="space-y-6 font-sans" id="project-dashboard-consolidated-root">
       
       {/* Top Header Banner */}
-      <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4" id="project-dashboard-header-banner">
+      <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs flex items-center justify-between gap-4" id="project-dashboard-header-banner">
         <div className="flex items-center space-x-3.5">
           <div className="p-3 bg-blue-50 border border-blue-100 text-blue-700 rounded-2xl shadow-2xs">
             <Layers className="w-6 h-6" />
@@ -960,33 +960,6 @@ export default function ProjectDashboard({
             <p className="text-xs text-slate-500 mt-0.5">
               Consolidated Executive Window • {getFiscalYearConfig(activeFy).label} Monthly Timeline, S-Curve Trends &amp; Detailed Metric Analyzer
             </p>
-          </div>
-        </div>
-
-        {/* Fiscal Year Quick Switcher Widget */}
-        <div className="flex items-center space-x-2 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/90 rounded-2xl px-3 py-1.5 shadow-2xs">
-          <Calendar className="w-4 h-4 text-indigo-600 shrink-0" />
-          <div className="relative flex items-center">
-            <select
-              value={activeFy}
-              onChange={(e) => {
-                const newFy = e.target.value as FiscalYearKey;
-                setActiveFy(newFy);
-                setStoredFiscalYear(newFy);
-              }}
-              aria-label="Select Fiscal Year"
-              className="bg-white border border-blue-200 hover:border-blue-300 rounded-xl px-2.5 py-1 pr-6 text-xs font-black text-blue-900 focus:outline-none cursor-pointer shadow-2xs appearance-none"
-            >
-              {FISCAL_YEAR_KEYS.map((fy) => {
-                const cfg = getFiscalYearConfig(fy);
-                return (
-                  <option key={fy} value={fy} className="text-slate-900 font-bold">
-                    {cfg.label} ({cfg.startMonthKey}–{cfg.endMonthKey})
-                  </option>
-                );
-              })}
-            </select>
-            <ChevronDown className="w-3.5 h-3.5 text-blue-700 pointer-events-none absolute right-1.5 shrink-0" />
           </div>
         </div>
       </div>
@@ -1213,7 +1186,7 @@ export default function ProjectDashboard({
           { 
             key: 'labour' as MetricType, 
             label: 'LABOUR', 
-            unit: 'Workers', 
+            unit: 'Labours', 
             titleColor: 'text-purple-600',
             badgeBg: 'bg-purple-50 text-purple-600', 
             barColor: 'bg-purple-600',

@@ -686,7 +686,7 @@ export default function Leaderboard({
           <div className="space-y-1">
             <span className="text-[10px] font-black uppercase text-purple-600 tracking-wider block">⚡ Top Labour Productivity</span>
             <h4 className="text-sm font-extrabold text-slate-900 truncate max-w-[220px]">{topProductivity?.name || 'N/A'}</h4>
-            <p className="text-[10px] text-slate-400 font-semibold">Productivity Index: ₹{topProductivity?.labourProductivity.toFixed(2)} L/Worker</p>
+            <p className="text-[10px] text-slate-400 font-semibold">Productivity: ₹{Math.round(topProductivity?.labourProductivity || 0).toLocaleString()} /Lab./Day</p>
           </div>
           <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0 border border-purple-200">
             <Zap className="w-5 h-5" />
