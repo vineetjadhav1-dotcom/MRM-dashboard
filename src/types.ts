@@ -210,6 +210,7 @@ export interface UserPermissions {
   canSyncSheet?: boolean;
   canExportReport?: boolean;
   canEditConfig?: boolean;
+  canChangeFiscalYear?: boolean;
   allowedVPs?: string[]; // Empty or ['all'] for all VPs
   allowedLeaders?: string[]; // Empty or ['all'] for all leaders
   allowedProjectCodes?: string[]; // Empty or ['all'] for all projects

@@ -105,6 +105,7 @@ export const DEFAULT_USER_PERMISSIONS: Record<string, UserPermissions> = {
     canSyncSheet: true,
     canExportReport: true,
     canEditConfig: false,
+    canChangeFiscalYear: true,
     allowedVPs: ['all'],
     allowedLeaders: ['all'],
     allowedProjectCodes: ['all']
@@ -210,6 +211,7 @@ export function getUserEffectivePermissions(
       canSyncSheet: true,
       canExportReport: true,
       canEditConfig: false,
+      canChangeFiscalYear: true,
       allowedVPs: ['all'],
       allowedLeaders: ['all'],
       allowedProjectCodes: ['all']
@@ -224,6 +226,7 @@ export function getUserEffectivePermissions(
       canSyncSheet: true,
       canExportReport: true,
       canEditConfig: true,
+      canChangeFiscalYear: true,
       allowedVPs: ['all'],
       allowedLeaders: ['all'],
       allowedProjectCodes: ['all']
@@ -242,6 +245,7 @@ export function getUserEffectivePermissions(
       canSyncSheet: userPerms.canSyncSheet !== undefined ? userPerms.canSyncSheet : true,
       canExportReport: userPerms.canExportReport !== undefined ? userPerms.canExportReport : true,
       canEditConfig: userPerms.canEditConfig !== undefined ? userPerms.canEditConfig : false,
+      canChangeFiscalYear: userPerms.canChangeFiscalYear !== undefined ? userPerms.canChangeFiscalYear : true,
       allowedVPs: userPerms.allowedVPs || ['all'],
       allowedLeaders: userPerms.allowedLeaders || ['all'],
       allowedProjectCodes: userPerms.allowedProjectCodes || ['all']
@@ -255,6 +259,7 @@ export function getUserEffectivePermissions(
     canSyncSheet: true,
     canExportReport: true,
     canEditConfig: false,
+    canChangeFiscalYear: true,
     allowedVPs: ['all'],
     allowedLeaders: ['all'],
     allowedProjectCodes: ['all']

@@ -32,7 +32,8 @@ import {
   FileText,
   Search,
   Download,
-  FolderGit2
+  FolderGit2,
+  Calendar
 } from 'lucide-react';
 
 interface UserManagementViewProps {
@@ -149,6 +150,7 @@ export default function UserManagementView({
   const [localCanSync, setLocalCanSync] = useState<boolean>(userPerms.canSyncSheet ?? true);
   const [localCanExport, setLocalCanExport] = useState<boolean>(userPerms.canExportReport ?? true);
   const [localCanEditConfig, setLocalCanEditConfig] = useState<boolean>(userPerms.canEditConfig ?? false);
+  const [localCanChangeFiscalYear, setLocalCanChangeFiscalYear] = useState<boolean>(userPerms.canChangeFiscalYear ?? true);
   const [localVPs, setLocalVPs] = useState<string[]>(userPerms.allowedVPs || ['all']);
   const [localLeaders, setLocalLeaders] = useState<string[]>(userPerms.allowedLeaders || ['all']);
   const [localProjects, setLocalProjects] = useState<string[]>(userPerms.allowedProjectCodes || ['all']);
@@ -162,6 +164,7 @@ export default function UserManagementView({
       canSyncSheet: true,
       canExportReport: true,
       canEditConfig: false,
+      canChangeFiscalYear: true,
       allowedVPs: ['all'],
       allowedLeaders: ['all'],
       allowedProjectCodes: ['all']
@@ -171,6 +174,7 @@ export default function UserManagementView({
     setLocalCanSync(p.canSyncSheet ?? true);
     setLocalCanExport(p.canExportReport ?? true);
     setLocalCanEditConfig(p.canEditConfig ?? false);
+    setLocalCanChangeFiscalYear(p.canChangeFiscalYear ?? true);
     setLocalVPs(p.allowedVPs || ['all']);
     setLocalLeaders(p.allowedLeaders || ['all']);
     setLocalProjects(p.allowedProjectCodes || ['all']);
@@ -246,6 +250,7 @@ export default function UserManagementView({
       setLocalCanSync(true);
       setLocalCanExport(true);
       setLocalCanEditConfig(true);
+      setLocalCanChangeFiscalYear(true);
       setLocalVPs(['all']);
       setLocalLeaders(['all']);
       setLocalProjects(['all']);
@@ -255,6 +260,7 @@ export default function UserManagementView({
       setLocalCanSync(true);
       setLocalCanExport(true);
       setLocalCanEditConfig(false);
+      setLocalCanChangeFiscalYear(true);
       setLocalVPs(['all']);
       setLocalLeaders(['all']);
       setLocalProjects(['all']);
@@ -264,6 +270,7 @@ export default function UserManagementView({
       setLocalCanSync(false);
       setLocalCanExport(false);
       setLocalCanEditConfig(false);
+      setLocalCanChangeFiscalYear(false);
     }
   };
 
@@ -274,6 +281,7 @@ export default function UserManagementView({
       canSyncSheet: localCanSync,
       canExportReport: localCanExport,
       canEditConfig: localCanEditConfig,
+      canChangeFiscalYear: localCanChangeFiscalYear,
       allowedVPs: localVPs.length > 0 ? localVPs : ['all'],
       allowedLeaders: localLeaders.length > 0 ? localLeaders : ['all'],
       allowedProjectCodes: localProjects.length > 0 ? localProjects : ['all']
@@ -1096,6 +1104,27 @@ export default function UserManagementView({
                     type="checkbox"
                     checked={localCanEditConfig}
                     onChange={(e) => setLocalCanEditConfig(e.target.checked)}
+                    className="w-4 h-4 text-blue-600 rounded"
+                  />
+                </label>
+
+                {/* 5. Fiscal Year Selection Permission */}
+                <label className={`flex items-center justify-between p-3.5 rounded-xl border transition-all cursor-pointer ${
+                  localCanChangeFiscalYear ? 'bg-white border-blue-500 shadow-2xs' : 'bg-slate-50 border-slate-200 opacity-70'
+                }`}>
+                  <div className="flex items-center space-x-3">
+                    <div className={`p-2 rounded-lg ${localCanChangeFiscalYear ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-600'}`}>
+                      <Calendar className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-slate-900">Allow Fiscal Year Selection</p>
+                      <p className="text-[11px] text-slate-500">Permit user to switch the active reporting fiscal year range (e.g. FY 26-27, FY 27-28, etc.).</p>
+                    </div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={localCanChangeFiscalYear}
+                    onChange={(e) => setLocalCanChangeFiscalYear(e.target.checked)}
                     className="w-4 h-4 text-blue-600 rounded"
                   />
                 </label>

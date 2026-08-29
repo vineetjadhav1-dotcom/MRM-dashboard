@@ -964,9 +964,8 @@ export default function ProjectDashboard({
         </div>
 
         {/* Fiscal Year Quick Switcher Widget */}
-        <div className="flex items-center space-x-2 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/90 rounded-2xl px-3.5 py-2 shadow-2xs">
+        <div className="flex items-center space-x-2 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/90 rounded-2xl px-3 py-1.5 shadow-2xs">
           <Calendar className="w-4 h-4 text-indigo-600 shrink-0" />
-          <span className="text-xs font-black text-indigo-900 shrink-0">Reporting FY:</span>
           <div className="relative flex items-center">
             <select
               value={activeFy}

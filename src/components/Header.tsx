@@ -143,6 +143,7 @@ export default function Header({
   // Permissions
   const canViewSourceSheet = isAdmin || permissions.showSourceSheet;
   const canSyncSheet = isAdmin || permissions.canSyncSheet !== false;
+  const canChangeFiscalYear = isAdmin || permissions.canChangeFiscalYear !== false;
 
   // Close nav on click outside or escape key
   useEffect(() => {
@@ -201,32 +202,42 @@ export default function Header({
           <div className="flex items-center space-x-2 sm:space-x-2.5 shrink-0 ml-auto" id="header-top-right-corner">
             
             {/* Fiscal Year Switcher Dropdown Control */}
-            <div 
-              className="relative flex items-center bg-gradient-to-r from-blue-50 via-indigo-50 to-blue-50 hover:from-blue-100 hover:to-indigo-100 border border-indigo-200 hover:border-indigo-300 rounded-xl px-2.5 sm:px-3 py-1.5 shadow-2xs transition-all group cursor-pointer"
-              id="header-fiscal-year-selector"
-              title="Select Active Reporting Fiscal Year Range"
-            >
-              <Calendar className="w-3.5 h-3.5 text-indigo-600 shrink-0 mr-1.5" />
-              <span className="hidden sm:inline text-[10px] font-black text-indigo-600 uppercase tracking-wider mr-1.5">
-                FY Range:
-              </span>
-              <select
-                value={activeFiscalYear}
-                onChange={(e) => handleFiscalYearChange(e.target.value as FiscalYearKey)}
-                aria-label="Select Fiscal Year"
-                className="bg-transparent text-xs font-black text-indigo-950 focus:outline-none cursor-pointer pr-4 appearance-none hover:text-indigo-700 font-sans"
+            {canChangeFiscalYear ? (
+              <div 
+                className="relative flex items-center bg-gradient-to-r from-blue-50 via-indigo-50 to-blue-50 hover:from-blue-100 hover:to-indigo-100 border border-indigo-200 hover:border-indigo-300 rounded-xl px-2.5 sm:px-3 py-1.5 shadow-2xs transition-all group cursor-pointer"
+                id="header-fiscal-year-selector"
+                title="Select Active Reporting Fiscal Year Range"
               >
-                {FISCAL_YEAR_KEYS.map((fy) => {
-                  const cfg = getFiscalYearConfig(fy);
-                  return (
-                    <option key={fy} value={fy} className="text-slate-900 bg-white font-bold py-1">
-                      {cfg.label} ({cfg.startMonthKey}–{cfg.endMonthKey})
-                    </option>
-                  );
-                })}
-              </select>
-              <ChevronDown className="w-3.5 h-3.5 text-indigo-600 pointer-events-none absolute right-2.5 shrink-0 group-hover:translate-y-0.5 transition-transform" />
-            </div>
+                <Calendar className="w-3.5 h-3.5 text-indigo-600 shrink-0 mr-1.5" />
+                <select
+                  value={activeFiscalYear}
+                  onChange={(e) => handleFiscalYearChange(e.target.value as FiscalYearKey)}
+                  aria-label="Select Fiscal Year"
+                  className="bg-transparent text-xs font-black text-indigo-950 focus:outline-none cursor-pointer pr-4 appearance-none hover:text-indigo-700 font-sans"
+                >
+                  {FISCAL_YEAR_KEYS.map((fy) => {
+                    const cfg = getFiscalYearConfig(fy);
+                    return (
+                      <option key={fy} value={fy} className="text-slate-900 bg-white font-bold py-1">
+                        {cfg.label} ({cfg.startMonthKey}–{cfg.endMonthKey})
+                      </option>
+                    );
+                  })}
+                </select>
+                <ChevronDown className="w-3.5 h-3.5 text-indigo-600 pointer-events-none absolute right-2.5 shrink-0 group-hover:translate-y-0.5 transition-transform" />
+              </div>
+            ) : (
+              <div 
+                className="flex items-center space-x-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 sm:px-3 py-1.5 shadow-2xs text-slate-700"
+                id="header-fiscal-year-display"
+                title="Active Reporting Fiscal Year"
+              >
+                <Calendar className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                <span className="text-xs font-black text-slate-800 font-sans">
+                  {getFiscalYearConfig(activeFiscalYear).label} ({getFiscalYearConfig(activeFiscalYear).startMonthKey}–{getFiscalYearConfig(activeFiscalYear).endMonthKey})
+                </span>
+              </div>
+            )}
 
             {/* Active Selected Option Indicator (Clickable to open dropdown) */}
             <button 
