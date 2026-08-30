@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { Software2Project, MonthlyMetric, Software2Mapping, Project, FiscalYearKey } from '@/src/types';
+import { useFilter } from '@/src/context/FilterContext';
 import { isCompleteOrLostStage, isTempProject } from '@/src/utils/customOrder';
 import { getFiscalYearConfig, getStoredFiscalYear, setStoredFiscalYear, FISCAL_YEAR_KEYS } from '@/src/utils/fiscalYear';
 import AttentionNeededProjects from './AttentionNeededProjects';
@@ -17,7 +18,8 @@ import {
   ComposedChart,
   LabelList,
   AreaChart,
-  Area
+  Area,
+  ReferenceLine
 } from 'recharts';
 import { 
   TrendingUp, 
@@ -49,7 +51,10 @@ import {
   Gauge,
   Award,
   AlertTriangle,
-  Maximize2
+  Maximize2,
+  Clock,
+  Target,
+  CheckCircle2
 } from 'lucide-react';
 
 interface ProjectDashboardProps {
@@ -63,6 +68,73 @@ interface ProjectDashboardProps {
 }
 
 type MetricType = 'vowd' | 'milestone' | 'labour' | 'ur' | 'uc';
+
+function formatDaysUnit(val: string | undefined | null): string {
+  if (!val || val === 'N/A' || val === 'null' || val === '-' || val === 'None') return '0 Days';
+  const clean = String(val).trim();
+  if (clean.toLowerCase().includes('day')) return clean;
+  const num = parseInt(clean, 10);
+  if (isNaN(num)) return clean;
+  if (num > 0 && !clean.startsWith('+')) return `+${num} Days`;
+  return `${num} Days`;
+}
+
+function parseDateToTimelineVal(dateStr: string | undefined | null): number | null {
+  if (!dateStr || dateStr === '-' || dateStr === 'N/A' || dateStr === 'null' || dateStr === 'undefined') return null;
+  const clean = String(dateStr).trim();
+  
+  // Check standard ISO yyyy-mm-dd
+  const isoMatch = clean.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+  if (isoMatch) {
+    const d = new Date(parseInt(isoMatch[1], 10), parseInt(isoMatch[2], 10) - 1, parseInt(isoMatch[3], 10));
+    if (!isNaN(d.getTime())) return d.getTime();
+  }
+
+  // Check dd-mm-yyyy or dd/mm/yyyy
+  const dmyMatch = clean.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})$/);
+  if (dmyMatch) {
+    let yr = parseInt(dmyMatch[3], 10);
+    if (yr < 100) yr += 2000;
+    const d = new Date(yr, parseInt(dmyMatch[2], 10) - 1, parseInt(dmyMatch[1], 10));
+    if (!isNaN(d.getTime())) return d.getTime();
+  }
+
+  // Parse strings like "30-Sep-26" or "Sep-26" or "September 2026"
+  const monthNames: { [k: string]: number } = {
+    jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11
+  };
+  const parts = clean.toLowerCase().split(/[\s-]+/);
+  let foundMonth = -1;
+  let foundYear = 2026;
+  let foundDay = 15;
+
+  parts.forEach(p => {
+    Object.keys(monthNames).forEach(m => {
+      if (p.includes(m)) foundMonth = monthNames[m];
+    });
+    const n = parseInt(p, 10);
+    if (!isNaN(n)) {
+      if (n > 2000) foundYear = n;
+      else if (n >= 20 && n <= 35) foundYear = 2000 + n;
+      else if (n >= 1 && n <= 31 && foundDay === 15) foundDay = n;
+    }
+  });
+
+  if (foundMonth !== -1) {
+    return new Date(foundYear, foundMonth, foundDay).getTime();
+  }
+
+  const directParsed = Date.parse(clean);
+  if (!isNaN(directParsed)) return directParsed;
+
+  return null;
+}
+
+function formatTimelineTick(timestamp: number): string {
+  if (!timestamp || isNaN(timestamp)) return '';
+  const d = new Date(timestamp);
+  return d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+}
 
 function getColLetter(index: number): string {
   let temp = index;
@@ -124,11 +196,18 @@ export default function ProjectDashboard({
   onUpdateMapping,
   isUsingDemo = true
 }: ProjectDashboardProps) {
-  const [activeMetric, setActiveMetric] = useState<MetricType>('vowd');
-  const [selectedProjectCode, setSelectedProjectCode] = useState<string>('all');
-  const [selectedLeader, setSelectedLeader] = useState<string>('all');
-  const [selectedVP, setSelectedVP] = useState<string>('all');
-  const [selectedPlanType, setSelectedPlanType] = useState<'r0' | 'r1' | 'both'>('r1');
+  const {
+    selectedVP,
+    setSelectedVP,
+    selectedLeader,
+    setSelectedLeader,
+    selectedProjectCode,
+    setSelectedProjectCode,
+    projectPlanType: selectedPlanType,
+    setProjectPlanType: setSelectedPlanType,
+    projectActiveMetric: activeMetric,
+    setProjectActiveMetric: setActiveMetric
+  } = useFilter();
   const [showMonthlyBars, setShowMonthlyBars] = useState<boolean>(true);
   const [showCumulativeLines, setShowCumulativeLines] = useState<boolean>(true);
   const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
@@ -216,6 +295,22 @@ export default function ProjectDashboard({
       return matchesVP && matchesLeader && matchesProject;
     });
   }, [projects, selectedVP, selectedLeader, selectedProjectCode]);
+
+  // Selected single project resolution (from Software 2 and Software 1)
+  const isSingleProjectSelected = selectedProjectCode !== 'all' && selectedProjectCode !== '';
+
+  const selectedS2Project = useMemo(() => {
+    if (!isSingleProjectSelected) return null;
+    return projects.find(p => p.code === selectedProjectCode) || null;
+  }, [isSingleProjectSelected, projects, selectedProjectCode]);
+
+  const selectedS1Project = useMemo(() => {
+    if (!isSingleProjectSelected) return null;
+    return allProjects?.find(p => 
+      p.code === selectedProjectCode || 
+      (selectedS2Project?.name && p.name && p.name.trim().toLowerCase() === selectedS2Project.name.trim().toLowerCase())
+    ) || null;
+  }, [isSingleProjectSelected, allProjects, selectedProjectCode, selectedS2Project]);
 
   // Metric visual configuration
   const metricsConfig = {
@@ -982,204 +1077,6 @@ export default function ProjectDashboard({
         </div>
       </div>
 
-      {/* Level-Based Hierarchical Filter Bar */}
-      <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-xs" id="project-dashboard-hierarchy-filters">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 mb-4 border-b border-slate-100 gap-2">
-          <div className="flex items-center space-x-2.5">
-            <div className="p-1.5 bg-blue-50 text-blue-600 rounded-lg">
-              <Filter className="w-4 h-4" />
-            </div>
-            <div>
-              <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Level-Based Filter System</h3>
-            </div>
-          </div>
-          
-          <button
-            onClick={() => {
-              setSelectedVP('all');
-              setSelectedLeader('all');
-              setSelectedProjectCode('all');
-            }}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 cursor-pointer ${
-              selectedVP === 'all' && selectedLeader === 'all' && selectedProjectCode === 'all'
-                ? 'bg-blue-600 text-white shadow-xs'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
-          >
-            <span>All Projects Summary</span>
-          </button>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Level 1: All Projects */}
-          <div className="space-y-1.5 bg-slate-50 p-3 rounded-2xl border border-slate-150 flex flex-col justify-between">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-extrabold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full uppercase tracking-wider">
-                Level 1
-              </span>
-              <span className="text-[10px] font-bold text-slate-400">
-                {projects.length} Projects
-              </span>
-            </div>
-            <div>
-              <h4 className="text-xs font-bold text-slate-800">All Projects Summary</h4>
-            </div>
-            <button
-              onClick={() => {
-                setSelectedVP('all');
-                setSelectedLeader('all');
-                setSelectedProjectCode('all');
-              }}
-              className={`w-full py-1.5 px-2 rounded-xl text-[11px] font-bold text-center transition-all cursor-pointer ${
-                selectedVP === 'all' && selectedLeader === 'all' && selectedProjectCode === 'all'
-                  ? 'bg-blue-600 text-white shadow-xs'
-                  : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
-              }`}
-            >
-              {selectedVP === 'all' && selectedLeader === 'all' ? '✓ Showing All' : 'Reset to All'}
-            </button>
-          </div>
-
-          {/* Level 2: Executive VP Selector */}
-          <div className="space-y-1.5 bg-slate-50 p-3 rounded-2xl border border-slate-150 flex flex-col justify-between">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-extrabold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-full uppercase tracking-wider">
-                Level 2
-              </span>
-              <span className="text-[10px] font-bold text-slate-400">
-                {vpList.length} VPs
-              </span>
-            </div>
-            <div>
-              <h4 className="text-xs font-bold text-slate-800">Select Executive VP</h4>
-            </div>
-            <select
-              value={selectedVP}
-              onChange={(e) => handleVPChange(e.target.value)}
-              className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
-            >
-              <option value="all">All VPs</option>
-              {vpList.map(vp => (
-                <option key={vp} value={vp}>{vp}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Level 3: Reporting Leader Selector */}
-          <div className="space-y-1.5 bg-slate-50 p-3 rounded-2xl border border-slate-150 flex flex-col justify-between">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-extrabold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full uppercase tracking-wider">
-                Level 3
-              </span>
-              <span className="text-[10px] font-bold text-slate-400">
-                {filteredLeaders.length} Leaders
-              </span>
-            </div>
-            <div>
-              <h4 className="text-xs font-bold text-slate-800">Select Project Leader</h4>
-            </div>
-            <select
-              value={selectedLeader}
-              onChange={(e) => handleLeaderChange(e.target.value)}
-              className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-purple-500 cursor-pointer"
-            >
-              <option value="all">All Leaders</option>
-              {filteredLeaders.map(lead => (
-                <option key={lead} value={lead}>{lead}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Specific Project Selector (Searchable by Project Name) */}
-          <div className="space-y-1.5 bg-slate-50 p-3 rounded-2xl border border-slate-150 flex flex-col justify-between relative" ref={projectComboboxRef}>
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full uppercase tracking-wider">
-                Specific Project
-              </span>
-              <span className="text-[10px] font-bold text-slate-400">
-                {filteredProjects.length} Available
-              </span>
-            </div>
-            <div>
-              <h4 className="text-xs font-bold text-slate-800">Drilldown Project</h4>
-            </div>
-
-            {/* Combobox Trigger Button */}
-            <button
-              type="button"
-              onClick={() => setIsProjectComboboxOpen(!isProjectComboboxOpen)}
-              className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-800 text-left flex items-center justify-between shadow-2xs hover:border-slate-300 cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500"
-            >
-              <span className="truncate">
-                {selectedProjectCode === 'all' 
-                  ? `All Projects (${projectList.length})` 
-                  : (projectList.find(p => p.code === selectedProjectCode)?.name || 'Select Project')}
-              </span>
-              <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0 ml-1" />
-            </button>
-
-            {/* Searchable Projects List Dropdown */}
-            {isProjectComboboxOpen && (
-              <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 p-2 space-y-1.5 animate-in fade-in zoom-in-95 duration-100 min-w-[260px]">
-                <div className="relative">
-                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    placeholder="Search by project name..."
-                    value={projectSearchTerm}
-                    onChange={(e) => setProjectSearchTerm(e.target.value)}
-                    autoFocus
-                    className="w-full pl-8 pr-2.5 py-1.5 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  />
-                </div>
-
-                <div className="max-h-52 overflow-y-auto space-y-0.5 pr-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedProjectCode('all');
-                      setIsProjectComboboxOpen(false);
-                      setProjectSearchTerm('');
-                    }}
-                    className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
-                      selectedProjectCode === 'all' ? 'bg-emerald-50 text-emerald-700 font-extrabold' : 'hover:bg-slate-50 text-slate-700'
-                    }`}
-                  >
-                    All Projects ({projectList.length})
-                  </button>
-
-                  {projectList
-                    .filter(p => p.name.toLowerCase().includes(projectSearchTerm.toLowerCase()))
-                    .map(p => (
-                      <button
-                        key={p.code}
-                        type="button"
-                        onClick={() => {
-                          setSelectedProjectCode(p.code);
-                          setIsProjectComboboxOpen(false);
-                          setProjectSearchTerm('');
-                        }}
-                        className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer truncate block ${
-                          selectedProjectCode === p.code ? 'bg-emerald-50 text-emerald-700 font-extrabold' : 'hover:bg-slate-50 text-slate-700'
-                        }`}
-                        title={p.name}
-                      >
-                        {p.name}
-                      </button>
-                    ))}
-
-                  {projectList.filter(p => p.name.toLowerCase().includes(projectSearchTerm.toLowerCase())).length === 0 && (
-                    <div className="py-3 text-center text-[11px] text-slate-400 italic">
-                      No projects matching "{projectSearchTerm}"
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
       {/* 5 Core Metric Cards (VOWD, Milestones, Labour, Residential UR, Commercial UC) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5" id="project-dashboard-metric-cards">
         {[
@@ -1257,12 +1154,25 @@ export default function ProjectDashboard({
 
               {/* Middle Row: Achieved / Planned */}
               <div className="flex items-baseline gap-1.5 flex-wrap">
-                <span className="text-xl font-black text-slate-900 tracking-tight">
-                  {metricData.ach.toLocaleString()}
-                </span>
-                <span className="text-xs text-slate-400 font-semibold">
-                  / {metricData.plan.toLocaleString()} {card.unit}
-                </span>
+                {card.key === 'vowd' ? (
+                  <>
+                    <span className="text-xl font-black text-slate-900 tracking-tight">
+                      ₹ {metricData.ach.toLocaleString()}
+                    </span>
+                    <span className="text-xs text-slate-400 font-semibold">
+                      / ₹ {metricData.plan.toLocaleString()} Cr.
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-xl font-black text-slate-900 tracking-tight">
+                      {metricData.ach.toLocaleString()}
+                    </span>
+                    <span className="text-xs text-slate-400 font-semibold">
+                      / {metricData.plan.toLocaleString()} {card.unit}
+                    </span>
+                  </>
+                )}
               </div>
 
               {/* Bottom Row: Progress Bar */}
@@ -1657,30 +1567,30 @@ export default function ProjectDashboard({
 
         {!isDetailTableCollapsed && (
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs">
+            <table className="w-full text-center border-collapse text-xs">
               <thead>
                 <tr className="bg-slate-50 text-slate-600 font-extrabold uppercase text-[10px] tracking-wider border-y border-slate-200">
-                  <th className="py-3 px-3">Month</th>
+                  <th className="py-3 px-3 text-center">Month</th>
                   {selectedPlanType === 'both' ? (
                     <>
-                      <th className="py-3 px-3 text-right">R0 Plan</th>
-                      <th className="py-3 px-3 text-right text-indigo-700">R1 Plan</th>
+                      <th className="py-3 px-3 text-center">R0 Plan</th>
+                      <th className="py-3 px-3 text-center text-indigo-700">R1 Plan</th>
                     </>
                   ) : (
-                    <th className="py-3 px-3 text-right">{selectedPlanType.toUpperCase()} Plan</th>
+                    <th className="py-3 px-3 text-center">{selectedPlanType.toUpperCase()} Plan</th>
                   )}
-                  <th className="py-3 px-3 text-right text-emerald-700">Monthly Actual</th>
-                  <th className="py-3 px-3 text-right">Monthly Ach %</th>
+                  <th className="py-3 px-3 text-center text-emerald-700">Monthly Actual</th>
+                  <th className="py-3 px-3 text-center">Monthly Ach %</th>
                   {selectedPlanType === 'both' ? (
                     <>
-                      <th className="py-3 px-3 text-right">Cum R0 Plan</th>
-                      <th className="py-3 px-3 text-right text-indigo-700">Cum R1 Plan</th>
+                      <th className="py-3 px-3 text-center">Cum R0 Plan</th>
+                      <th className="py-3 px-3 text-center text-indigo-700">Cum R1 Plan</th>
                     </>
                   ) : (
-                    <th className="py-3 px-3 text-right">Cum Plan</th>
+                    <th className="py-3 px-3 text-center">Cum Plan</th>
                   )}
-                  <th className="py-3 px-3 text-right text-emerald-700">Cum Actual</th>
-                  <th className="py-3 px-3 text-right font-black">Cum Ach %</th>
+                  <th className="py-3 px-3 text-center text-emerald-700">Cum Actual</th>
+                  <th className="py-3 px-3 text-center font-black">Cum Ach %</th>
                   <th className="py-3 px-3 text-center">Status</th>
                 </tr>
               </thead>
@@ -1691,19 +1601,19 @@ export default function ProjectDashboard({
 
                   return (
                     <tr key={row.month} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
-                      <td className="py-2.5 px-3 font-bold text-slate-900">{row.month}</td>
+                      <td className="py-2.5 px-3 font-bold text-slate-900 text-center">{row.month}</td>
                       {selectedPlanType === 'both' ? (
                         <>
-                          <td className="py-2.5 px-3 text-right text-slate-600">{row.PlanR0.toLocaleString()}</td>
-                          <td className="py-2.5 px-3 text-right font-bold text-indigo-700">{row.PlanR1.toLocaleString()}</td>
+                          <td className="py-2.5 px-3 text-center text-slate-600">{row.PlanR0.toLocaleString()}</td>
+                          <td className="py-2.5 px-3 text-center font-bold text-indigo-700">{row.PlanR1.toLocaleString()}</td>
                         </>
                       ) : (
-                        <td className="py-2.5 px-3 text-right font-bold text-slate-800">{row.Plan.toLocaleString()}</td>
+                        <td className="py-2.5 px-3 text-center font-bold text-slate-800">{row.Plan.toLocaleString()}</td>
                       )}
-                      <td className="py-2.5 px-3 text-right font-extrabold text-emerald-700">
+                      <td className="py-2.5 px-3 text-center font-extrabold text-emerald-700">
                         {isFuture ? '-' : row.Achievement?.toLocaleString()}
                       </td>
-                      <td className="py-2.5 px-3 text-right font-bold">
+                      <td className="py-2.5 px-3 text-center font-bold">
                         {isFuture || row['Achievement %'] === null ? (
                           <span className="text-slate-400 font-normal">-</span>
                         ) : (
@@ -1714,16 +1624,16 @@ export default function ProjectDashboard({
                       </td>
                       {selectedPlanType === 'both' ? (
                         <>
-                          <td className="py-2.5 px-3 text-right text-slate-600">{row.CumPlanR0.toLocaleString()}</td>
-                          <td className="py-2.5 px-3 text-right font-bold text-indigo-700">{row.CumPlanR1.toLocaleString()}</td>
+                          <td className="py-2.5 px-3 text-center text-slate-600">{row.CumPlanR0.toLocaleString()}</td>
+                          <td className="py-2.5 px-3 text-center font-bold text-indigo-700">{row.CumPlanR1.toLocaleString()}</td>
                         </>
                       ) : (
-                        <td className="py-2.5 px-3 text-right font-bold text-slate-800">{row.CumPlan.toLocaleString()}</td>
+                        <td className="py-2.5 px-3 text-center font-bold text-slate-800">{row.CumPlan.toLocaleString()}</td>
                       )}
-                      <td className="py-2.5 px-3 text-right font-extrabold text-emerald-700">
+                      <td className="py-2.5 px-3 text-center font-extrabold text-emerald-700">
                         {isFuture ? '-' : row.CumAchievement?.toLocaleString()}
                       </td>
-                      <td className="py-2.5 px-3 text-right font-black">
+                      <td className="py-2.5 px-3 text-center font-black">
                         {isFuture || cumPct === null ? (
                           <span className="text-slate-400 font-normal">-</span>
                         ) : (
@@ -2177,6 +2087,301 @@ export default function ProjectDashboard({
         </div>
       </div>
 
+      {/* CONDITIONAL SECTION: TIMELINE & DELAY (Light Theme - Rendered below Executive Productivity & Rating Curves ONLY when any specific project is selected in filter) */}
+      {isSingleProjectSelected && (selectedS1Project || selectedS2Project) && (() => {
+        const s1 = selectedS1Project;
+        const s2 = selectedS2Project;
+        
+        // 1. Baseline Finish Date (prioritize baseline1Finish if present)
+        const isBaseline1 = Boolean(s1?.baseline1Finish && s1.baseline1Finish !== 'N/A' && s1.baseline1Finish.trim() !== '');
+        const baselineFinishDate = isBaseline1 
+          ? s1?.baseline1Finish 
+          : (s1?.baselineFinish || s1?.targetDate || 'N/A');
+        const baselineLabel = isBaseline1 ? 'Baseline1 Finish Date' : 'Baseline Finish Date';
+        const baselineSubtext = isBaseline1 ? 'Revised baseline target' : 'Original baseline target';
+
+        // 2. Proposed Finish Date (adjusted to Avg QHSE rating)
+        const proposedFinishDate = s2?.proposedFinish || s1?.proposedFinish || s1?.targetDate || 'N/A';
+        const avgQhse = s2?.avgQhseRating && s2.avgQhseRating !== '-' ? s2.avgQhseRating : (s1?.qualityProgress || '-');
+        const qhseNum = parseFloat(String(avgQhse).replace(/%/g, ''));
+
+        // 3. Schedule Variance & Delay in current month
+        const scheduleVariance = s1?.scheduleVariance || '0 Days';
+        const delayInMonth = s1?.delayInCurrentMonth || '0 Days';
+        
+        const isVarianceDelayed = scheduleVariance && (scheduleVariance.includes('+') || parseFloat(scheduleVariance) > 0);
+        const isMonthDelayed = delayInMonth && (delayInMonth.includes('+') || parseFloat(delayInMonth) > 0 || (parseInt(delayInMonth, 10) > 0 && delayInMonth !== '0 Days'));
+
+        // 4. Monthwise Timeline Graph Data (refer Software 2 columns LZ to MK)
+        const baselineVal = parseDateToTimelineVal(baselineFinishDate);
+        const activeMonths = getFiscalYearConfig(activeFy).months;
+
+        const timelineMonthlyData = activeMonths.map(m => {
+          const histItem = s2?.proposedFinishHistory?.find(h => h.month === m.key);
+          const rawStr = histItem?.finishDate || (m.key === 'Apr-26' || m.key === 'May-26' || m.key === 'Jun-26' || m.key === 'Jul-26' || m.key === 'Aug-26' ? proposedFinishDate : '');
+          const val = parseDateToTimelineVal(rawStr);
+          return {
+            month: m.key,
+            rawDate: rawStr || '-',
+            proposedVal: val,
+            baselineVal: baselineVal
+          };
+        });
+
+        const allTimelineVals = timelineMonthlyData
+          .map(d => d.proposedVal)
+          .filter((v): v is number => v !== null);
+        if (baselineVal) allTimelineVals.push(baselineVal);
+
+        let yDomain: [number, number] | ['auto', 'auto'] = ['auto', 'auto'];
+        if (allTimelineVals.length > 0) {
+          const minT = Math.min(...allTimelineVals);
+          const maxT = Math.max(...allTimelineVals);
+          yDomain = [minT - 2592000000, maxT + 2592000000]; // 30 days buffer
+        }
+
+        return (
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs space-y-6" id="project-timeline-delay-panel">
+            {/* Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+              <div className="flex items-center space-x-3">
+                <div className="p-2.5 bg-indigo-50 border border-indigo-100 text-indigo-700 rounded-2xl shadow-2xs">
+                  <Clock className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center space-x-2 flex-wrap">
+                    <h3 className="text-base font-extrabold text-slate-900 tracking-tight">
+                      Timeline, Proposed Finish &amp; Delay Analytics
+                    </h3>
+                    <span className="bg-indigo-50 text-indigo-700 text-xs font-black px-2.5 py-0.5 rounded-full border border-indigo-200 uppercase">
+                      {s2?.name || s1?.name || selectedProjectCode}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Deliverable Milestones &amp; Month-by-Month Forecast Progression (Adjusted against site quality &amp; safety performance)
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {s1?.status && (
+                  <span className={`px-2.5 py-1 rounded-xl text-xs font-bold uppercase border ${
+                    s1.status === 'Green' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                    s1.status === 'Amber' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                    'bg-rose-50 text-rose-700 border-rose-200'
+                  }`}>
+                    {s1.status} Health
+                  </span>
+                )}
+                <span className="px-2.5 py-1 rounded-xl text-xs font-bold bg-slate-50 text-slate-700 border border-slate-200">
+                  ID: {selectedProjectCode}
+                </span>
+              </div>
+            </div>
+
+            {/* 4 Core KPI Cards in Light Theme */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+              
+              {/* 1. Baseline Finish Date */}
+              <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/80 shadow-2xs space-y-1">
+                <span className="text-[10px] font-black uppercase text-indigo-700 tracking-wider block">
+                  {baselineLabel}
+                </span>
+                <div className="flex items-baseline space-x-1.5">
+                  <span className="text-xl font-black text-slate-900 font-mono tracking-tight">
+                    {baselineFinishDate}
+                  </span>
+                </div>
+                <p className="text-[10.5px] text-slate-500">{baselineSubtext}</p>
+              </div>
+
+              {/* 2. Proposed Finish Date (adjusted to Avg QHSE rating) */}
+              <div className="bg-blue-50/50 rounded-2xl p-4 border border-blue-200/80 shadow-2xs space-y-1">
+                <span className="text-[10px] font-black uppercase text-blue-700 tracking-wider block">
+                  Proposed Finish Date
+                </span>
+                <div className="flex items-baseline space-x-1.5">
+                  <span className="text-xl font-black text-blue-800 font-mono tracking-tight">
+                    {proposedFinishDate}
+                  </span>
+                </div>
+                <div className="flex items-center space-x-1.5 text-[10.5px] text-slate-600">
+                  <span>Avg QHSE:</span>
+                  <span className={`font-bold px-1.5 py-0.2 rounded text-[10px] ${
+                    !isNaN(qhseNum) && qhseNum >= 90 ? 'bg-emerald-100 text-emerald-800' :
+                    !isNaN(qhseNum) && qhseNum >= 75 ? 'bg-amber-100 text-amber-800' :
+                    'bg-slate-200 text-slate-800'
+                  }`}>
+                    {avgQhse}
+                  </span>
+                </div>
+              </div>
+
+              {/* 3. Schedule Variance */}
+              <div className={`rounded-2xl p-4 border shadow-2xs space-y-1 ${
+                isVarianceDelayed
+                  ? 'bg-rose-50/70 border-rose-200'
+                  : 'bg-emerald-50/70 border-emerald-200'
+              }`}>
+                <span className={`text-[10px] font-black uppercase tracking-wider block ${
+                  isVarianceDelayed ? 'text-rose-700' : 'text-emerald-700'
+                }`}>
+                  Schedule Variance
+                </span>
+                <div className="flex items-baseline space-x-1.5">
+                  <span className={`text-xl font-black font-mono tracking-tight ${
+                    isVarianceDelayed ? 'text-rose-700' : 'text-emerald-700'
+                  }`}>
+                    {formatDaysUnit(scheduleVariance)}
+                  </span>
+                </div>
+                <p className="text-[10.5px] text-slate-500">
+                  {isVarianceDelayed ? 'Cumulative slippage against baseline' : 'On schedule with master baseline'}
+                </p>
+              </div>
+
+              {/* 4. Delay in Current Month */}
+              <div className={`rounded-2xl p-4 border shadow-2xs space-y-1 ${
+                isMonthDelayed
+                  ? 'bg-rose-50/70 border-rose-200'
+                  : 'bg-slate-50 border-slate-200/80'
+              }`}>
+                <span className={`text-[10px] font-black uppercase tracking-wider block ${
+                  isMonthDelayed ? 'text-rose-700' : 'text-slate-600'
+                }`}>
+                  Delay in Current Month
+                </span>
+                <div className="flex items-baseline space-x-1.5">
+                  <span className={`text-xl font-black font-mono tracking-tight ${
+                    isMonthDelayed ? 'text-rose-700' : 'text-emerald-700'
+                  }`}>
+                    {formatDaysUnit(delayInMonth)}
+                  </span>
+                </div>
+                <p className="text-[10.5px] text-slate-500">
+                  {isMonthDelayed ? 'Days delayed in active reporting cycle' : 'No monthly slippage incurred'}
+                </p>
+              </div>
+
+            </div>
+
+            {/* Finish Milestone Comparison (Baseline vs Proposed) Timeline Graph */}
+            <div className="bg-slate-50/80 border border-slate-200 rounded-3xl p-5 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200/80 pb-3">
+                <div>
+                  <h4 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                    <Target className="w-4 h-4 text-indigo-600" />
+                    <span>Finish Milestone Comparison (Baseline vs Proposed)</span>
+                  </h4>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Y-Axis: Forecasted Completion Timeline • X-Axis: Financial Year Months • Baseline Finish Date Highlighted
+                  </p>
+                </div>
+                <div className="flex items-center gap-4 text-xs font-bold flex-wrap">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-3.5 h-1 border-t-2 border-dashed border-indigo-600 shrink-0" />
+                    <span className="text-slate-600">{baselineLabel}: <strong className="text-indigo-700">{baselineFinishDate}</strong></span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded-full bg-blue-600 shrink-0" />
+                    <span className="text-slate-600">Proposed Finish Date: <strong className="text-blue-700">{proposedFinishDate}</strong></span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Timeline Chart Canvas */}
+              <div className="h-[240px] w-full pt-1">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={timelineMonthlyData} margin={{ top: 20, right: 30, left: 10, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                    <XAxis dataKey="month" stroke="#64748b" fontSize={10} fontWeight={700} tickLine={false} axisLine={false} />
+                    <YAxis 
+                      stroke="#64748b" 
+                      fontSize={10} 
+                      fontWeight={700} 
+                      tickLine={false} 
+                      axisLine={false} 
+                      domain={yDomain}
+                      tickFormatter={formatTimelineTick}
+                    />
+                    <Tooltip
+                      content={({ active, payload }) => {
+                        if (active && payload && payload.length) {
+                          const dataObj = payload[0].payload;
+                          return (
+                            <div className="bg-slate-900 text-white rounded-xl px-3 py-2 text-xs space-y-1 shadow-lg">
+                              <p className="font-bold border-b border-slate-700 pb-1 text-slate-200">Reporting Cycle: {dataObj.month}</p>
+                              <div className="flex items-center justify-between gap-3 text-[11px]">
+                                <span className="text-slate-300">Proposed Finish:</span>
+                                <span className="font-extrabold text-blue-400">{dataObj.rawDate || 'N/A'}</span>
+                              </div>
+                              <div className="flex items-center justify-between gap-3 text-[11px]">
+                                <span className="text-slate-300">{baselineLabel}:</span>
+                                <span className="font-extrabold text-indigo-300">{baselineFinishDate}</span>
+                              </div>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    {/* Baseline Highlight Reference Line */}
+                    {baselineVal && (
+                      <ReferenceLine 
+                        y={baselineVal} 
+                        stroke="#4f46e5" 
+                        strokeWidth={2.5} 
+                        strokeDasharray="4 4" 
+                        label={{ 
+                          value: `🎯 ${baselineLabel} (${baselineFinishDate})`, 
+                          fill: '#4338ca', 
+                          fontSize: 10.5, 
+                          fontWeight: 800, 
+                          position: 'insideTopRight' 
+                        }} 
+                      />
+                    )}
+                    {/* Proposed Finish Date Monthwise Curve */}
+                    <Line 
+                      type="monotone" 
+                      dataKey="proposedVal" 
+                      name="Proposed Finish Date" 
+                      stroke="#2563eb" 
+                      strokeWidth={3} 
+                      dot={{ r: 4.5, fill: '#2563eb', stroke: '#ffffff', strokeWidth: 2 }}
+                      activeDot={{ r: 6.5, fill: '#1d4ed8' }}
+                      connectNulls
+                    >
+                      <LabelList 
+                        dataKey="rawDate" 
+                        content={(props: any) => {
+                          const { x, y, value } = props;
+                          if (!value || value === '-' || value === 'N/A') return null;
+                          return (
+                            <text x={x} y={y - 8} fill="#1e40af" fontSize={9} fontWeight={800} textAnchor="middle">
+                              {value}
+                            </text>
+                          );
+                        }} 
+                      />
+                    </Line>
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Progress Summary Footer */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between text-xs text-slate-500 pt-1 border-t border-slate-200/60 gap-2">
+                <span>Monthwise Finish Date projections captured across active financial year cycles</span>
+                <span className={`font-bold ${isVarianceDelayed ? 'text-rose-600' : 'text-emerald-600'}`}>
+                  Variance Deviation: {formatDaysUnit(scheduleVariance)} ({isVarianceDelayed ? 'Delayed' : 'On Track'})
+                </span>
+              </div>
+            </div>
+
+          </div>
+        );
+      })()}
+
       {/* Project-Wise Contribution Breakdown Table */}
       <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-xs" id="project-dashboard-breakdown-list">
         <div className="px-6 py-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -2211,16 +2416,16 @@ export default function ProjectDashboard({
 
         {!isBreakdownTableCollapsed && (
           <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs">
+            <table className="w-full text-center border-collapse text-xs">
               <thead>
                 <tr className="border-b border-slate-150 bg-slate-50/50 text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                  <th className="py-3 px-6">Project Metadata</th>
-                  <th className="py-3 px-4">VP Division</th>
-                  <th className="py-3 px-4">Project Leader</th>
-                  <th className="py-3 px-4 text-right">Target (Plan)</th>
-                  <th className="py-3 px-4 text-right">Actual (Achieved)</th>
-                  <th className="py-3 px-4 text-right">Variance</th>
-                  <th className="py-3 px-6 text-right">% Achieved</th>
+                  <th className="py-3 px-6 text-center">Project Metadata</th>
+                  <th className="py-3 px-4 text-center">VP Division</th>
+                  <th className="py-3 px-4 text-center">Project Leader</th>
+                  <th className="py-3 px-4 text-center">Target (Plan)</th>
+                  <th className="py-3 px-4 text-center">Actual (Achieved)</th>
+                  <th className="py-3 px-4 text-center">Variance</th>
+                  <th className="py-3 px-6 text-center">% Achieved</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
@@ -2230,12 +2435,12 @@ export default function ProjectDashboard({
                     className="hover:bg-slate-50/70 transition-colors group cursor-pointer"
                     onClick={() => setSelectedProjectCode(row.code)}
                   >
-                    <td className="py-3.5 px-6">
-                      <div className="flex items-center space-x-3">
+                    <td className="py-3.5 px-6 text-center">
+                      <div className="flex items-center justify-center space-x-3">
                         <span className="px-2 py-1 rounded bg-slate-100 text-[10px] font-mono font-bold text-slate-600 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
                           {row.code}
                         </span>
-                        <div className="space-y-0.5 max-w-[240px]">
+                        <div className="space-y-0.5 max-w-[240px] text-center">
                           <span className="font-bold text-slate-900 block truncate group-hover:text-blue-600 transition-colors">
                             {row.name}
                           </span>
@@ -2247,21 +2452,21 @@ export default function ProjectDashboard({
                         </div>
                       </div>
                     </td>
-                    <td className="py-3.5 px-4 font-semibold text-slate-700">{row.vp}</td>
-                    <td className="py-3.5 px-4 text-slate-600">{row.leader}</td>
-                    <td className="py-3.5 px-4 text-right font-bold text-slate-900">
+                    <td className="py-3.5 px-4 font-semibold text-slate-700 text-center">{row.vp}</td>
+                    <td className="py-3.5 px-4 text-slate-600 text-center">{row.leader}</td>
+                    <td className="py-3.5 px-4 text-center font-bold text-slate-900">
                       {row.plan.toLocaleString()} <span className="text-[10px] font-normal text-slate-400">{currentConfig.unit}</span>
                     </td>
-                    <td className="py-3.5 px-4 text-right font-bold" style={{ color: currentConfig.colorAch }}>
+                    <td className="py-3.5 px-4 text-center font-bold" style={{ color: currentConfig.colorAch }}>
                       {row.achievement.toLocaleString()} <span className="text-[10px] font-normal text-slate-400">{currentConfig.unit}</span>
                     </td>
-                    <td className={`py-3.5 px-4 text-right font-semibold ${
+                    <td className={`py-3.5 px-4 text-center font-semibold ${
                       row.variance >= 0 ? 'text-emerald-600' : 'text-rose-500'
                     }`}>
                       {row.variance > 0 ? '+' : ''}{row.variance}
                     </td>
-                    <td className="py-3.5 px-6 text-right">
-                      <div className="flex items-center justify-end space-x-2">
+                    <td className="py-3.5 px-6 text-center">
+                      <div className="flex items-center justify-center space-x-2">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
                           row.pct >= 90 ? 'bg-emerald-50 text-emerald-700' : row.pct >= 75 ? 'bg-amber-50 text-amber-700' : 'bg-rose-50 text-rose-700'
                         }`}>

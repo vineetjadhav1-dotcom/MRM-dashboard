@@ -1,3 +1,4 @@
+import React from 'react';
 import { Project, Software2Project } from '@/src/types';
 import PlanedgePdfLogo from './PlanedgePdfLogo';
 import { getFiscalYearConfig, getStoredFiscalYear } from '@/src/utils/fiscalYear';
@@ -9,7 +10,8 @@ import {
   Calendar, 
   ShieldCheck, 
   Search,
-  Flame,
+  AlertTriangle,
+  ChevronRight,
   DollarSign,
   Users,
   ShieldAlert,
@@ -93,7 +95,7 @@ const formatDaysUnit = (val: string | undefined | null): string => {
 const formatValue = (val: number, isCurrency: boolean) => {
   if (isCurrency) {
     const formatted = val % 1 === 0 ? val.toLocaleString() : val.toFixed(2);
-    return `${formatted} Cr.`;
+    return `₹ ${formatted} Cr.`;
   }
   return Math.round(val).toLocaleString();
 };
@@ -116,7 +118,7 @@ const getPercent = (pct: string | undefined, plan: string | undefined, ach: stri
 };
 
 const METRIC_CONFIGS: Record<string, { label: string; shortLabel: string; isCurrency: boolean; unit: string; colorPlan: string; colorAch: string }> = {
-  vowd: { label: 'VOWD', shortLabel: 'VOWD', isCurrency: true, unit: 'Cr.', colorPlan: '#818cf8', colorAch: '#4f46e5' },
+  vowd: { label: 'VOWD', shortLabel: 'VOWD', isCurrency: true, unit: '₹ Cr.', colorPlan: '#818cf8', colorAch: '#4f46e5' },
   milestone: { label: 'Milestones', shortLabel: 'Milestones', isCurrency: false, unit: 'Nos.', colorPlan: '#38bdf8', colorAch: '#0284c7' },
   labour: { label: 'Labour', shortLabel: 'Labour', isCurrency: false, unit: 'Labours', colorPlan: '#c084fc', colorAch: '#7e22ce' },
   ur: { label: 'Unit Delivery - Residential', shortLabel: 'Unit Delivery - Residential', isCurrency: false, unit: 'Units', colorPlan: '#fb923c', colorAch: '#c2410c' },
@@ -127,24 +129,54 @@ const METRIC_CONFIGS: Record<string, { label: string; shortLabel: string; isCurr
  * 1. COVER SLIDE COMPONENT
  * ------------------------------------------------------------- */
 export function CoverSlide({
-  title = 'MRM - July 26',
+  title,
+  completedMonth,
   teamName = 'Team KM'
 }: {
   title?: string;
+  completedMonth?: string;
   teamName: string;
 }) {
+  // Derive previous completed month (e.g. July 26 if active is Aug 26)
+  const monthText = React.useMemo(() => {
+    if (completedMonth) return completedMonth;
+    if (title && title.includes(' - ')) {
+      const parts = title.split(' - ');
+      if (parts[1]) return parts[1].trim();
+    }
+    const now = new Date();
+    const lastMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const monthName = lastMonthDate.toLocaleString('en-US', { month: 'long' });
+    const year2Digit = lastMonthDate.getFullYear().toString().slice(-2);
+    return `${monthName} ${year2Digit}`;
+  }, [completedMonth, title]);
+
   return (
     <div 
       className="report-slide relative flex flex-col justify-between p-12 overflow-hidden select-none font-sans" 
       style={{ width: '1122px', height: '794px', boxSizing: 'border-box', backgroundColor: '#ffffff', color: '#0f172a' }}
     >
-      <div className="flex-1 flex flex-col items-center justify-center text-center">
-        {title && (
-          <h1 className="text-4xl font-extrabold tracking-tight mb-8" style={{ color: '#0f172a' }}>
-            {title}
-          </h1>
-        )}
-        <h2 className="text-4xl font-black tracking-tight" style={{ color: '#0f172a' }}>
+      <div className="flex-1 flex flex-col items-center justify-center text-center space-y-5">
+        {/* Line 1: Planedge Monthly Review Meeting (MRM) on single line */}
+        <h1 
+          className="text-3xl sm:text-4xl font-extrabold tracking-tight whitespace-nowrap text-center" 
+          style={{ color: '#0f172a', whiteSpace: 'nowrap', letterSpacing: '-0.02em' }}
+        >
+          Planedge Monthly Review Meeting (MRM)
+        </h1>
+
+        {/* Line 2: Previously completed month (e.g. July 26) */}
+        <div 
+          className="inline-flex items-center px-6 py-2 rounded-full border shadow-2xs"
+          style={{ backgroundColor: '#eef2ff', borderColor: '#c7d2fe' }}
+        >
+          <span className="text-xl font-extrabold tracking-wide" style={{ color: '#4338ca' }}>
+            {monthText}
+          </span>
+        </div>
+
+        {/* Team Name */}
+        <h2 className="text-3xl font-black tracking-tight pt-4" style={{ color: '#0f172a' }}>
           {teamName}
         </h2>
       </div>
@@ -266,7 +298,7 @@ export function SummarySlide({
               <div className="rounded-xl p-2 bg-white border" style={{ borderColor: '#bbf7d0' }}>
                 <span className="text-[8px] font-black uppercase tracking-wider block" style={{ color: '#059669' }}>Const. Budget</span>
                 <span className="text-sm font-black block mt-0.5 truncate" style={{ color: '#064e3b' }}>
-                  {stats.totalBudgetUnderConstruction && stats.totalBudgetUnderConstruction > 0 ? formatValue(stats.totalBudgetUnderConstruction, true) : '0 Cr.'}
+                  {stats.totalBudgetUnderConstruction && stats.totalBudgetUnderConstruction > 0 ? formatValue(stats.totalBudgetUnderConstruction, true) : '₹ 0 Cr.'}
                 </span>
               </div>
             </div>
@@ -903,14 +935,14 @@ export function ProgressCurveSlide({
 
         {/* Sub-bar: Baseline Plan & Display Mode */}
         <div 
-          className="flex items-center justify-between p-2.5 rounded-2xl border text-[10px]"
+          className="flex items-center justify-between p-2.5 rounded-2xl border text-[10px] whitespace-nowrap flex-nowrap gap-3"
           style={{ backgroundColor: '#f8fafc', borderColor: '#e2e8f0' }}
         >
-          <div className="flex items-center gap-2">
-            <span className="font-extrabold uppercase tracking-wider" style={{ color: '#64748b' }}>Baseline Plan:</span>
-            <div className="inline-flex rounded-lg border p-0.5" style={{ backgroundColor: '#ffffff', borderColor: '#e2e8f0' }}>
+          <div className="flex items-center gap-2 whitespace-nowrap flex-nowrap shrink-0">
+            <span className="font-extrabold uppercase tracking-wider whitespace-nowrap" style={{ color: '#64748b' }}>Baseline Plan:</span>
+            <div className="inline-flex rounded-lg border p-0.5 whitespace-nowrap flex-nowrap shrink-0" style={{ backgroundColor: '#ffffff', borderColor: '#e2e8f0' }}>
               <span 
-                className="px-2.5 py-0.5 font-bold rounded"
+                className="px-2.5 py-0.5 font-bold rounded whitespace-nowrap"
                 style={{
                   backgroundColor: baselinePlan === 'r0' ? '#4f46e5' : 'transparent',
                   color: baselinePlan === 'r0' ? '#ffffff' : '#475569'
@@ -919,7 +951,7 @@ export function ProgressCurveSlide({
                 R0 Plan
               </span>
               <span 
-                className="px-2.5 py-0.5 font-bold rounded"
+                className="px-2.5 py-0.5 font-bold rounded whitespace-nowrap"
                 style={{
                   backgroundColor: baselinePlan === 'r1' ? '#4f46e5' : 'transparent',
                   color: baselinePlan === 'r1' ? '#ffffff' : '#475569'
@@ -928,7 +960,7 @@ export function ProgressCurveSlide({
                 R1 Plan
               </span>
               <span 
-                className="px-2.5 py-0.5 font-bold rounded"
+                className="px-2.5 py-0.5 font-bold rounded whitespace-nowrap"
                 style={{
                   backgroundColor: baselinePlan === 'both' ? '#4f46e5' : 'transparent',
                   color: baselinePlan === 'both' ? '#ffffff' : '#475569'
@@ -939,17 +971,17 @@ export function ProgressCurveSlide({
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="font-extrabold uppercase tracking-wider" style={{ color: '#64748b' }}>Display Mode:</span>
-            <div className="inline-flex rounded-lg border p-0.5" style={{ backgroundColor: '#ffffff', borderColor: '#e2e8f0' }}>
+          <div className="flex items-center gap-2 whitespace-nowrap flex-nowrap shrink-0">
+            <span className="font-extrabold uppercase tracking-wider whitespace-nowrap" style={{ color: '#64748b' }}>Display Mode:</span>
+            <div className="inline-flex rounded-lg border p-0.5 whitespace-nowrap flex-nowrap shrink-0" style={{ backgroundColor: '#ffffff', borderColor: '#e2e8f0' }}>
               <span 
-                className="px-2.5 py-0.5 font-bold rounded border"
+                className="px-2.5 py-0.5 font-bold rounded border whitespace-nowrap"
                 style={{ backgroundColor: '#eef2ff', color: '#4338ca', borderColor: '#c7d2fe' }}
               >
                 Monthly (Bar)
               </span>
               <span 
-                className="px-2.5 py-0.5 font-bold rounded border ml-1"
+                className="px-2.5 py-0.5 font-bold rounded border ml-1 whitespace-nowrap"
                 style={{ backgroundColor: '#eef2ff', color: '#4338ca', borderColor: '#c7d2fe' }}
               >
                 Cumulative (Line)
@@ -959,54 +991,54 @@ export function ProgressCurveSlide({
         </div>
 
         {/* Legend */}
-        <div className="flex items-center justify-end gap-5 text-[9.5px] font-bold px-2">
-          <div className="flex items-center gap-2">
-            <span className="uppercase tracking-wider text-[8px] font-black" style={{ color: '#94a3b8' }}>Monthly Bars:</span>
+        <div className="flex items-center justify-end gap-5 text-[9.5px] font-bold px-2 whitespace-nowrap flex-nowrap">
+          <div className="flex items-center gap-2 whitespace-nowrap flex-nowrap shrink-0">
+            <span className="uppercase tracking-wider text-[8px] font-black whitespace-nowrap" style={{ color: '#94a3b8' }}>Monthly Bars:</span>
             {baselinePlan === 'both' ? (
               <>
-                <div className="flex items-center space-x-1">
-                  <span className="w-2.5 h-2.5 rounded" style={{ backgroundColor: '#94a3b8' }} />
-                  <span style={{ color: '#475569' }}>R0 Plan</span>
+                <div className="flex items-center space-x-1 whitespace-nowrap shrink-0">
+                  <span className="w-2.5 h-2.5 rounded shrink-0" style={{ backgroundColor: '#94a3b8' }} />
+                  <span className="whitespace-nowrap" style={{ color: '#475569' }}>R0 Plan</span>
                 </div>
-                <div className="flex items-center space-x-1">
-                  <span className="w-2.5 h-2.5 rounded" style={{ backgroundColor: config.colorPlan }} />
-                  <span style={{ color: '#475569' }}>R1 Plan</span>
+                <div className="flex items-center space-x-1 whitespace-nowrap shrink-0">
+                  <span className="w-2.5 h-2.5 rounded shrink-0" style={{ backgroundColor: config.colorPlan }} />
+                  <span className="whitespace-nowrap" style={{ color: '#475569' }}>R1 Plan</span>
                 </div>
               </>
             ) : (
-              <div className="flex items-center space-x-1">
-                <span className="w-2.5 h-2.5 rounded" style={{ backgroundColor: config.colorPlan }} />
-                <span style={{ color: '#475569' }}>{baselinePlan.toUpperCase()} Plan</span>
+              <div className="flex items-center space-x-1 whitespace-nowrap shrink-0">
+                <span className="w-2.5 h-2.5 rounded shrink-0" style={{ backgroundColor: config.colorPlan }} />
+                <span className="whitespace-nowrap" style={{ color: '#475569' }}>{baselinePlan.toUpperCase()} Plan</span>
               </div>
             )}
-            <div className="flex items-center space-x-1">
-              <span className="w-2.5 h-2.5 rounded" style={{ backgroundColor: config.colorAch }} />
-              <span style={{ color: '#475569' }}>Actual</span>
+            <div className="flex items-center space-x-1 whitespace-nowrap shrink-0">
+              <span className="w-2.5 h-2.5 rounded shrink-0" style={{ backgroundColor: config.colorAch }} />
+              <span className="whitespace-nowrap" style={{ color: '#475569' }}>Actual</span>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 border-l pl-4" style={{ borderColor: '#e2e8f0' }}>
-            <span className="uppercase tracking-wider text-[8px] font-black" style={{ color: '#94a3b8' }}>S-Curve Lines:</span>
+          <div className="flex items-center gap-2 border-l pl-4 whitespace-nowrap flex-nowrap shrink-0" style={{ borderColor: '#e2e8f0' }}>
+            <span className="uppercase tracking-wider text-[8px] font-black whitespace-nowrap" style={{ color: '#94a3b8' }}>S-Curve Lines:</span>
             {baselinePlan === 'both' ? (
               <>
-                <div className="flex items-center space-x-1">
-                  <span className="inline-block w-4 h-0.5 border-t-2 border-dashed" style={{ borderColor: '#94a3b8' }} />
-                  <span style={{ color: '#475569' }}>Cum R0</span>
+                <div className="flex items-center space-x-1 whitespace-nowrap shrink-0">
+                  <span className="inline-block w-4 h-0.5 border-t-2 border-dashed shrink-0" style={{ borderColor: '#94a3b8' }} />
+                  <span className="whitespace-nowrap" style={{ color: '#475569' }}>Cum R0</span>
                 </div>
-                <div className="flex items-center space-x-1">
-                  <span className="inline-block w-4 h-0.5 border-t-2 border-solid" style={{ borderColor: config.colorPlan }} />
-                  <span style={{ color: '#475569' }}>Cum R1</span>
+                <div className="flex items-center space-x-1 whitespace-nowrap shrink-0">
+                  <span className="inline-block w-4 h-0.5 border-t-2 border-solid shrink-0" style={{ borderColor: config.colorPlan }} />
+                  <span className="whitespace-nowrap" style={{ color: '#475569' }}>Cum R1</span>
                 </div>
               </>
             ) : (
-              <div className="flex items-center space-x-1">
-                <span className="inline-block w-4 h-0.5 border-t-2 border-solid" style={{ borderColor: config.colorPlan }} />
-                <span style={{ color: '#475569' }}>Cum {baselinePlan.toUpperCase()}</span>
+              <div className="flex items-center space-x-1 whitespace-nowrap shrink-0">
+                <span className="inline-block w-4 h-0.5 border-t-2 border-solid shrink-0" style={{ borderColor: config.colorPlan }} />
+                <span className="whitespace-nowrap" style={{ color: '#475569' }}>Cum {baselinePlan.toUpperCase()}</span>
               </div>
             )}
-            <div className="flex items-center space-x-1">
-              <span className="inline-block w-4 h-0.5 border-t-2 border-solid" style={{ borderColor: config.colorAch }} />
-              <span style={{ color: '#475569' }}>Cum Actual</span>
+            <div className="flex items-center space-x-1 whitespace-nowrap shrink-0">
+              <span className="inline-block w-4 h-0.5 border-t-2 border-solid shrink-0" style={{ borderColor: config.colorAch }} />
+              <span className="whitespace-nowrap" style={{ color: '#475569' }}>Cum Actual</span>
             </div>
           </div>
         </div>
@@ -1113,9 +1145,10 @@ export function ProjectCardsSlide({
             const labourPct = getPercent(p.labourPctAch, p.labourPlan, p.labourAch);
             const formattedArea = p.areaSqft ? parseFloat(p.areaSqft.replace(/,/g, '')).toLocaleString() : '';
 
-            const statusColor = p.status === 'Green' ? '#10b981' : p.status === 'Amber' ? '#f59e0b' : p.status === 'Red' ? '#f43f5e' : '#94a3b8';
-            const statusBg = p.status === 'Green' ? '#ecfdf5' : p.status === 'Amber' ? '#fffbeb' : p.status === 'Red' ? '#fff1f2' : '#f8fafc';
-            const statusText = p.status === 'Green' ? '#047857' : p.status === 'Amber' ? '#b45309' : p.status === 'Red' ? '#be123c' : '#475569';
+            const isSpiNA = !p.spi || /^(NA|N\/A|-|NONE|)$/i.test(String(p.spi).trim()) || isNaN(parseFloat(p.spi));
+            const statusColor = isSpiNA ? '#94a3b8' : (p.status === 'Green' ? '#10b981' : p.status === 'Amber' ? '#f59e0b' : p.status === 'Red' ? '#f43f5e' : '#94a3b8');
+            const statusBg = isSpiNA ? '#f8fafc' : (p.status === 'Green' ? '#ecfdf5' : p.status === 'Amber' ? '#fffbeb' : p.status === 'Red' ? '#fff1f2' : '#f8fafc');
+            const statusText = isSpiNA ? '#64748b' : (p.status === 'Green' ? '#047857' : p.status === 'Amber' ? '#b45309' : p.status === 'Red' ? '#be123c' : '#475569');
 
             return (
               <div 
@@ -1333,7 +1366,7 @@ export interface AttentionNeededSlideProps {
 }
 
 export function AttentionNeededSlide({
-  title = 'Attention Needed — Top Critical Projects',
+  title = 'Attention Needed — Top 7 Critical Projects',
   subtitle,
   teamName = 'Team Overview',
   projects = [],
@@ -1342,9 +1375,15 @@ export function AttentionNeededSlide({
   const activeFy = getStoredFiscalYear();
   const fyConfig = getFiscalYearConfig(activeFy);
 
-  // Compute top 4 critical projects for this entity
-  const criticalItems = React.useMemo(() => {
+  // Compute critical projects with parameter lags
+  const { criticalItems, lagCounts } = React.useMemo(() => {
     const list: any[] = [];
+    let vowdCount = 0;
+    let labourCount = 0;
+    let milestoneCount = 0;
+    let urCount = 0;
+    let ucCount = 0;
+    let spiCount = 0;
 
     projects.forEach(p => {
       if (!p || !p.code) return;
@@ -1359,6 +1398,7 @@ export function AttentionNeededSlide({
       const vowdPct = vowdPlan > 0 ? (vowdAch / vowdPlan) * 100 : (vowdAch > 0 ? 100 : 0);
       const vowdGap = Math.max(0, vowdPlan - vowdAch);
       const isLaggingVowd = vowdPlan > 0 && (vowdPct < 85 || vowdGap >= 0.5);
+      if (isLaggingVowd) vowdCount++;
 
       // Labour
       const labourPlan = parseFloat(String(p.labourPlan || '').replace(/,/g, '')) || 0;
@@ -1366,6 +1406,7 @@ export function AttentionNeededSlide({
       const labourPct = labourPlan > 0 ? (labourAch / labourPlan) * 100 : (labourAch > 0 ? 100 : 0);
       const labourGap = Math.max(0, labourPlan - labourAch);
       const isLaggingLabour = labourPlan > 0 && (labourPct < 85 || labourGap >= 15);
+      if (isLaggingLabour) labourCount++;
 
       // Milestones
       const milestonePlan = parseFloat(String(p.milestonePlan || '').replace(/,/g, '')) || 0;
@@ -1373,10 +1414,16 @@ export function AttentionNeededSlide({
       const milestonePct = milestonePlan > 0 ? (milestoneAch / milestonePlan) * 100 : (milestoneAch > 0 ? 100 : 0);
       const milestoneGap = Math.max(0, milestonePlan - milestoneAch);
       const isLaggingMilestone = milestonePlan > 0 && (milestonePct < 85 || milestoneGap >= 1);
+      if (isLaggingMilestone) milestoneCount++;
+
+      // Unit Delivery - Res / Comm
+      const isLaggingUr = false;
+      const isLaggingUc = false;
 
       // SPI
       const spiNum = parseFloat(String(p.spi || s2?.spi || '1.0').replace(/%/g, '')) || 1.0;
       const isLaggingSpi = spiNum < 0.85;
+      if (isLaggingSpi) spiCount++;
 
       let score = 0;
       if (isLaggingVowd) score += 35 + (vowdGap * 2);
@@ -1385,178 +1432,205 @@ export function AttentionNeededSlide({
       if (isLaggingSpi) score += 20 * (1 - Math.min(1, spiNum));
 
       if (score > 0 || isLaggingVowd || isLaggingLabour || isLaggingMilestone || isLaggingSpi) {
-        // Findings
-        const findings: string[] = [];
-        if (isLaggingVowd) findings.push(`VOWD achievement is ${vowdPct.toFixed(0)}% (gap ₹${vowdGap.toFixed(1)}Cr)`);
-        if (isLaggingLabour) findings.push(`Labour deployment at ${labourPct.toFixed(0)}% (gap ${labourGap} Labours)`);
-        if (isLaggingMilestone) findings.push(`Milestones achieved ${milestoneAch}/${milestonePlan} (${milestonePct.toFixed(0)}%)`);
-        if (isLaggingSpi) findings.push(`SPI trailing at ${spiNum.toFixed(2)}`);
-
         list.push({
           code: p.code,
           name: p.name || p.code,
           vp: p.vp,
           leader: p.leader,
-          stage: p.projectStage || 'Under Construction',
+          stage: p.projectStage || 'On Going project',
           status: p.status || (score > 40 ? 'Red' : 'Amber'),
           score,
           vowd: { plan: vowdPlan, ach: vowdAch, pct: vowdPct, gap: vowdGap, isLagging: isLaggingVowd },
           labour: { plan: labourPlan, ach: labourAch, pct: labourPct, gap: labourGap, isLagging: isLaggingLabour },
           milestone: { plan: milestonePlan, ach: milestoneAch, pct: milestonePct, gap: milestoneGap, isLagging: isLaggingMilestone },
           spi: spiNum,
-          findings: findings.join('; ') || 'Near threshold milestone compression observed.',
-          action: isLaggingLabour && isLaggingVowd
-            ? 'Mobilize contractor manpower augmentation and expedite billing certifications.'
-            : isLaggingMilestone
-            ? 'Enforce critical-path micro-schedules and accelerate key material deliveries.'
-            : 'Maintain close milestone monitoring and audit sub-contractor progress.'
+          isLaggingSpi
         });
       }
     });
 
     list.sort((a, b) => b.score - a.score);
-    return list.slice(0, 4);
+    return {
+      criticalItems: list.slice(0, 6),
+      lagCounts: {
+        total: list.length,
+        vowd: vowdCount,
+        labour: labourCount,
+        milestone: milestoneCount,
+        ur: urCount,
+        uc: ucCount,
+        spi: spiCount
+      }
+    };
   }, [projects, software2Projects]);
 
   return (
     <div 
-      className="report-slide relative flex flex-col justify-between p-8 overflow-hidden select-none font-sans" 
+      className="report-slide relative flex flex-col justify-between p-7 overflow-hidden select-none font-sans" 
       style={{ width: '1122px', height: '794px', boxSizing: 'border-box', backgroundColor: '#ffffff', color: '#0f172a' }}
     >
       {/* Top Header */}
-      <div className="flex items-center justify-between border-b pb-3" style={{ borderColor: '#fecdd3' }}>
-        <div className="flex items-center space-x-3">
-          <div className="p-2.5 rounded-xl text-white shadow-md" style={{ backgroundColor: '#e11d48' }}>
-            <Flame className="w-5 h-5" />
+      <div className="flex items-center justify-between border-b pb-3" style={{ borderColor: '#ffe4e6' }}>
+        <div className="flex items-start space-x-3.5">
+          <div className="p-2.5 rounded-2xl text-white shadow-md flex items-center justify-center shrink-0" style={{ backgroundColor: '#f43f5e' }}>
+            <AlertTriangle className="w-5 h-5" />
           </div>
           <div>
-            <div className="flex items-center space-x-2">
-              <h2 className="text-xl font-black tracking-tight" style={{ color: '#0f172a' }}>
+            <div className="flex items-center space-x-2.5">
+              <h2 className="text-lg font-black tracking-tight text-slate-900">
                 {title}
               </h2>
-              <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full" style={{ backgroundColor: '#ffe4e6', color: '#be123c', border: '1px solid #fecdd3' }}>
-                Action Required
+              <span className="text-[9px] font-black uppercase px-2.5 py-0.5 rounded-full" style={{ backgroundColor: '#ffe4e6', color: '#be123c', border: '1px solid #fecdd3' }}>
+                ACTION REQUIRED
               </span>
             </div>
-            <p className="text-[11px] font-medium" style={{ color: '#64748b' }}>
-              {subtitle || `Critical path deliverable variances & prioritized recovery roadmap • ${teamName} • ${fyConfig.label}`}
+            <p className="text-[10.5px] text-slate-500 mt-0.5 max-w-[760px] leading-snug">
+              {subtitle || `In-depth performance diagnosis analyzing data from April 2026 to ${fyConfig.endMonthKey}. Highlights lagging deliverable parameters, shortfall gaps, labour productivity, efficiency, speed of construction, and executive recovery actions.`}
             </p>
           </div>
         </div>
 
-        <div className="text-right">
-          <span className="text-xs font-black uppercase tracking-wider block" style={{ color: '#be123c' }}>
+        <div className="text-right shrink-0">
+          <span className="text-xs font-black uppercase tracking-wider block text-rose-700">
             {teamName}
           </span>
-          <span className="text-[10px] font-bold" style={{ color: '#94a3b8' }}>
+          <span className="text-[10px] font-bold text-slate-400">
             {fyConfig.label} ({fyConfig.startMonthKey}–{fyConfig.endMonthKey})
           </span>
         </div>
       </div>
 
-      {/* Main Content Area: 4 Critical Project Diagnosis Cards */}
-      <div className="flex-1 my-3 flex flex-col justify-between">
+      {/* Filter Parameter Summary Bar (matching attachment) */}
+      <div className="my-2.5 flex items-center space-x-2 text-[10px] font-bold overflow-x-hidden">
+        <span className="text-[9.5px] font-black uppercase text-slate-400 tracking-wider shrink-0 mr-1">
+          FILTER BY PARAMETER:
+        </span>
+        <span className="px-2.5 py-1 rounded-full font-black text-white bg-slate-900">
+          All Critical ({lagCounts.total})
+        </span>
+        <span className="px-2.5 py-1 rounded-full text-slate-600 bg-slate-100 border border-slate-200">
+          VOWD Lag ({lagCounts.vowd})
+        </span>
+        <span className="px-2.5 py-1 rounded-full text-slate-600 bg-slate-100 border border-slate-200">
+          Labour Lag ({lagCounts.labour})
+        </span>
+        <span className="px-2.5 py-1 rounded-full text-slate-600 bg-slate-100 border border-slate-200">
+          Milestones Lag ({lagCounts.milestone})
+        </span>
+        <span className="px-2.5 py-1 rounded-full text-slate-600 bg-slate-100 border border-slate-200">
+          Unit Delivery - Res ({lagCounts.ur})
+        </span>
+        <span className="px-2.5 py-1 rounded-full text-slate-600 bg-slate-100 border border-slate-200">
+          Unit Delivery - Comm ({lagCounts.uc})
+        </span>
+        <span className="px-2.5 py-1 rounded-full text-slate-600 bg-slate-100 border border-slate-200">
+          SPI &amp; Ratings Lag ({lagCounts.spi})
+        </span>
+      </div>
+
+      {/* Main Content Area: Critical Projects List Rows */}
+      <div className="flex-1 flex flex-col justify-start space-y-2 my-1 overflow-hidden">
         {criticalItems.length === 0 ? (
-          <div className="flex-1 flex items-center justify-center p-12 text-center rounded-2xl border border-dashed" style={{ borderColor: '#cbd5e1', backgroundColor: '#f8fafc' }}>
+          <div className="flex-1 flex items-center justify-center p-10 text-center rounded-2xl border border-dashed border-slate-200 bg-slate-50">
             <div>
-              <ShieldCheck className="w-12 h-12 mx-auto mb-2 text-emerald-500" />
-              <h4 className="text-base font-black text-slate-800">All Projects Operating Within Baseline Thresholds</h4>
+              <ShieldCheck className="w-10 h-10 mx-auto mb-2 text-emerald-500" />
+              <h4 className="text-sm font-black text-slate-800">All Projects Operating Within Baseline Thresholds</h4>
               <p className="text-xs text-slate-500 mt-1">No critical deliverable lags identified across {teamName} portfolio.</p>
             </div>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-3.5 h-full">
-            {criticalItems.map((item, idx) => (
+          criticalItems.map((item, idx) => {
+            const hasLags = item.vowd.isLagging || item.labour.isLagging || item.milestone.isLagging || item.isLaggingSpi;
+
+            return (
               <div 
                 key={item.code}
-                className="p-3.5 rounded-2xl border flex flex-col justify-between"
-                style={{ 
-                  backgroundColor: idx === 0 ? '#fff1f2' : '#ffffff', 
-                  borderColor: idx === 0 ? '#fecdd3' : '#e2e8f0',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
-                }}
+                className="px-4 py-2.5 rounded-2xl border border-slate-200 bg-white flex items-center justify-between shadow-2xs"
               >
-                {/* Project Header */}
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
+                {/* Left: Rank, Code, Name, Status & Metadata */}
+                <div className="flex items-center space-x-3 min-w-0">
+                  <span className="px-2 py-0.5 rounded-lg text-rose-700 bg-rose-50 font-black text-xs shrink-0 border border-rose-100">
+                    #{idx + 1}
+                  </span>
+
+                  <span className="px-2 py-0.5 rounded-md font-mono font-black text-[10px] bg-slate-100 text-slate-700 shrink-0">
+                    {item.code}
+                  </span>
+
+                  <div className="min-w-0">
                     <div className="flex items-center space-x-2">
-                      <span className="w-5 h-5 rounded-lg text-white font-black text-[10px] flex items-center justify-center" style={{ backgroundColor: '#e11d48' }}>
-                        #{idx + 1}
-                      </span>
-                      <span className="px-1.5 py-0.2 rounded font-mono font-black text-[10px] bg-slate-100 text-slate-800 border border-slate-200">
-                        {item.code}
-                      </span>
-                      <h4 className="text-xs font-black text-slate-900 truncate max-w-[240px]">
+                      <h4 className="text-xs font-black text-slate-900 truncate max-w-[220px]">
                         {item.name}
                       </h4>
-                    </div>
-
-                    <span className="text-[9px] font-black px-2 py-0.2 rounded uppercase" style={{
-                      backgroundColor: item.status.toLowerCase() === 'red' ? '#ffe4e6' : '#fef3c7',
-                      color: item.status.toLowerCase() === 'red' ? '#be123c' : '#b45309'
-                    }}>
-                      {item.status} Status
-                    </span>
-                  </div>
-
-                  <div className="flex items-center space-x-3 text-[10px] font-semibold text-slate-500 mb-2">
-                    <span>VP: <strong className="text-slate-800">{item.vp}</strong></span>
-                    <span>•</span>
-                    <span>Lead: <strong className="text-slate-800">{item.leader}</strong></span>
-                    <span>•</span>
-                    <span>Stage: <strong className="text-slate-800">{item.stage}</strong></span>
-                  </div>
-
-                  {/* Key Metrics Mini-Grid */}
-                  <div className="grid grid-cols-4 gap-1.5 mb-2 text-center">
-                    <div className="p-1.5 rounded-lg bg-white border border-slate-200">
-                      <span className="text-[8px] uppercase font-bold text-blue-700 block">VOWD</span>
-                      <span className="text-[10px] font-black text-slate-900 block">₹{item.vowd.ach.toFixed(1)} <span className="text-[8px] font-normal text-slate-400">/{item.vowd.plan.toFixed(1)}Cr</span></span>
-                      <span className={`text-[8px] font-black ${item.vowd.pct >= 90 ? 'text-emerald-600' : 'text-rose-600'}`}>{item.vowd.pct.toFixed(0)}%</span>
-                    </div>
-
-                    <div className="p-1.5 rounded-lg bg-white border border-slate-200">
-                      <span className="text-[8px] uppercase font-bold text-purple-700 block">Labour</span>
-                      <span className="text-[10px] font-black text-slate-900 block">{item.labour.ach} <span className="text-[8px] font-normal text-slate-400">/{item.labour.plan}</span></span>
-                      <span className={`text-[8px] font-black ${item.labour.pct >= 90 ? 'text-emerald-600' : 'text-rose-600'}`}>{item.labour.pct.toFixed(0)}%</span>
-                    </div>
-
-                    <div className="p-1.5 rounded-lg bg-white border border-slate-200">
-                      <span className="text-[8px] uppercase font-bold text-emerald-700 block">Milestones</span>
-                      <span className="text-[10px] font-black text-slate-900 block">{item.milestone.ach} <span className="text-[8px] font-normal text-slate-400">/{item.milestone.plan}</span></span>
-                      <span className={`text-[8px] font-black ${item.milestone.pct >= 90 ? 'text-emerald-600' : 'text-rose-600'}`}>{item.milestone.pct.toFixed(0)}%</span>
-                    </div>
-
-                    <div className="p-1.5 rounded-lg bg-white border border-slate-200">
-                      <span className="text-[8px] uppercase font-bold text-indigo-700 block">SPI</span>
-                      <span className="text-[10px] font-black text-slate-900 block">{item.spi.toFixed(2)}</span>
-                      <span className={`text-[8px] font-black ${item.spi >= 0.9 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                        {item.spi >= 1.0 ? 'Target' : 'Variance'}
+                      <span className={`text-[8.5px] font-black px-1.5 py-0.2 rounded uppercase ${
+                        item.status.toLowerCase() === 'red' ? 'bg-rose-100 text-rose-800' :
+                        item.status.toLowerCase() === 'amber' ? 'bg-amber-100 text-amber-800' :
+                        'bg-slate-100 text-slate-600'
+                      }`}>
+                        {item.status}
                       </span>
                     </div>
+
+                    <div className="flex items-center space-x-2 text-[10px] text-slate-500 font-medium mt-0.5">
+                      <span>VP: <strong className="text-slate-700">{item.vp}</strong></span>
+                      <span>•</span>
+                      <span>Lead: <strong className="text-slate-700">{item.leader}</strong></span>
+                      <span>•</span>
+                      <span>Stage: <strong className="text-slate-700">{item.stage}</strong></span>
+                    </div>
                   </div>
                 </div>
 
-                {/* Findings & Recovery Plan */}
-                <div className="space-y-1 text-[9.5px]">
-                  <div className="p-1.5 rounded-lg bg-rose-50 border border-rose-100">
-                    <span className="font-black uppercase text-rose-800 block text-[8px]">Executive Findings:</span>
-                    <p className="text-slate-800 leading-tight truncate">{item.findings}</p>
-                  </div>
-                  <div className="p-1.5 rounded-lg bg-blue-50 border border-blue-100">
-                    <span className="font-black uppercase text-blue-800 block text-[8px]">Recovery Roadmap:</span>
-                    <p className="text-slate-800 leading-tight truncate">{item.action}</p>
-                  </div>
+                {/* Right: Parameter Lag Badges & Actions */}
+                <div className="flex items-center space-x-2 shrink-0">
+                  {item.vowd.isLagging && (
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                      $ VOWD: {item.vowd.pct.toFixed(0)}% (-₹{item.vowd.gap.toFixed(1)}Cr)
+                    </span>
+                  )}
+
+                  {item.labour.isLagging && (
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
+                      Labour: {item.labour.pct.toFixed(0)}% (-{item.labour.gap} Labours)
+                    </span>
+                  )}
+
+                  {item.milestone.isLagging && (
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      Milestones: {item.milestone.pct.toFixed(0)}% (-{item.milestone.gap}Qty)
+                    </span>
+                  )}
+
+                  {item.isLaggingSpi && (
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                      SPI: {item.spi.toFixed(2)}
+                    </span>
+                  )}
+
+                  {!hasLags && (
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-[10px] font-bold bg-slate-100 text-slate-600">
+                      Near Threshold Variance (SPI: {item.spi.toFixed(2)})
+                    </span>
+                  )}
+
+                  <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                    Drilldown
+                  </span>
+
+                  <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-slate-100 text-slate-700 flex items-center">
+                    <span>Analyze</span>
+                    <ChevronRight className="w-3 h-3 ml-0.5 text-slate-400" />
+                  </span>
                 </div>
               </div>
-            ))}
-          </div>
+            );
+          })
         )}
       </div>
 
       {/* Footer */}
-      <div className="flex justify-between items-center pt-2 border-t" style={{ borderColor: '#f1f5f9' }}>
-        <span className="text-[9px] font-bold" style={{ color: '#94a3b8' }}>
+      <div className="flex justify-between items-center pt-2 border-t border-slate-100">
+        <span className="text-[9px] font-bold text-slate-400">
           CONFIDENTIAL • Executive Performance Diagnostic • Planedge Management Review
         </span>
         <PlanedgePdfLogo />

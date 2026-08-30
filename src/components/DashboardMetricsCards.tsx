@@ -82,7 +82,7 @@ export default function DashboardMetricsCards({ metrics }: DashboardMetricsCards
             <div className="bg-white border border-slate-200/80 rounded-2xl p-3 shadow-2xs">
               <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider block">Total Budget</span>
               <span className="text-base sm:text-lg font-black text-slate-900 block mt-0.5 truncate">
-                {totalBudgetUnderManagement > 0 ? `₹ ${formatBudgetDisplay(totalBudgetUnderManagement)}` : 'N/A'}
+                {totalBudgetUnderManagement > 0 ? formatBudgetDisplay(totalBudgetUnderManagement) : 'N/A'}
               </span>
               <span className="text-[9px] text-slate-400">Portfolio budget</span>
             </div>
@@ -125,7 +125,7 @@ export default function DashboardMetricsCards({ metrics }: DashboardMetricsCards
             <div className="bg-white border border-emerald-100 rounded-2xl p-3 shadow-2xs">
               <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider block">Const. Budget</span>
               <span className="text-base sm:text-lg font-black text-emerald-800 block mt-0.5 truncate">
-                {totalBudgetUnderConstruction > 0 ? `₹ ${formatBudgetDisplay(totalBudgetUnderConstruction)}` : '₹ 0 Cr.'}
+                {totalBudgetUnderConstruction > 0 ? formatBudgetDisplay(totalBudgetUnderConstruction) : '₹ 0 Cr.'}
               </span>
               <span className="text-[9px] text-slate-400">Construction budget</span>
             </div>

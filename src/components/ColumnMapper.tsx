@@ -41,7 +41,7 @@ function getColLetter(index: number): string {
   return letter;
 }
 
-type S2TabType = 'meta' | 'vowd' | 'milestone' | 'labour' | 'ur' | 'uc' | 'spi' | 'quality' | 'safety' | 'qhse';
+type S2TabType = 'meta' | 'vowd' | 'milestone' | 'labour' | 'ur' | 'uc' | 'spi' | 'quality' | 'safety' | 'qhse' | 'proposedFinish';
 
 interface S2ParamDef {
   key: string;
@@ -259,7 +259,21 @@ export default function ColumnMapper({
     'qhse_Dec': { ach: 332 },
     'qhse_Jan': { ach: 333 },
     'qhse_Feb': { ach: 334 },
-    'qhse_Mar': { ach: 335 }
+    'qhse_Mar': { ach: 335 },
+
+    // Proposed Finish Date (12 Months) - Column LZ (337) to Column MK (348)
+    'finish_Apr': { ach: 337 },
+    'finish_May': { ach: 338 },
+    'finish_Jun': { ach: 339 },
+    'finish_Jul': { ach: 340 },
+    'finish_Aug': { ach: 341 },
+    'finish_Sep': { ach: 342 },
+    'finish_Oct': { ach: 343 },
+    'finish_Nov': { ach: 344 },
+    'finish_Dec': { ach: 345 },
+    'finish_Jan': { ach: 346 },
+    'finish_Feb': { ach: 347 },
+    'finish_Mar': { ach: 348 }
   };
 
   // Build Software 2 parameter list
@@ -272,7 +286,8 @@ export default function ColumnMapper({
       { key: 'meta_name', category: 'meta', primaryLabel: 'Project', subLabel: 'Official Project Name (Col C)', defaultColIndex: 2, mappingProp: 'nameIndex' },
       { key: 'meta_leader', category: 'meta', primaryLabel: 'Leader', subLabel: 'Lead Project Manager (Col D)', defaultColIndex: 3, mappingProp: 'leaderIndex' },
       { key: 'meta_vp', category: 'meta', primaryLabel: 'VP', subLabel: 'Executive Vice President (Col E)', defaultColIndex: 4, mappingProp: 'vpIndex' },
-      { key: 'meta_stage', category: 'meta', primaryLabel: 'Project Stage', subLabel: 'Current Lifecycle Stage (Col F)', defaultColIndex: 5, mappingProp: 'stageIndex' }
+      { key: 'meta_stage', category: 'meta', primaryLabel: 'Project Stage', subLabel: 'Current Lifecycle Stage (Col F)', defaultColIndex: 5, mappingProp: 'stageIndex' },
+      { key: 'meta_proposed_finish', category: 'meta', primaryLabel: 'Proposed Finish Date', subLabel: 'Target Completion Date (adjusted to Avg QHSE rating)', defaultColIndex: -1, mappingProp: 'proposedFinishIndex' }
     );
 
     // Helper for 12 months with R0 / R1 / Ach
@@ -344,6 +359,7 @@ export default function ColumnMapper({
     addAchievementOnlyMonths('quality', 'quality', 'Quality Rating');
     addAchievementOnlyMonths('safety', 'safety', 'Safety Rating');
     addAchievementOnlyMonths('qhse', 'qhse', 'Avg QHSE Rating');
+    addAchievementOnlyMonths('proposedFinish', 'finish', 'Proposed Finish Date');
 
     return list;
   }, []);
@@ -431,8 +447,8 @@ export default function ColumnMapper({
     5: 'Vice President (VP)',
     6: 'Project Stage',
     7: 'PM / Site Incharge',
-    8: 'Baseline 0 Finish',
-    9: 'Baseline 1 Finish',
+    8: 'Baseline Finish',
+    9: 'Baseline1 Finish',
     10: 'Proposed Finish Date',
     11: 'Schedule Variance (Days)',
     12: 'Delay in Current Month',
@@ -513,8 +529,8 @@ export default function ColumnMapper({
       icon: Calendar,
       fields: [
         { label: 'Target / Baseline Finish Date', field: 'targetDateIndex' as keyof ColumnMapping, desc: 'Current scheduled completion deadline' },
-        { label: 'Baseline 0 Finish', field: 'baselineFinishIndex' as keyof ColumnMapping, desc: 'Initial master schedule target date' },
-        { label: 'Baseline 1 Finish', field: 'baseline1FinishIndex' as keyof ColumnMapping, desc: 'Revised target date after H1 review' },
+        { label: 'Baseline Finish', field: 'baselineFinishIndex' as keyof ColumnMapping, desc: 'Initial master schedule target date' },
+        { label: 'Baseline1 Finish', field: 'baseline1FinishIndex' as keyof ColumnMapping, desc: 'Revised target date after H1 review' },
         { label: 'Proposed Finish Date', field: 'proposedFinishIndex' as keyof ColumnMapping, desc: 'Current forecast handover date' },
         { label: 'Schedule Variance (Days)', field: 'scheduleVarianceIndex' as keyof ColumnMapping, desc: 'Variance days against original baseline' },
         { label: 'Delay in Current Month', field: 'delayInCurrentMonthIndex' as keyof ColumnMapping, desc: 'Days of slippage in the reporting cycle' },
@@ -554,6 +570,7 @@ export default function ColumnMapper({
     { id: 'quality', label: 'Quality Rating', icon: '⭐' },
     { id: 'safety', label: 'Safety Rating', icon: '🦺' },
     { id: 'qhse', label: 'Avg QHSE Rating', icon: '🛡️' },
+    { id: 'proposedFinish', label: 'Proposed Finish Date', icon: '🏁' }
   ];
 
   return (

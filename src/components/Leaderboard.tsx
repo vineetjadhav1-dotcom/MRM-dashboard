@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { Project, Software2Project, VPData, LeaderData, FiscalYearKey } from '@/src/types';
+import { useFilter } from '@/src/context/FilterContext';
 import { isTempProject } from '@/src/utils/customOrder';
 import { getFiscalYearConfig, getStoredFiscalYear } from '@/src/utils/fiscalYear';
 import { isUnderConstructionStage } from '@/src/utils/sheetParser';
@@ -105,8 +106,14 @@ export default function Leaderboard({
   const fyConfig = useMemo(() => getFiscalYearConfig(activeFy), [activeFy]);
   const FY_MONTHS = fyConfig.months;
 
-  const [activeCategory, setActiveCategory] = useState<LeaderboardCategory>('VP');
-  const [searchQuery, setSearchQuery] = useState('');
+  const {
+    leaderboardCategory: activeCategory,
+    setLeaderboardCategory: setActiveCategory,
+    selectedVP,
+    selectedLeader,
+    searchQuery,
+    setSearchQuery
+  } = useFilter();
   const [sortField, setSortField] = useState<keyof LeaderboardRow>('compositeScore');
   const [sortAsc, setSortAsc] = useState<boolean>(false);
 
@@ -235,7 +242,10 @@ export default function Leaderboard({
 
   // 1. VP Leaderboard Calculation
   const vpRows: LeaderboardRow[] = useMemo(() => {
-    const vps = Array.from(new Set(projects.map(p => p.vp).filter(Boolean)));
+    let vps = Array.from(new Set(projects.map(p => p.vp).filter(Boolean)));
+    if (selectedVP !== 'all') {
+      vps = vps.filter(vp => String(vp).trim() === selectedVP);
+    }
 
     return vps.map(vpName => {
       const vpProjects = projects.filter(p => !isTempProject(p.code) && p.vp === vpName);
@@ -320,14 +330,23 @@ export default function Leaderboard({
         compositeScore
       };
     });
-  }, [projects, extractProjectMetrics, elapsedMonthsCount]);
+  }, [projects, extractProjectMetrics, elapsedMonthsCount, selectedVP]);
 
   // 2. Leader Leaderboard Calculation
   const leaderRows: LeaderboardRow[] = useMemo(() => {
-    const leaders = Array.from(new Set(projects.map(p => p.leader).filter(Boolean)));
+    let leaders = Array.from(new Set(projects.map(p => p.leader).filter(Boolean)));
+    if (selectedVP !== 'all') {
+      leaders = leaders.filter(leaderName => {
+        const lp = projects.filter(p => !isTempProject(p.code) && p.leader === leaderName);
+        return lp.some(p => p.vp === selectedVP);
+      });
+    }
+    if (selectedLeader !== 'all') {
+      leaders = leaders.filter(l => String(l).trim() === selectedLeader);
+    }
 
     return leaders.map(leaderName => {
-      const leaderProjects = projects.filter(p => !isTempProject(p.code) && p.leader === leaderName);
+      const leaderProjects = projects.filter(p => !isTempProject(p.code) && p.leader === leaderName && (selectedVP === 'all' || p.vp === selectedVP));
       const vpName = leaderProjects[0]?.vp || 'Unassigned';
       let vowdPlan = 0, vowdAch = 0;
       let milestonePlan = 0, milestoneAch = 0;
@@ -410,11 +429,19 @@ export default function Leaderboard({
         compositeScore
       };
     });
-  }, [projects, extractProjectMetrics, elapsedMonthsCount]);
+  }, [projects, extractProjectMetrics, elapsedMonthsCount, selectedVP, selectedLeader]);
 
   // 3. Projects Leaderboard Calculation
   const projectRows: LeaderboardRow[] = useMemo(() => {
-    return projects.map(p => {
+    let filteredProjects = projects.filter(p => !isTempProject(p.code));
+    if (selectedVP !== 'all') {
+      filteredProjects = filteredProjects.filter(p => p.vp === selectedVP);
+    }
+    if (selectedLeader !== 'all') {
+      filteredProjects = filteredProjects.filter(p => p.leader === selectedLeader);
+    }
+
+    return filteredProjects.map(p => {
       const m = extractProjectMetrics(p);
       const vowdPct = m.vowd.plan > 0 ? (m.vowd.ach / m.vowd.plan) * 100 : (parseFloat(p.progress) || 0);
       const milestonePct = m.milestone.plan > 0 ? (m.milestone.ach / m.milestone.plan) * 100 : 0;
@@ -467,7 +494,7 @@ export default function Leaderboard({
         rawProject: p
       };
     });
-  }, [projects, extractProjectMetrics, elapsedMonthsCount]);
+  }, [projects, extractProjectMetrics, elapsedMonthsCount, selectedVP, selectedLeader]);
 
   // Active dataset according to selected category
   const activeRawRows = activeCategory === 'VP' ? vpRows : activeCategory === 'LEADER' ? leaderRows : projectRows;
@@ -534,36 +561,6 @@ export default function Leaderboard({
               Rankings &amp; cross-comparative efficiency metrics across <strong className="text-slate-700">VPs, Leaders &amp; Projects</strong> evaluated across the selected month timeframe.
             </p>
           </div>
-        </div>
-
-        {/* 3 Main Tables Switcher Tabs */}
-        <div className="flex items-center bg-slate-100 p-1.5 rounded-2xl border border-slate-200/80 shrink-0">
-          {[
-            { id: 'VP' as LeaderboardCategory, label: `VP Leaderboard (${vpRows.length})`, icon: Building2 },
-            { id: 'LEADER' as LeaderboardCategory, label: `Leader Leaderboard (${leaderRows.length})`, icon: Users },
-            { id: 'PROJECTS' as LeaderboardCategory, label: `Projects Leaderboard (${projectRows.length})`, icon: Activity }
-          ].map(tab => {
-            const Icon = tab.icon;
-            const isActive = activeCategory === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => {
-                  setActiveCategory(tab.id);
-                  setSortField('compositeScore');
-                  setSortAsc(false);
-                }}
-                className={`flex items-center space-x-2 px-3.5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
-                  isActive 
-                    ? 'bg-slate-900 text-white shadow-md' 
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
-                }`}
-              >
-                <Icon className="w-3.5 h-3.5" />
-                <span>{tab.label}</span>
-              </button>
-            );
-          })}
         </div>
       </div>
 
@@ -731,40 +728,40 @@ export default function Leaderboard({
 
         {/* Responsive Table */}
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[1100px]">
+          <table className="w-full text-center border-collapse min-w-[1100px]">
             <thead>
               <tr className="bg-slate-100/75 border-b border-slate-200 text-[10px] font-black text-slate-600 uppercase tracking-wider select-none">
                 <th className="py-3 px-3 w-14 text-center cursor-pointer" onClick={() => handleSort('rank')}>
                   Rank
                 </th>
-                <th className="py-3 px-4 min-w-[200px] cursor-pointer" onClick={() => handleSort('name')}>
+                <th className="py-3 px-4 min-w-[200px] text-center cursor-pointer" onClick={() => handleSort('name')}>
                   {activeCategory === 'VP' ? 'Executive VP' : activeCategory === 'LEADER' ? 'Project Leader' : 'Project Name'}
                 </th>
-                <th className="py-3 px-3 text-right cursor-pointer" onClick={() => handleSort('vowdPct')}>
-                  VOWD (% / Cr.)
+                <th className="py-3 px-3 text-center cursor-pointer" onClick={() => handleSort('vowdPct')}>
+                  VOWD (% / ₹ Cr.)
                 </th>
-                <th className="py-3 px-3 text-right cursor-pointer" onClick={() => handleSort('milestonePct')}>
+                <th className="py-3 px-3 text-center cursor-pointer" onClick={() => handleSort('milestonePct')}>
                   Milestones
                 </th>
-                <th className="py-3 px-3 text-right cursor-pointer" onClick={() => handleSort('labourPct')}>
+                <th className="py-3 px-3 text-center cursor-pointer" onClick={() => handleSort('labourPct')}>
                   Labour
                 </th>
-                <th className="py-3 px-3 text-right cursor-pointer" onClick={() => handleSort('urPct')}>
+                <th className="py-3 px-3 text-center cursor-pointer" onClick={() => handleSort('urPct')}>
                   Unit Del. (Res.)
                 </th>
-                <th className="py-3 px-3 text-right cursor-pointer" onClick={() => handleSort('ucPct')}>
+                <th className="py-3 px-3 text-center cursor-pointer" onClick={() => handleSort('ucPct')}>
                   Unit Del. (Comm.)
                 </th>
-                <th className="py-3 px-3 text-right cursor-pointer" onClick={() => handleSort('labourProductivity')}>
+                <th className="py-3 px-3 text-center cursor-pointer" onClick={() => handleSort('labourProductivity')}>
                   Labour Productivity
                 </th>
-                <th className="py-3 px-3 text-right cursor-pointer" onClick={() => handleSort('labourEfficiency')}>
+                <th className="py-3 px-3 text-center cursor-pointer" onClick={() => handleSort('labourEfficiency')}>
                   Labour Efficiency
                 </th>
-                <th className="py-3 px-3 text-right cursor-pointer" onClick={() => handleSort('speedOfConstruction')}>
+                <th className="py-3 px-3 text-center cursor-pointer" onClick={() => handleSort('speedOfConstruction')}>
                   Speed (₹/Sqft/Mo)
                 </th>
-                <th className="py-3 px-3 text-right cursor-pointer" onClick={() => handleSort('avgSPI')}>
+                <th className="py-3 px-3 text-center cursor-pointer" onClick={() => handleSort('avgSPI')}>
                   Avg SPI ({startMonth}–{toMonth})
                 </th>
                 <th className="py-3 px-4 text-center cursor-pointer" onClick={() => handleSort('compositeScore')}>
@@ -814,29 +811,29 @@ export default function Leaderboard({
                     </td>
 
                     {/* Entity Name & Subtitle */}
-                    <td className="py-3.5 px-4">
-                      <div className="font-extrabold text-slate-900 max-w-[240px] truncate" title={row.name}>
+                    <td className="py-3.5 px-4 text-center">
+                      <div className="font-extrabold text-slate-900 max-w-[240px] truncate mx-auto" title={row.name}>
                         {row.name}
                       </div>
                       {row.subTitle && (
-                        <div className="text-[10px] text-slate-400 font-medium truncate max-w-[240px]">
+                        <div className="text-[10px] text-slate-400 font-medium truncate max-w-[240px] mx-auto">
                           {row.subTitle}
                         </div>
                       )}
                     </td>
 
                     {/* 1. VOWD */}
-                    <td className="py-3.5 px-3 text-right whitespace-nowrap">
+                    <td className="py-3.5 px-3 text-center whitespace-nowrap">
                       <div className="font-extrabold text-slate-900 font-mono">
                         {row.vowdPct.toFixed(0)}%
                       </div>
                       <div className="text-[10px] text-slate-400 font-medium">
-                        {row.vowdAch.toFixed(1)} / {row.vowdPlan.toFixed(1)} Cr
+                        ₹ {row.vowdAch.toFixed(1)} / ₹ {row.vowdPlan.toFixed(1)} Cr.
                       </div>
                     </td>
 
                     {/* 2. Milestone */}
-                    <td className="py-3.5 px-3 text-right whitespace-nowrap">
+                    <td className="py-3.5 px-3 text-center whitespace-nowrap">
                       <div className="font-extrabold text-slate-900 font-mono">
                         {row.milestonePct.toFixed(0)}%
                       </div>
@@ -846,7 +843,7 @@ export default function Leaderboard({
                     </td>
 
                     {/* 3. Labour */}
-                    <td className="py-3.5 px-3 text-right whitespace-nowrap">
+                    <td className="py-3.5 px-3 text-center whitespace-nowrap">
                       <div className="font-extrabold text-slate-900 font-mono">
                         {row.labourPct.toFixed(0)}%
                       </div>
@@ -856,7 +853,7 @@ export default function Leaderboard({
                     </td>
 
                     {/* 4. Unit Delivery - Residential */}
-                    <td className="py-3.5 px-3 text-right whitespace-nowrap">
+                    <td className="py-3.5 px-3 text-center whitespace-nowrap">
                       <div className="font-extrabold text-slate-900 font-mono">
                         {row.urPct.toFixed(0)}%
                       </div>
@@ -866,7 +863,7 @@ export default function Leaderboard({
                     </td>
 
                     {/* 5. Unit Delivery - Commercial */}
-                    <td className="py-3.5 px-3 text-right whitespace-nowrap">
+                    <td className="py-3.5 px-3 text-center whitespace-nowrap">
                       <div className="font-extrabold text-slate-900 font-mono">
                         {row.ucPct.toFixed(0)}%
                       </div>
@@ -876,7 +873,7 @@ export default function Leaderboard({
                     </td>
 
                     {/* 6. Labour Productivity */}
-                    <td className="py-3.5 px-3 text-right whitespace-nowrap font-mono">
+                    <td className="py-3.5 px-3 text-center whitespace-nowrap font-mono">
                       <span className="font-bold text-slate-800">
                         ₹{row.labourProductivity > 0 ? Math.round(row.labourProductivity).toLocaleString() : '0'}
                       </span>
@@ -884,7 +881,7 @@ export default function Leaderboard({
                     </td>
 
                     {/* 7. Labour Efficiency */}
-                    <td className="py-3.5 px-3 text-right whitespace-nowrap font-mono">
+                    <td className="py-3.5 px-3 text-center whitespace-nowrap font-mono">
                       <span className={`font-bold ${row.labourEfficiency >= 1.0 ? 'text-emerald-600' : 'text-slate-800'}`}>
                         {row.labourEfficiency > 0 ? row.labourEfficiency.toFixed(2) : '0.00'}
                       </span>
@@ -892,7 +889,7 @@ export default function Leaderboard({
                     </td>
 
                     {/* 8. Speed of Construction */}
-                    <td className="py-3.5 px-3 text-right whitespace-nowrap font-mono">
+                    <td className="py-3.5 px-3 text-center whitespace-nowrap font-mono">
                       <span className="font-bold text-slate-800">
                         {row.speedOfConstruction > 0 ? `₹${Math.round(row.speedOfConstruction).toLocaleString()}` : '-'}
                       </span>
@@ -900,7 +897,7 @@ export default function Leaderboard({
                     </td>
 
                     {/* 9. Avg SPI */}
-                    <td className="py-3.5 px-3 text-right whitespace-nowrap">
+                    <td className="py-3.5 px-3 text-center whitespace-nowrap">
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-black font-mono border ${
                         row.avgSPI >= 1.0 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
                         row.avgSPI >= 0.85 ? 'bg-amber-50 text-amber-700 border-amber-200' :

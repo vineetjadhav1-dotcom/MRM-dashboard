@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import PlanedgeLogo from './PlanedgeLogo';
-import { Project, Software2Project, ActiveTab, AppUser, UserPermissions, FiscalYearKey } from '@/src/types';
+import { Project, Software2Project, ActiveTab, AppUser, UserPermissions, FiscalYearKey, Software3Milestone } from '@/src/types';
+import HorizontalFilterBar from './HorizontalFilterBar';
 import { 
   getFiscalYearConfig, 
   getStoredFiscalYear, 
@@ -40,6 +41,7 @@ interface HeaderProps {
   projectsCount: number;
   projects?: Project[];
   software2Projects?: Software2Project[];
+  software3Milestones?: Software3Milestone[];
   onLoadCustomData?: (rows: string[][], rows2?: string[][]) => void;
   onOpenLogin?: () => void;
   activeTab?: ActiveTab;
@@ -67,16 +69,16 @@ const ALL_NAV_MENU_ITEMS: NavMenuItem[] = [
     icon: Users
   },
   {
-    id: 'milestones',
-    label: 'MILESTONE ANALYSIS',
-    subtitle: 'Detailed categories, weekly plan, bottlenecks & enabler readings',
-    icon: Flag
-  },
-  {
     id: 'leaderboard',
     label: 'LEADERBOARD',
     subtitle: 'Executive benchmarking, project scores & tier rankings',
     icon: Trophy
+  },
+  {
+    id: 'milestones',
+    label: 'MILESTONE ANALYSIS',
+    subtitle: 'Detailed categories, weekly plan, bottlenecks & enabler readings',
+    icon: Flag
   },
   {
     id: 'insights',
@@ -117,6 +119,9 @@ export default function Header({
   onLogout,
   onRefresh,
   projectsCount,
+  projects = [],
+  software2Projects = [],
+  software3Milestones = [],
   activeTab = 'projectDashboard',
   onSelectTab
 }: HeaderProps) {
@@ -194,7 +199,7 @@ export default function Header({
             <div>
               <div className="flex items-center space-x-2">
                 <h1 className="text-lg sm:text-2xl font-bold text-slate-900 tracking-tight">
-                  Planedge Dashboard
+                  Planedge Executive Dashboard
                 </h1>
 
                 <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-2xs">
@@ -245,20 +250,6 @@ export default function Header({
                 </span>
               </div>
             )}
-
-            {/* Active Selected Option Indicator (Clickable to open dropdown) */}
-            <button 
-              type="button"
-              onClick={() => setIsNavOpen(prev => !prev)}
-              className="flex items-center space-x-2 px-2.5 sm:px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100/80 border border-blue-200 text-blue-900 shadow-2xs transition-colors cursor-pointer"
-              id="active-option-indicator"
-              title={`Current View: ${activeMenuItem.label} (Click to switch view)`}
-            >
-              <ActiveIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-600 shrink-0" />
-              <span className="text-xs font-bold tracking-wide uppercase truncate max-w-[110px] sm:max-w-[180px] md:max-w-[220px]">
-                {activeMenuItem.label}
-              </span>
-            </button>
 
             {/* Direct Synchronize Spreadsheet Data Button */}
             {canSyncSheet && (
@@ -346,6 +337,54 @@ export default function Header({
 
         </div>
       </header>
+
+      {/* Horizontal Navigation Bar (Direct 1-Click Access) */}
+      <nav className="bg-slate-900 border-b border-slate-800 px-3 sm:px-6 lg:px-8 py-1.5 overflow-x-auto scrollbar-none shadow-inner" id="horizontal-nav-bar" aria-label="Main Navigation">
+        <div className="max-w-[1536px] mx-auto flex items-center space-x-1.5 sm:space-x-2 min-w-max">
+          {visibleNavItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = activeTab === item.id;
+            const isUserAccessTab = item.id === 'userAccess';
+
+            return (
+              <button
+                key={item.id}
+                type="button"
+                id={`navbar-tab-${item.id}`}
+                onClick={() => onSelectTab && onSelectTab(item.id)}
+                className={`flex items-center space-x-2 px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                  isActive
+                    ? 'bg-blue-600 text-white shadow-md shadow-blue-900/30'
+                    : isUserAccessTab
+                    ? 'bg-purple-950/40 text-purple-300 hover:bg-purple-900/60 hover:text-white border border-purple-800/40'
+                    : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                }`}
+                title={item.subtitle}
+              >
+                <Icon className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-white' : isUserAccessTab ? 'text-purple-400' : 'text-slate-400'}`} />
+                <span className="tracking-wide uppercase text-[11px] sm:text-xs">
+                  {item.label}
+                </span>
+                {isUserAccessTab && (
+                  <span className="text-[8px] font-black px-1 py-0.2 rounded bg-purple-500/30 text-purple-200">
+                    Admin
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </nav>
+
+      {/* Dedicated 1-Click Horizontal Filter Bar */}
+      {activeTab && (
+        <HorizontalFilterBar
+          activeTab={activeTab}
+          projects={projects}
+          software2Projects={software2Projects}
+          software3Milestones={software3Milestones}
+        />
+      )}
 
       {/* Dimmed Backdrop Overlay (Behind the dropdown panel) */}
       {isNavOpen && (

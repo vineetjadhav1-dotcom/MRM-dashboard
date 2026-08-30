@@ -348,19 +348,20 @@ export function parseSheetData(
     const spiVal = getVal(mapping.spiIndex);
     const qhse = getVal(mapping.qhseRatingIndex);
 
-    // Derive status: status column -> SPI threshold -> QHSE -> default Green
+    // Derive status: SPI threshold -> status column -> Gray if NA
+    const cleanSpi = String(spiVal || '').trim().toUpperCase();
+    const isSpiNA = cleanSpi === 'NA' || cleanSpi === 'N/A' || cleanSpi === '-' || cleanSpi === 'NONE' || cleanSpi === '' || isNaN(parseFloat(spiVal));
+
     let status = 'Gray';
-    if (rawStatus) {
-      status = normalizeStatus(rawStatus);
-    } else if (spiVal) {
+    if (spiVal && !isSpiNA) {
       const spiNum = parseFloat(spiVal);
       if (!isNaN(spiNum)) {
         status = spiNum >= 1.0 ? 'Green' : spiNum >= 0.85 ? 'Amber' : 'Red';
-      } else {
-        status = 'Green';
       }
+    } else if (rawStatus && !isSpiNA) {
+      status = normalizeStatus(rawStatus);
     } else {
-      status = 'Green';
+      status = 'Gray';
     }
 
     const progress = spiVal ? `SPI: ${spiVal}` : (getVal(mapping.progressIndex) || '0%');
@@ -574,11 +575,11 @@ export function parseBudgetValue(val?: string | number): number {
  * Format numeric Crores value into a readable string (e.g. "1,250.50 Cr." or "45.00 Cr.")
  */
 export function formatBudgetDisplay(crVal: number): string {
-  if (!crVal || isNaN(crVal) || crVal <= 0) return '0 Cr.';
+  if (!crVal || isNaN(crVal) || crVal <= 0) return '₹ 0 Cr.';
   if (crVal >= 100) {
-    return `${crVal.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 1 })} Cr.`;
+    return `₹ ${crVal.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 1 })} Cr.`;
   }
-  return `${crVal.toFixed(2)} Cr.`;
+  return `₹ ${crVal.toFixed(2)} Cr.`;
 }
 
 /**
@@ -781,7 +782,7 @@ export function parseSoftware2Data(
   const activeMonths = fyConfig.months;
 
   // Map of col index to parsed details with canonical default Software2 coordinates
-  const colMappings: { [idx: number]: { metric: 'vowd' | 'milestone' | 'labour' | 'ur' | 'uc' | 'spi' | 'quality' | 'safety' | 'qhse'; month: string; type: 'planR0' | 'planR1' | 'achievement' } } = {
+  const colMappings: { [idx: number]: { metric: 'vowd' | 'milestone' | 'labour' | 'ur' | 'uc' | 'spi' | 'quality' | 'safety' | 'qhse' | 'finish'; month: string; type: 'planR0' | 'planR1' | 'achievement' } } = {
     // VOWD
     18: { metric: 'vowd', month: activeMonths[0].key, type: 'planR0' },
     19: { metric: 'vowd', month: activeMonths[0].key, type: 'achievement' },
@@ -996,7 +997,21 @@ export function parseSoftware2Data(
     332: { metric: 'qhse', month: activeMonths[8].key, type: 'achievement' },
     333: { metric: 'qhse', month: activeMonths[9].key, type: 'achievement' },
     334: { metric: 'qhse', month: activeMonths[10].key, type: 'achievement' },
-    335: { metric: 'qhse', month: activeMonths[11].key, type: 'achievement' }
+    335: { metric: 'qhse', month: activeMonths[11].key, type: 'achievement' },
+
+    // Proposed Finish Date (12 Months) - Columns 337 to 348 (LZ to MK)
+    337: { metric: 'finish', month: activeMonths[0].key, type: 'achievement' },
+    338: { metric: 'finish', month: activeMonths[1].key, type: 'achievement' },
+    339: { metric: 'finish', month: activeMonths[2].key, type: 'achievement' },
+    340: { metric: 'finish', month: activeMonths[3].key, type: 'achievement' },
+    341: { metric: 'finish', month: activeMonths[4].key, type: 'achievement' },
+    342: { metric: 'finish', month: activeMonths[5].key, type: 'achievement' },
+    343: { metric: 'finish', month: activeMonths[6].key, type: 'achievement' },
+    344: { metric: 'finish', month: activeMonths[7].key, type: 'achievement' },
+    345: { metric: 'finish', month: activeMonths[8].key, type: 'achievement' },
+    346: { metric: 'finish', month: activeMonths[9].key, type: 'achievement' },
+    347: { metric: 'finish', month: activeMonths[10].key, type: 'achievement' },
+    348: { metric: 'finish', month: activeMonths[11].key, type: 'achievement' }
   };
   
   // Basic metadata indexes
@@ -1006,6 +1021,7 @@ export function parseSoftware2Data(
   let vpIndex = 4;     // Column E
   let stageIndex = 5;  // Column F
   let areaIndex = 6;   // Column G
+  let proposedFinishIndex = -1;
   let spiIndex = 6;    // Column G - SPI
   let qualityRatingIndex = 8; // Column I - Quality Rating
   let safetyRatingIndex = 9;  // Column J - Safety Rating
@@ -1089,6 +1105,8 @@ export function parseSoftware2Data(
       safetyRatingIndex = idx;
     } else if (/avg.*qhse|qhse/i.test(val)) {
       avgQhseRatingIndex = idx;
+    } else if (/proposed\s*finish|proposed\s*date|forecast\s*finish|target\s*date|\bproposed\b/i.test(val)) {
+      proposedFinishIndex = idx;
     }
 
     // Determine metrics
@@ -1150,7 +1168,7 @@ export function parseSoftware2Data(
       // Check for SPI, Quality, Safety, QHSE (12 achievement months in active FY)
       const monthObj = fyMonths.find(m => m.regex.test(fullText));
       if (monthObj) {
-        let metric25: 'spi' | 'quality' | 'safety' | 'qhse' | null = null;
+        let metric25: 'spi' | 'quality' | 'safety' | 'qhse' | 'finish' | null = null;
         if (/\bspi\b/i.test(fullText)) {
           metric25 = 'spi';
         } else if (/\bquality\b|\bqua\b/i.test(fullText)) {
@@ -1159,6 +1177,8 @@ export function parseSoftware2Data(
           metric25 = 'safety';
         } else if (/avg.*qhse|qhse|avg.*rating|rating/i.test(fullText)) {
           metric25 = 'qhse';
+        } else if (/finish\s*date|proposed\s*finish/i.test(fullText)) {
+          metric25 = 'finish';
         }
 
         if (metric25) {
@@ -1181,6 +1201,7 @@ export function parseSoftware2Data(
     if (customMapping.stageIndex !== undefined && customMapping.stageIndex !== -1) stageIndex = customMapping.stageIndex;
     if (customMapping.areaIndex !== undefined && customMapping.areaIndex !== -1) areaIndex = customMapping.areaIndex;
     if (customMapping.spiIndex !== undefined && customMapping.spiIndex !== -1) spiIndex = customMapping.spiIndex;
+    if (customMapping.proposedFinishIndex !== undefined && customMapping.proposedFinishIndex !== -1) proposedFinishIndex = customMapping.proposedFinishIndex;
     if (customMapping.qualityRatingIndex !== undefined && customMapping.qualityRatingIndex !== -1) qualityRatingIndex = customMapping.qualityRatingIndex;
     if (customMapping.safetyRatingIndex !== undefined && customMapping.safetyRatingIndex !== -1) safetyRatingIndex = customMapping.safetyRatingIndex;
     if (customMapping.avgQhseRatingIndex !== undefined && customMapping.avgQhseRatingIndex !== -1) avgQhseRatingIndex = customMapping.avgQhseRatingIndex;
@@ -1232,6 +1253,7 @@ export function parseSoftware2Data(
     const vp = getVal(vpIndex) || 'Unassigned';
     const stage = getVal(stageIndex) || 'Execution';
     const area = getVal(areaIndex) || 'Unassigned';
+    const proposedFinish = getVal(proposedFinishIndex);
 
     const cleanRatingStr2 = (val: string) => {
       if (!val) return '-';
@@ -1257,6 +1279,7 @@ export function parseSoftware2Data(
     const qualityMap: { [month: string]: MonthlyMetric } = {};
     const safetyMap: { [month: string]: MonthlyMetric } = {};
     const qhseMap: { [month: string]: MonthlyMetric } = {};
+    const finishMap: { [month: string]: string } = {};
 
     fyMonths.forEach(m => {
       vowdMap[m.key] = { month: m.key, plan: 0, planR0: 0, planR1: undefined, achievement: 0 };
@@ -1268,13 +1291,22 @@ export function parseSoftware2Data(
       qualityMap[m.key] = { month: m.key, plan: 0, planR0: 0, achievement: 0 };
       safetyMap[m.key] = { month: m.key, plan: 0, planR0: 0, achievement: 0 };
       qhseMap[m.key] = { month: m.key, plan: 0, planR0: 0, achievement: 0 };
+      finishMap[m.key] = '';
     });
 
     row.forEach((cell, idx) => {
       const mapping = colMappings[idx];
       if (!mapping) return;
 
-      const cellClean = String(cell || '').replace(/[$,%\s]/g, '');
+      const rawCellStr = String(cell || '').trim();
+      if (mapping.metric === 'finish') {
+        if (rawCellStr && rawCellStr !== '-' && rawCellStr !== 'null' && rawCellStr !== 'undefined') {
+          finishMap[mapping.month] = rawCellStr;
+        }
+        return;
+      }
+
+      const cellClean = rawCellStr.replace(/[$,%\s]/g, '');
       const val = parseFloat(cellClean) || 0;
 
       let mapToUse: { [month: string]: MonthlyMetric } | null = null;
@@ -1303,6 +1335,15 @@ export function parseSoftware2Data(
       }
     });
 
+    // Derive resolved proposed finish date (from meta column or latest non-empty month in finishMap)
+    let finalProposedFinish = proposedFinish;
+    if (!finalProposedFinish || finalProposedFinish === '-' || finalProposedFinish === 'N/A') {
+      const activeNonEmpty = fyMonths.map(m => finishMap[m.key]).filter(Boolean);
+      if (activeNonEmpty.length > 0) {
+        finalProposedFinish = activeNonEmpty[activeNonEmpty.length - 1];
+      }
+    }
+
     projects.push({
       code,
       name,
@@ -1314,6 +1355,8 @@ export function parseSoftware2Data(
       qualityRating,
       safetyRating,
       avgQhseRating,
+      proposedFinish: finalProposedFinish,
+      proposedFinishHistory: fyMonths.map(m => ({ month: m.key, finishDate: finishMap[m.key] || '' })),
       vowd: Object.values(vowdMap),
       milestone: Object.values(milestoneMap),
       labour: Object.values(labourMap),
@@ -1435,15 +1478,15 @@ export function parseSoftware3Data(rows: string[][], projects: Project[] = []): 
     const labourAvailability = normalizeCheck(r[16]);
     const clientDecision = normalizeCheck(r[17]);
 
-    const govtApproval = String(r[18] || '').trim();
-    const crm = String(r[19] || '').trim();
-    const other = String(r[20] || '').trim();
+    const govtApproval = normalizeCheck(r[18]);
+    const crm = normalizeCheck(r[19]);
+    const other = normalizeCheck(r[20]);
     const remark = String(r[21] || '').trim();
 
     // VP lookup
     const vp = vpLookup.get(projectCode.toLowerCase()) || vpLookup.get(projectName.toLowerCase()) || '';
 
-    // Collect failing constraints
+    // Collect failing constraints across all 10 site & technical enabling parameters
     const failingConstraints: string[] = [];
     if (contractorApp === 'Not Done') failingConstraints.push('Contractor App.');
     if (drawing === 'Not Done') failingConstraints.push('Drawing / GFC');
@@ -1452,6 +1495,9 @@ export function parseSoftware3Data(rows: string[][], projects: Project[] = []): 
     if (materialDelivery === 'Not Done') failingConstraints.push('Material Delivery');
     if (labourAvailability === 'Not Done') failingConstraints.push('Labour Availability');
     if (clientDecision === 'Not Done') failingConstraints.push('Client Decision');
+    if (govtApproval === 'Not Done') failingConstraints.push('Govt Approval');
+    if (crm === 'Not Done') failingConstraints.push('CRM');
+    if (other === 'Not Done') failingConstraints.push('Other');
 
     // Primary Bottleneck
     let primaryBottleneck = failingConstraints.length > 0 ? failingConstraints[0] : (status === 'Done' ? 'None (Achieved)' : 'On-Site Execution');
@@ -1473,6 +1519,12 @@ export function parseSoftware3Data(rows: string[][], projects: Project[] = []): 
         actionRecommendation = 'Finalize contractor work order / appointment documentation.';
       } else if (contractorMob === 'Not Done') {
         actionRecommendation = 'Ensure contractor site mobilization, machinery, and setup on-site.';
+      } else if (govtApproval === 'Not Done') {
+        actionRecommendation = 'Follow up on statutory authority / municipal NOC and approvals.';
+      } else if (crm === 'Not Done') {
+        actionRecommendation = 'Coordinate customer relationship management (CRM) handover inspections.';
+      } else if (other === 'Not Done') {
+        actionRecommendation = 'Address specific operational bottleneck on site.';
       } else if (remark) {
         actionRecommendation = `Address site bottleneck: ${remark}`;
       } else {

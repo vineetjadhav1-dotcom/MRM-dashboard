@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { VPData, Project } from '@/src/types';
+import { useFilter } from '@/src/context/FilterContext';
 import { isCompleteOrLostStage, isTempProject } from '@/src/utils/customOrder';
 import { 
   Users, 
@@ -21,11 +22,22 @@ interface VPListProps {
 }
 
 export default function VPList({ vpDataList, onProjectSelect }: VPListProps) {
+  const { selectedVP, searchQuery } = useFilter();
   const [expandedVP, setExpandedVP] = useState<string | null>(null);
 
   const toggleExpand = (vpName: string) => {
     setExpandedVP(expandedVP === vpName ? null : vpName);
   };
+
+  const filteredVps = useMemo(() => {
+    return vpDataList.filter(vp => {
+      const matchVP = selectedVP === 'all' || vp.name.trim().toLowerCase() === selectedVP.trim().toLowerCase();
+      const matchQuery = !searchQuery.trim() || 
+        vp.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        vp.projects.some(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.code.toLowerCase().includes(searchQuery.toLowerCase()));
+      return matchVP && matchQuery;
+    });
+  }, [vpDataList, selectedVP, searchQuery]);
 
   return (
     <div className="space-y-4 font-sans" id="vp-portfolio-list">
@@ -37,7 +49,7 @@ export default function VPList({ vpDataList, onProjectSelect }: VPListProps) {
       </div>
 
       <div className="grid grid-cols-1 gap-4" id="vps-container">
-        {vpDataList.map((vp) => {
+        {filteredVps.map((vp) => {
           const isExpanded = expandedVP === vp.name;
           const greenCount = vp.statusCounts['Green'] || 0;
           const amberCount = vp.statusCounts['Amber'] || 0;

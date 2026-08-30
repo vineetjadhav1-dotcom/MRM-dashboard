@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Project } from '@/src/types';
+import { useFilter } from '@/src/context/FilterContext';
 import { sortVpNames, sortLeaderNames } from '@/src/utils/customOrder';
 import { 
   Search, 
@@ -25,11 +26,17 @@ type SortField = 'code' | 'name' | 'leader' | 'vp' | 'area' | 'status' | 'target
 type SortOrder = 'asc' | 'desc';
 
 export default function ProjectListTable({ projects, onProjectSelect }: ProjectListTableProps) {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedVP, setSelectedVP] = useState('All');
-  const [selectedLeader, setSelectedLeader] = useState('All');
+  const {
+    selectedVP,
+    setSelectedVP,
+    selectedLeader,
+    setSelectedLeader,
+    masterStatus: selectedStatus,
+    setMasterStatus: setSelectedStatus,
+    searchQuery,
+    setSearchQuery
+  } = useFilter();
   const [selectedArea, setSelectedArea] = useState('All');
-  const [selectedStatus, setSelectedStatus] = useState('All');
   
   const [sortField, setSortField] = useState<SortField>('code');
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
@@ -227,50 +234,50 @@ export default function ProjectListTable({ projects, onProjectSelect }: ProjectL
             <p className="text-xs text-slate-400 mt-1 max-w-sm">Try broadening your search query or setting the reporting filters to &quot;All&quot;.</p>
           </div>
         ) : (
-          <table className="min-w-full divide-y divide-slate-200 text-left text-xs text-slate-700" id="projects-table">
+          <table className="min-w-full divide-y divide-slate-200 text-center text-xs text-slate-700" id="projects-table">
             <thead className="bg-slate-50/80 font-bold uppercase tracking-wider text-slate-500">
               <tr>
                 <th 
                   onClick={() => handleSort('code')}
-                  className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors whitespace-nowrap w-[140px]"
+                  className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors whitespace-nowrap w-[140px] text-center"
                 >
-                  <div className="flex items-center space-x-1">
+                  <div className="flex items-center justify-center space-x-1">
                     <span>Project ID</span>
                     <ArrowUpDown className="w-3 h-3 text-slate-400" />
                   </div>
                 </th>
                 <th 
                   onClick={() => handleSort('name')}
-                  className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors whitespace-nowrap"
+                  className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors whitespace-nowrap text-center"
                 >
-                  <div className="flex items-center space-x-1">
+                  <div className="flex items-center justify-center space-x-1">
                     <span>Project Name</span>
                     <ArrowUpDown className="w-3 h-3 text-slate-400" />
                   </div>
                 </th>
                 <th 
                   onClick={() => handleSort('leader')}
-                  className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors whitespace-nowrap w-[150px]"
+                  className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors whitespace-nowrap w-[150px] text-center"
                 >
-                  <div className="flex items-center space-x-1">
+                  <div className="flex items-center justify-center space-x-1">
                     <span>Leader</span>
                     <ArrowUpDown className="w-3 h-3 text-slate-400" />
                   </div>
                 </th>
                 <th 
                   onClick={() => handleSort('vp')}
-                  className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors whitespace-nowrap w-[150px]"
+                  className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors whitespace-nowrap w-[150px] text-center"
                 >
-                  <div className="flex items-center space-x-1">
+                  <div className="flex items-center justify-center space-x-1">
                     <span>Sponsor VP</span>
                     <ArrowUpDown className="w-3 h-3 text-slate-400" />
                   </div>
                 </th>
                 <th 
                   onClick={() => handleSort('area')}
-                  className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors whitespace-nowrap w-[150px]"
+                  className="px-6 py-4 cursor-pointer hover:bg-slate-100 transition-colors whitespace-nowrap w-[150px] text-center"
                 >
-                  <div className="flex items-center space-x-1">
+                  <div className="flex items-center justify-center space-x-1">
                     <span>Area</span>
                     <ArrowUpDown className="w-3 h-3 text-slate-400" />
                   </div>
@@ -284,7 +291,7 @@ export default function ProjectListTable({ projects, onProjectSelect }: ProjectL
                     <ArrowUpDown className="w-3 h-3 text-slate-400" />
                   </div>
                 </th>
-                <th className="px-6 py-4 whitespace-nowrap text-right w-[80px]">
+                <th className="px-6 py-4 whitespace-nowrap text-center w-[80px]">
                   <span>Action</span>
                 </th>
               </tr>
@@ -297,19 +304,19 @@ export default function ProjectListTable({ projects, onProjectSelect }: ProjectL
                   className="hover:bg-slate-50/50 cursor-pointer transition-colors"
                 >
                   {/* Code */}
-                  <td className="px-6 py-4 font-mono font-bold text-blue-600 whitespace-nowrap">
+                  <td className="px-6 py-4 font-mono font-bold text-blue-600 whitespace-nowrap text-center">
                     {proj.code}
                   </td>
                   
                   {/* Name and Progress bar */}
-                  <td className="px-6 py-4">
-                    <div className="space-y-1.5 max-w-[320px]">
+                  <td className="px-6 py-4 text-center">
+                    <div className="space-y-1.5 max-w-[320px] mx-auto text-center">
                       <p className="font-semibold text-slate-900 truncate" title={proj.name}>
                         {proj.name}
                       </p>
                       
                       {/* Dynamic Progress Indicator */}
-                      <div className="flex items-center space-x-2 text-[10px] text-slate-400">
+                      <div className="flex items-center justify-center space-x-2 text-[10px] text-slate-400">
                         <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden shrink-0">
                           <div 
                             style={{ width: proj.progress && proj.progress.includes('%') ? proj.progress : '0%' }}
@@ -326,21 +333,21 @@ export default function ProjectListTable({ projects, onProjectSelect }: ProjectL
                   </td>
                   
                   {/* Leader */}
-                  <td className="px-6 py-4 font-medium text-slate-800 whitespace-nowrap">
-                    <div className="flex items-center space-x-1.5">
+                  <td className="px-6 py-4 font-medium text-slate-800 whitespace-nowrap text-center">
+                    <div className="flex items-center justify-center space-x-1.5">
                       <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                       <span>{proj.leader}</span>
                     </div>
                   </td>
                   
                   {/* VP */}
-                  <td className="px-6 py-4 text-slate-600 whitespace-nowrap font-medium">
+                  <td className="px-6 py-4 text-slate-600 whitespace-nowrap font-medium text-center">
                     {proj.vp}
                   </td>
                   
                   {/* Area */}
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="px-2.5 py-1 text-[11px] font-semibold bg-slate-100 border border-slate-200 text-slate-600 rounded-lg">
+                  <td className="px-6 py-4 whitespace-nowrap text-center">
+                    <span className="px-2.5 py-1 text-[11px] font-semibold bg-slate-100 border border-slate-200 text-slate-600 rounded-lg inline-block">
                       {proj.area}
                     </span>
                   </td>
@@ -363,7 +370,7 @@ export default function ProjectListTable({ projects, onProjectSelect }: ProjectL
                   </td>
                   
                   {/* Action */}
-                  <td className="px-6 py-4 text-right whitespace-nowrap">
+                  <td className="px-6 py-4 text-center whitespace-nowrap">
                     <button 
                       id={`view-btn-${proj.code}`}
                       className="inline-flex items-center px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-slate-900 rounded-lg text-[10px] font-bold border border-slate-200 transition-colors cursor-pointer"

@@ -3,8 +3,8 @@ import { ActiveTab, AppUser, UserManagementSettings, UserPermissions, Project, S
 export const ALL_NAV_TABS: ActiveTab[] = [
   'projectDashboard',
   'leader',
-  'milestones',
   'leaderboard',
+  'milestones',
   'insights',
   'vp',
   'all',
@@ -33,16 +33,16 @@ export const NAV_TABS_META: NavTabMeta[] = [
     description: 'Leader portfolio breakdown & interactive review slide deck'
   },
   {
-    id: 'milestones',
-    label: 'Milestone Analysis',
-    category: 'Core Execution',
-    description: 'Detailed milestone categories, weekly planning, bottlenecks & enabler readings'
-  },
-  {
     id: 'leaderboard',
     label: 'Leaderboard',
     category: 'Executive Review',
     description: 'Executive benchmarking, project scores & tier rankings'
+  },
+  {
+    id: 'milestones',
+    label: 'Milestone Analysis',
+    category: 'Core Execution',
+    description: 'Detailed milestone categories, weekly planning, bottlenecks & enabler readings'
   },
   {
     id: 'insights',
@@ -103,6 +103,7 @@ export const DEFAULT_USER_PERMISSIONS: Record<string, UserPermissions> = {
       'projectDashboard',
       'leader',
       'leaderboard',
+      'milestones',
       'insights',
       'vp',
       'all',

@@ -144,6 +144,11 @@ export interface MonthlyMetric {
   achievement: number;
 }
 
+export interface MonthlyFinishDate {
+  month: string;
+  finishDate: string;
+}
+
 export interface Software2Project {
   code: string;
   name: string;
@@ -155,6 +160,8 @@ export interface Software2Project {
   qualityRating?: string;
   safetyRating?: string;
   avgQhseRating?: string;
+  proposedFinish?: string; // Proposed finish date (from software 2)
+  proposedFinishHistory?: MonthlyFinishDate[]; // Monthwise forecast finish dates (Cols LZ to MK)
   vowd: MonthlyMetric[];
   milestone: MonthlyMetric[];
   labour: MonthlyMetric[];
@@ -173,6 +180,7 @@ export interface Software2Mapping {
   vpIndex: number;
   stageIndex?: number;
   areaIndex: number;
+  proposedFinishIndex?: number;
   spiIndex?: number;
   qualityRatingIndex?: number;
   safetyRatingIndex?: number;

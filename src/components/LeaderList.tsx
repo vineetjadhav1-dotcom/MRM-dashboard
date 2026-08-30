@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { LeaderData, Project, MonthlyMetric, Software2Project, FiscalYearKey } from '@/src/types';
+import { useFilter } from '@/src/context/FilterContext';
 import { DEMO_SOFTWARE2_PROJECTS } from '@/src/hooks/useGoogleSheets';
 import { generatePdfReport } from '@/src/utils/pdfExport';
 import ExportReportModal from './report/ExportReportModal';
@@ -77,12 +78,12 @@ const parseNumericValue = (val: string | undefined): number => {
   return isNaN(parsed) ? 0 : parsed;
 };
 
-// Formatter for values (handles currency formats gracefully as Cr.)
+// Formatter for values (handles currency formats gracefully as ₹ Cr.)
 const formatValue = (val: number, isCurrency: boolean) => {
   if (isCurrency) {
-    // VOWD is represented in Cr. (crore)
+    // VOWD is represented in ₹ Cr. (crore)
     const formatted = val % 1 === 0 ? val.toLocaleString() : val.toFixed(2);
-    return `${formatted} Cr.`;
+    return `₹ ${formatted} Cr.`;
   }
   return Math.round(val).toLocaleString();
 };
@@ -256,10 +257,16 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
       .sort(sortLeaderItems);
   }, [leaderDataList]);
 
-  // Select active leader and VP filter (default to 'all' for Level 1 Summary)
-  const [selectedLeaderName, setSelectedLeaderName] = useState<string>('all');
-  const [selectedVP, setSelectedVP] = useState<string>('all');
-  const [selectedStageKey, setSelectedStageKey] = useState<string>('hold');
+  const {
+    selectedVP,
+    setSelectedVP,
+    selectedLeader: selectedLeaderName,
+    setSelectedLeader: setSelectedLeaderName,
+    leaderStage: selectedStageKey,
+    setLeaderStage: setSelectedStageKey,
+    searchQuery: projectSearchQuery,
+    setSearchQuery: setProjectSearchQuery
+  } = useFilter();
 
   // Multi-page presentation report export modal state
   const [showExportModal, setShowExportModal] = useState<boolean>(false);
@@ -304,9 +311,6 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
     return () => window.removeEventListener('mrm-fiscal-year-changed', handleFyChanged);
   }, []);
   
-  // Individual leader search query for their projects
-  const [projectSearchQuery, setProjectSearchQuery] = useState<string>('');
-
   // Find active leader data or construct consolidated view
   const activeLeader = useMemo(() => {
     if (filteredLeaderDataList.length === 0) return null;
@@ -1089,205 +1093,7 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
         </button>
       </div>
 
-      {/* 3-Level Hierarchical Filter System */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-3 shadow-xs" id="mrm-3level-filter-card">
-        <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100 gap-2">
-          <div className="flex items-center space-x-2 text-slate-800">
-            <div className="p-1 bg-indigo-50 text-indigo-600 rounded-md">
-              <Filter className="w-3.5 h-3.5" />
-            </div>
-            <h3 className="text-xs font-bold text-slate-850 uppercase tracking-wider">Level-Based Filter System</h3>
-          </div>
-          
-          <button
-            onClick={() => {
-              setSelectedVP('all');
-              setSelectedLeaderName('all');
-            }}
-            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
-              selectedVP === 'all' && selectedLeaderName === 'all'
-                ? 'bg-indigo-600 text-white shadow-xs'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
-          >
-            Reset All Filters
-          </button>
-        </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-          {/* Level 1: All Projects */}
-          <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-150 flex flex-col justify-between space-y-1.5">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-extrabold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full uppercase tracking-wider">
-                Level 1: All Projects
-              </span>
-              <span className="text-[10px] font-bold text-slate-500">
-                {totalProjectsCount} Projects
-              </span>
-            </div>
-            <button
-              onClick={() => {
-                setSelectedVP('all');
-                setSelectedLeaderName('all');
-              }}
-              className={`w-full py-1.5 px-2.5 rounded-lg text-[11px] font-bold text-center transition-all cursor-pointer ${
-                selectedVP === 'all' && selectedLeaderName === 'all'
-                  ? 'bg-indigo-600 text-white shadow-xs'
-                  : 'bg-white text-slate-700 border border-slate-200 hover:bg-slate-100'
-              }`}
-            >
-              {selectedVP === 'all' && selectedLeaderName === 'all' ? '✓ Displaying All' : 'Select All Projects'}
-            </button>
-          </div>
-
-          {/* Level 2: VP */}
-          <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-150 flex flex-col justify-between space-y-1.5">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-extrabold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-full uppercase tracking-wider">
-                Level 2: VP
-              </span>
-              <span className="text-[10px] font-bold text-slate-500">
-                {vpList.length} VPs
-              </span>
-            </div>
-            <select
-              value={selectedVP}
-              onChange={(e) => {
-                const newVp = e.target.value;
-                setSelectedVP(newVp);
-                setSelectedLeaderName('all');
-              }}
-              className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold text-slate-800 focus:outline-none focus:border-indigo-500 cursor-pointer hover:bg-slate-50 transition-colors"
-            >
-              <option value="all">🌐 All VPs (Consolidated)</option>
-              {vpList.map(vp => (
-                <option key={vp} value={vp}>👤 VP: {vp}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Level 3: Leader */}
-          <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-150 flex flex-col justify-between space-y-1.5">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] font-extrabold text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full uppercase tracking-wider">
-                Level 3: Leader
-              </span>
-              <span className="text-[10px] font-bold text-slate-500">
-                {leaderList.length} Leaders
-              </span>
-            </div>
-            <select
-              value={selectedLeaderName}
-              onChange={(e) => {
-                const newLeader = e.target.value;
-                if (newLeader === 'all') {
-                  setSelectedLeaderName('all');
-                } else {
-                  setSelectedLeaderName(newLeader);
-                  const found = filteredLeaderDataList.find(l => l.name === newLeader);
-                  if (found && found.vpName) {
-                    setSelectedVP(found.vpName);
-                  }
-                }
-              }}
-              className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold text-slate-800 focus:outline-none focus:border-purple-500 cursor-pointer hover:bg-slate-50 transition-colors"
-            >
-              <option value="all">👥 All Leaders (Summary)</option>
-              {filteredLeaderDataList.map(l => {
-                const isOutsideVP = selectedVP !== 'all' && l.vpName !== selectedVP;
-                return (
-                  <option 
-                    key={l.name} 
-                    value={l.name}
-                    className={isOutsideVP ? 'text-slate-400 bg-slate-50' : ''}
-                  >
-                    Leader: {l.name} ({l.vpName}){isOutsideVP ? ' - outside selected VP' : ''}
-                  </option>
-                );
-              })}
-            </select>
-          </div>
-        </div>
-      </div>
-
-      {/* Horizontal Leader Selector Bar - placed below title horizontally */}
-      <div className="bg-white border border-slate-200 rounded-3xl p-4.5 shadow-xs space-y-3" id="leader-selector-horizontal">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-2 gap-1">
-          <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest block">
-            Active Leaders ({selectedVP === 'all' ? filteredLeaderDataList.length : filteredLeaderDataList.filter(l => l.vpName === selectedVP).length})
-          </span>
-          <p className="text-[11px] text-slate-500">Select a leader to load their full performance window.</p>
-        </div>
-
-        <div className="flex items-center gap-3 overflow-x-auto pb-1.5 scrollbar-thin scrollbar-thumb-slate-200" id="leader-horizontal-list">
-          {/* Summary option button */}
-          <button
-            onClick={() => setSelectedLeaderName('all')}
-            className={`flex-shrink-0 text-left px-4 py-2.5 rounded-2xl border transition-all flex items-center gap-3 relative group cursor-pointer ${
-              selectedLeaderName === 'all' 
-                ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-600/15' 
-                : 'bg-slate-50/50 border-slate-200 hover:bg-slate-100/50 hover:border-slate-300'
-            }`}
-            id="leader-btn-all-summary"
-          >
-            <div className="truncate pr-1">
-              <span className={`text-xs font-extrabold truncate block ${selectedLeaderName === 'all' ? 'text-white' : 'text-slate-800'}`}>
-                🌐 All Leaders Summary
-              </span>
-              <span className={`text-[9px] block mt-0.5 ${selectedLeaderName === 'all' ? 'text-indigo-200' : 'text-slate-400'}`}>
-                {activeLeader?.projectsCount || totalProjectsCount} Projects Consolidated
-              </span>
-            </div>
-          </button>
-
-          {filteredLeaderDataList
-            .filter(leader => selectedVP === 'all' || leader.vpName === selectedVP)
-            .map((leader) => {
-              const isSelected = leader.name === selectedLeaderName;
-              const statusG = leader.statusCounts['Green'] || 0;
-              const statusA = leader.statusCounts['Amber'] || 0;
-              const statusR = leader.statusCounts['Red'] || 0;
-
-              return (
-                <button
-                  key={leader.name}
-                  onClick={() => {
-                    setSelectedLeaderName(leader.name);
-                    if (leader.vpName) setSelectedVP(leader.vpName);
-                  }}
-                  className={`flex-shrink-0 text-left px-4 py-2.5 rounded-2xl border transition-all flex items-center gap-3 relative group cursor-pointer ${
-                    isSelected 
-                      ? 'bg-indigo-600 text-white border-indigo-600 shadow-md shadow-indigo-600/15' 
-                      : 'bg-slate-50/50 border-slate-200 hover:bg-slate-100/50 hover:border-slate-300'
-                  }`}
-                  id={`leader-btn-${leader.name.replace(/\s+/g, '-')}`}
-                >
-                  <div className="truncate pr-1">
-                    <span className={`text-xs font-extrabold truncate block ${isSelected ? 'text-white' : 'text-slate-800'}`}>
-                      {leader.name}
-                    </span>
-                    <span className={`text-[9px] block mt-0.5 ${isSelected ? 'text-indigo-200' : 'text-slate-400'}`}>
-                      {leader.projectsCount} {leader.projectsCount === 1 ? 'Project' : 'Projects'} &bull; <span className="font-semibold">{leader.vpName}</span>
-                    </span>
-                  </div>
-
-                  {/* Tiny Status Pills */}
-                  <div className="flex items-center space-x-1.5 shrink-0 border-l pl-2.5 border-dashed border-current/15">
-                    {statusG > 0 && (
-                      <span className={`w-2.5 h-2.5 rounded-full ${isSelected ? 'bg-emerald-300' : 'bg-emerald-500'}`} title={`${statusG} Green`} />
-                    )}
-                    {statusA > 0 && (
-                      <span className={`w-2.5 h-2.5 rounded-full ${isSelected ? 'bg-amber-300' : 'bg-amber-400'}`} title={`${statusA} Amber`} />
-                    )}
-                    {statusR > 0 && (
-                      <span className={`w-2.5 h-2.5 rounded-full ${isSelected ? 'bg-rose-300' : 'bg-rose-500'}`} title={`${statusR} Red`} />
-                    )}
-                  </div>
-                </button>
-              );
-            })}
-        </div>
-      </div>
 
       {/* FULL WIDTH DASHBOARD MAIN VIEW */}
       <div className="space-y-6" id="leader-dashboard-main-view">
@@ -1405,7 +1211,7 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
                     <div className="bg-white border border-emerald-100 rounded-2xl p-3 shadow-2xs">
                       <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider block">Const. Budget</span>
                       <span className="text-base sm:text-lg font-black text-emerald-800 block mt-0.5 truncate">
-                        {stats.underConstruction.budget > 0 ? `₹ ${stats.underConstruction.budgetFormatted}` : '₹ 0 Cr.'}
+                        {stats.underConstruction.budget > 0 ? stats.underConstruction.budgetFormatted : '₹ 0 Cr.'}
                       </span>
                       <span className="text-[9px] text-slate-400 font-medium">Construction budget</span>
                     </div>
@@ -2515,29 +2321,29 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
 
                   {!isMrmTableCollapsed && (
                     <div className="overflow-x-auto">
-                      <table className="w-full text-left border-collapse text-[11px]">
+                      <table className="w-full text-center border-collapse text-[11px]">
                         <thead>
                           <tr className="bg-slate-100/90 text-slate-700 font-extrabold uppercase text-[9px] tracking-wider border-y border-slate-200">
-                            <th className="py-2 px-2.5">Month</th>
+                            <th className="py-2 px-2.5 text-center">Month</th>
                             {mrmBaselinePlan === 'both' ? (
                               <>
-                                <th className="py-2 px-2 text-right">R0 Plan</th>
-                                <th className="py-2 px-2 text-right text-indigo-700">R1 Plan</th>
+                                <th className="py-2 px-2 text-center">R0 Plan</th>
+                                <th className="py-2 px-2 text-center text-indigo-700">R1 Plan</th>
                               </>
                             ) : (
-                              <th className="py-2 px-2 text-right">{mrmBaselinePlan.toUpperCase()} Plan</th>
+                              <th className="py-2 px-2 text-center">{mrmBaselinePlan.toUpperCase()} Plan</th>
                             )}
-                            <th className="py-2 px-2 text-right text-emerald-700">Monthly Actual</th>
+                            <th className="py-2 px-2 text-center text-emerald-700">Monthly Actual</th>
                             {mrmBaselinePlan === 'both' ? (
                               <>
-                                <th className="py-2 px-2 text-right">Cum R0 Plan</th>
-                                <th className="py-2 px-2 text-right text-indigo-700">Cum R1 Plan</th>
+                                <th className="py-2 px-2 text-center">Cum R0 Plan</th>
+                                <th className="py-2 px-2 text-center text-indigo-700">Cum R1 Plan</th>
                               </>
                             ) : (
-                              <th className="py-2 px-2 text-right">Cum Plan</th>
+                              <th className="py-2 px-2 text-center">Cum Plan</th>
                             )}
-                            <th className="py-2 px-2 text-right text-emerald-700">Cum Actual</th>
-                            <th className="py-2 px-2.5 text-right font-black">Cum Ach %</th>
+                            <th className="py-2 px-2 text-center text-emerald-700">Cum Actual</th>
+                            <th className="py-2 px-2.5 text-center font-black">Cum Ach %</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-150 font-medium">
@@ -2545,30 +2351,30 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
                             const isFuture = row.Achievement === null;
                             return (
                               <tr key={row.month} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
-                                <td className="py-1.5 px-2.5 font-bold text-slate-800">{row.month}</td>
+                                <td className="py-1.5 px-2.5 font-bold text-slate-800 text-center">{row.month}</td>
                                 {mrmBaselinePlan === 'both' ? (
                                   <>
-                                    <td className="py-1.5 px-2 text-right text-slate-600">{formatValue(row.PlanR0, currentMrmConfig.isCurrency)}</td>
-                                    <td className="py-1.5 px-2 text-right font-bold text-indigo-700">{formatValue(row.PlanR1, currentMrmConfig.isCurrency)}</td>
+                                    <td className="py-1.5 px-2 text-center text-slate-600">{formatValue(row.PlanR0, currentMrmConfig.isCurrency)}</td>
+                                    <td className="py-1.5 px-2 text-center font-bold text-indigo-700">{formatValue(row.PlanR1, currentMrmConfig.isCurrency)}</td>
                                   </>
                                 ) : (
-                                  <td className="py-1.5 px-2 text-right font-bold text-slate-700">{formatValue(row.Plan, currentMrmConfig.isCurrency)}</td>
+                                  <td className="py-1.5 px-2 text-center font-bold text-slate-700">{formatValue(row.Plan, currentMrmConfig.isCurrency)}</td>
                                 )}
-                                <td className="py-1.5 px-2 text-right font-extrabold text-emerald-700">
+                                <td className="py-1.5 px-2 text-center font-extrabold text-emerald-700">
                                   {isFuture ? '-' : formatValue(row.Achievement, currentMrmConfig.isCurrency)}
                                 </td>
                                 {mrmBaselinePlan === 'both' ? (
                                   <>
-                                    <td className="py-1.5 px-2 text-right text-slate-600">{formatValue(row.CumPlanR0, currentMrmConfig.isCurrency)}</td>
-                                    <td className="py-1.5 px-2 text-right font-bold text-indigo-700">{formatValue(row.CumPlanR1, currentMrmConfig.isCurrency)}</td>
+                                    <td className="py-1.5 px-2 text-center text-slate-600">{formatValue(row.CumPlanR0, currentMrmConfig.isCurrency)}</td>
+                                    <td className="py-1.5 px-2 text-center font-bold text-indigo-700">{formatValue(row.CumPlanR1, currentMrmConfig.isCurrency)}</td>
                                   </>
                                 ) : (
-                                  <td className="py-1.5 px-2 text-right text-slate-700">{formatValue(row.CumPlan, currentMrmConfig.isCurrency)}</td>
+                                  <td className="py-1.5 px-2 text-center text-slate-700">{formatValue(row.CumPlan, currentMrmConfig.isCurrency)}</td>
                                 )}
-                                <td className="py-1.5 px-2 text-right font-extrabold text-emerald-700">
+                                <td className="py-1.5 px-2 text-center font-extrabold text-emerald-700">
                                   {isFuture ? '-' : formatValue(row.CumAchievement, currentMrmConfig.isCurrency)}
                                 </td>
-                                <td className="py-1.5 px-2.5 text-right font-black">
+                                <td className="py-1.5 px-2.5 text-center font-black">
                                   {isFuture || !row['CumAchievement %'] ? (
                                     <span className="text-slate-400 font-normal">-</span>
                                   ) : (
@@ -2629,18 +2435,28 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
                         ? parseFloat(p.areaSqft.replace(/,/g, '')).toLocaleString() 
                         : '';
 
+                      const isSpiNA = !p.spi || /^(NA|N\/A|-|NONE|)$/i.test(String(p.spi).trim()) || isNaN(parseFloat(p.spi));
+                      const stripColor = isSpiNA ? 'bg-slate-400' : (
+                        p.status === 'Green' ? 'bg-emerald-500' :
+                        p.status === 'Amber' ? 'bg-amber-500' :
+                        p.status === 'Red' ? 'bg-rose-500' : 'bg-slate-400'
+                      );
+                      const badgeClass = isSpiNA ? 'bg-slate-100 text-slate-600 border-slate-200' : (
+                        p.status === 'Green' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
+                        p.status === 'Amber' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                        p.status === 'Red' ? 'bg-rose-50 text-rose-700 border-rose-100' :
+                        'bg-slate-50 text-slate-700 border-slate-100'
+                      );
+                      const badgeText = isSpiNA ? 'N/A' : p.status;
+
                       return (
                         <div 
                           key={p.code} 
                           className="bg-white border border-slate-200 hover:border-indigo-400 hover:shadow-md transition-all duration-300 rounded-2xl p-5 flex flex-col justify-between space-y-4 shadow-xs relative overflow-hidden"
                           id={`project-block-${p.code}`}
                         >
-                          {/* Status Accent Top Border */}
-                          <div className={`absolute top-0 left-0 right-0 h-1.5 ${
-                            p.status === 'Green' ? 'bg-emerald-500' :
-                            p.status === 'Amber' ? 'bg-amber-500' :
-                            p.status === 'Red' ? 'bg-rose-500' : 'bg-slate-400'
-                          }`} />
+                          {/* Status Accent Top Border (Gray if SPI is NA) */}
+                          <div className={`absolute top-0 left-0 right-0 h-1.5 ${stripColor}`} />
 
                           {/* Block Header */}
                           <div className="flex items-start justify-between gap-3 pt-1">
@@ -2651,13 +2467,8 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
                                     {p.code}
                                   </span>
                                 )}
-                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold border uppercase tracking-wider ${
-                                  p.status === 'Green' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
-                                  p.status === 'Amber' ? 'bg-amber-50 text-amber-700 border-amber-200' :
-                                  p.status === 'Red' ? 'bg-rose-50 text-rose-700 border-rose-100' :
-                                  'bg-slate-50 text-slate-700 border-slate-100'
-                                }`}>
-                                  {p.status}
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold border uppercase tracking-wider ${badgeClass}`}>
+                                  {badgeText}
                                 </span>
                               </div>
                               <h5 className="font-extrabold text-slate-800 text-sm tracking-tight leading-snug truncate" title={p.name}>

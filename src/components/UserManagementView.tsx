@@ -33,7 +33,8 @@ import {
   Search,
   Download,
   FolderGit2,
-  Calendar
+  Calendar,
+  Flag
 } from 'lucide-react';
 
 interface UserManagementViewProps {
@@ -50,6 +51,7 @@ const TAB_ICONS: Record<ActiveTab, any> = {
   leaderboard: Trophy,
   insights: Lightbulb,
   vp: Building2,
+  milestones: Flag,
   all: TableProperties,
   overview: SlidersHorizontal,
   userAccess: ShieldCheck
@@ -134,7 +136,7 @@ export default function UserManagementView({
 
   const selectedUser = settings.users.find(u => u.username.toLowerCase() === selectedUsername.toLowerCase()) || settings.users[0];
   const userPerms: UserPermissions = settings.userPermissions[selectedUser.username.toLowerCase()] || {
-    allowedNavTabs: ['projectDashboard', 'leader', 'leaderboard', 'insights', 'vp', 'all', 'overview'],
+    allowedNavTabs: ['projectDashboard', 'leader', 'leaderboard', 'milestones', 'insights', 'vp', 'all', 'overview'],
     showSourceSheet: true,
     canSyncSheet: true,
     canExportReport: true,
@@ -159,7 +161,7 @@ export default function UserManagementView({
   const handleSelectUser = (u: AppUser) => {
     setSelectedUsername(u.username);
     const p = settings.userPermissions[u.username.toLowerCase()] || {
-      allowedNavTabs: ['projectDashboard', 'leader', 'leaderboard', 'insights', 'vp', 'all', 'overview'],
+      allowedNavTabs: ['projectDashboard', 'leader', 'leaderboard', 'milestones', 'insights', 'vp', 'all', 'overview'],
       showSourceSheet: true,
       canSyncSheet: true,
       canExportReport: true,
@@ -336,7 +338,7 @@ export default function UserManagementView({
         [cleanUsername]: {
           allowedNavTabs: newRole === 'admin' 
             ? NAV_TABS_META.map(t => t.id)
-            : ['projectDashboard', 'leader', 'leaderboard', 'insights', 'vp', 'all', 'overview'],
+            : ['projectDashboard', 'leader', 'leaderboard', 'milestones', 'insights', 'vp', 'all', 'overview'],
           showSourceSheet: true,
           canSyncSheet: true,
           canExportReport: true,
@@ -441,7 +443,7 @@ export default function UserManagementView({
         newPermissionsDict[uName] = {
           allowedNavTabs: uRole === 'admin' 
             ? NAV_TABS_META.map(t => t.id)
-            : ['projectDashboard', 'leader', 'leaderboard', 'insights', 'vp', 'all', 'overview'],
+            : ['projectDashboard', 'leader', 'leaderboard', 'milestones', 'insights', 'vp', 'all', 'overview'],
           showSourceSheet: true,
           canSyncSheet: true,
           canExportReport: true,

@@ -341,6 +341,21 @@ export const DEMO_SOFTWARE2_PROJECTS: Software2Project[] = [
     qualityRating: "92%",
     safetyRating: "96%",
     avgQhseRating: "94.0%",
+    proposedFinish: "2026-09-30",
+    proposedFinishHistory: [
+      { month: 'Apr-26', finishDate: '2026-08-31' },
+      { month: 'May-26', finishDate: '2026-08-31' },
+      { month: 'Jun-26', finishDate: '2026-09-15' },
+      { month: 'Jul-26', finishDate: '2026-09-30' },
+      { month: 'Aug-26', finishDate: '2026-09-30' },
+      { month: 'Sep-26', finishDate: '2026-09-30' },
+      { month: 'Oct-26', finishDate: '2026-09-30' },
+      { month: 'Nov-26', finishDate: '2026-09-30' },
+      { month: 'Dec-26', finishDate: '2026-09-30' },
+      { month: 'Jan-27', finishDate: '2026-09-30' },
+      { month: 'Feb-27', finishDate: '2026-09-30' },
+      { month: 'Mar-27', finishDate: '2026-09-30' }
+    ],
     vowd: generateMonthlyMetrics(2.5, 0.12, 100),
     milestone: generateMonthlyMetrics(3, 0.2, 200),
     labour: generateMonthlyMetrics(180, 0.08, 300),
@@ -362,6 +377,21 @@ export const DEMO_SOFTWARE2_PROJECTS: Software2Project[] = [
     qualityRating: "88%",
     safetyRating: "92%",
     avgQhseRating: "90.0%",
+    proposedFinish: "2026-11-15",
+    proposedFinishHistory: [
+      { month: 'Apr-26', finishDate: '2026-09-30' },
+      { month: 'May-26', finishDate: '2026-10-15' },
+      { month: 'Jun-26', finishDate: '2026-10-31' },
+      { month: 'Jul-26', finishDate: '2026-11-15' },
+      { month: 'Aug-26', finishDate: '2026-11-15' },
+      { month: 'Sep-26', finishDate: '2026-11-15' },
+      { month: 'Oct-26', finishDate: '2026-11-15' },
+      { month: 'Nov-26', finishDate: '2026-11-15' },
+      { month: 'Dec-26', finishDate: '2026-11-15' },
+      { month: 'Jan-27', finishDate: '2026-11-15' },
+      { month: 'Feb-27', finishDate: '2026-11-15' },
+      { month: 'Mar-27', finishDate: '2026-11-15' }
+    ],
     vowd: generateMonthlyMetrics(1.8, 0.15, 600),
     milestone: generateMonthlyMetrics(2, 0.25, 700),
     labour: generateMonthlyMetrics(120, 0.12, 800),
@@ -383,6 +413,21 @@ export const DEMO_SOFTWARE2_PROJECTS: Software2Project[] = [
     qualityRating: "95%",
     safetyRating: "98%",
     avgQhseRating: "96.5%",
+    proposedFinish: "2026-08-15",
+    proposedFinishHistory: [
+      { month: 'Apr-26', finishDate: '2026-08-31' },
+      { month: 'May-26', finishDate: '2026-08-31' },
+      { month: 'Jun-26', finishDate: '2026-08-15' },
+      { month: 'Jul-26', finishDate: '2026-08-15' },
+      { month: 'Aug-26', finishDate: '2026-08-15' },
+      { month: 'Sep-26', finishDate: '2026-08-15' },
+      { month: 'Oct-26', finishDate: '2026-08-15' },
+      { month: 'Nov-26', finishDate: '2026-08-15' },
+      { month: 'Dec-26', finishDate: '2026-08-15' },
+      { month: 'Jan-27', finishDate: '2026-08-15' },
+      { month: 'Feb-27', finishDate: '2026-08-15' },
+      { month: 'Mar-27', finishDate: '2026-08-15' }
+    ],
     vowd: generateMonthlyMetrics(3.2, 0.08, 1100),
     milestone: generateMonthlyMetrics(4, 0.15, 1200),
     labour: generateMonthlyMetrics(220, 0.05, 1300),
@@ -404,6 +449,21 @@ export const DEMO_SOFTWARE2_PROJECTS: Software2Project[] = [
     qualityRating: "89%",
     safetyRating: "94%",
     avgQhseRating: "91.5%",
+    proposedFinish: "2026-12-15",
+    proposedFinishHistory: [
+      { month: 'Apr-26', finishDate: '2026-11-30' },
+      { month: 'May-26', finishDate: '2026-11-30' },
+      { month: 'Jun-26', finishDate: '2026-12-15' },
+      { month: 'Jul-26', finishDate: '2026-12-15' },
+      { month: 'Aug-26', finishDate: '2026-12-15' },
+      { month: 'Sep-26', finishDate: '2026-12-15' },
+      { month: 'Oct-26', finishDate: '2026-12-15' },
+      { month: 'Nov-26', finishDate: '2026-12-15' },
+      { month: 'Dec-26', finishDate: '2026-12-15' },
+      { month: 'Jan-27', finishDate: '2026-12-15' },
+      { month: 'Feb-27', finishDate: '2026-12-15' },
+      { month: 'Mar-27', finishDate: '2026-12-15' }
+    ],
     vowd: generateMonthlyMetrics(1.2, 0.1, 1600),
     milestone: generateMonthlyMetrics(1, 0.2, 1700),
     labour: generateMonthlyMetrics(80, 0.15, 1800),
@@ -425,6 +485,21 @@ export const DEMO_SOFTWARE2_PROJECTS: Software2Project[] = [
     qualityRating: "91%",
     safetyRating: "95%",
     avgQhseRating: "93.0%",
+    proposedFinish: "2026-10-01",
+    proposedFinishHistory: [
+      { month: 'Apr-26', finishDate: '2026-09-15' },
+      { month: 'May-26', finishDate: '2026-09-30' },
+      { month: 'Jun-26', finishDate: '2026-10-01' },
+      { month: 'Jul-26', finishDate: '2026-10-01' },
+      { month: 'Aug-26', finishDate: '2026-10-01' },
+      { month: 'Sep-26', finishDate: '2026-10-01' },
+      { month: 'Oct-26', finishDate: '2026-10-01' },
+      { month: 'Nov-26', finishDate: '2026-10-01' },
+      { month: 'Dec-26', finishDate: '2026-10-01' },
+      { month: 'Jan-27', finishDate: '2026-10-01' },
+      { month: 'Feb-27', finishDate: '2026-10-01' },
+      { month: 'Mar-27', finishDate: '2026-10-01' }
+    ],
     vowd: generateMonthlyMetrics(4.0, 0.1, 2100),
     milestone: generateMonthlyMetrics(5, 0.15, 2200),
     labour: generateMonthlyMetrics(300, 0.06, 2300),
@@ -437,6 +512,129 @@ export const DEMO_SOFTWARE2_PROJECTS: Software2Project[] = [
   }
 ];
 
+export const generateDemoSoftware3Milestones = (): Software3Milestone[] => {
+  const result: Software3Milestone[] = [];
+  
+  const projectsList = [
+    { code: 'PRJ-001', name: 'Skyline Luxury Towers', leader: 'Abhishek Patil', vp: 'Kedar Shete', bldg: 'Tower A' },
+    { code: 'PRJ-002', name: 'Oceanic Heights Residency', leader: 'Sachin Kamble', vp: 'Amit Deshmukh', bldg: 'Tower 1' },
+    { code: 'PRJ-003', name: 'Green Valley Villas', leader: 'Rajesh Gokhale', vp: 'Rohit Kulkarni', bldg: 'Clubhouse' },
+    { code: 'PRJ-004', name: 'Highland Park Commercial', leader: 'Priya Sharma', vp: 'Kedar Shete', bldg: 'Wing B' },
+    { code: 'PRJ-005', name: 'Metro Corporate Arena', leader: 'Sameer Joshi', vp: 'Amit Deshmukh', bldg: 'Core 1' },
+    { code: 'PRJ-006', name: 'Zenith Business Hub', leader: 'Abhishek Patil', vp: 'Kedar Shete', bldg: 'Block C' },
+    { code: 'PRJ-007', name: 'Emerald Bay Residences', leader: 'Sachin Kamble', vp: 'Amit Deshmukh', bldg: 'Tower D' },
+    { code: 'PRJ-008', name: 'Grand Horizon Mall', leader: 'Rajesh Gokhale', vp: 'Rohit Kulkarni', bldg: 'Retail Hub' }
+  ];
+
+  const milestoneTemplates = [
+    { name: 'Raft Foundation Concrete Pouring', cat: 'Start', week: 'W1', bn: 'Work Front Availability', rec: 'Clear excavation area & complete water pump-out.' },
+    { name: 'Basement 2 Structural Slab Casting', cat: '50%', week: 'W2', bn: 'Drawing / GFC', rec: 'Urgent release of structural reinforcement GFC drawings.' },
+    { name: '14th Floor Slab Shuttering & Rebar', cat: '50%', week: 'W3', bn: 'Material Delivery', rec: 'Expedite TMT steel bar rebar shipments from vendor.' },
+    { name: 'Facade Glazing & Curtain Wall Installation', cat: '50%', week: 'W4', bn: 'Contractor App.', rec: 'Finalize specialized facade contractor work order.' },
+    { name: 'Internal Gypsum Plastering & Waterproofing', cat: '50%', week: 'W2', bn: 'Labour Availability', rec: 'Deploy 40 additional plasterers on site to recover schedule.' },
+    { name: 'Electrical HT Substation & Transformer Setup', cat: 'Start', week: 'W1', bn: 'Client Decision', rec: 'Escalate client decision on electrical vendor approval.' },
+    { name: 'Fire Fighting Piping & Pressure Testing', cat: 'Finish', week: 'W4', bn: 'Govt Approval', rec: 'Follow up on statutory authority fire NOC & approvals.' },
+    { name: 'High-speed Elevator Shaft Erection', cat: 'Finish', week: 'W3', bn: 'CRM', rec: 'Coordinate CRM & customer handover inspection clearance.' },
+    { name: 'Podium Landscape Waterproofing & Drainage', cat: '50%', week: 'W2', bn: 'Other', rec: 'Address site logistical and dewatering constraints.' },
+    { name: 'Main Lobby Marble Cladding & Lighting', cat: 'Finish', week: 'W4', bn: 'Labour Availability', rec: 'Augment skilled stone masons on-site.' },
+    { name: 'Terrace Structural Waterproofing & Screed', cat: 'Finish', week: 'W3', bn: 'Drawing / GFC', rec: 'Release drainage slope detailing GFC drawing.' },
+    { name: 'Sewage Treatment Plant (STP) Civil Work', cat: 'Start', week: 'W1', bn: 'Work Front Availability', rec: 'Dewater basement sump area for civil start.' }
+  ];
+
+  // Month configs matching user specifications (Apr 26 old month to Aug 26 current month)
+  const monthDistributions = [
+    { month: 'Apr 26', count: 30, criticalCount: 14 },
+    { month: 'May 26', count: 20, criticalCount: 9 },
+    { month: 'Jun 26', count: 18, criticalCount: 7 },
+    { month: 'Jul 26', count: 15, criticalCount: 5 },
+    { month: 'Aug 26', count: 22, criticalCount: 6, doneCount: 14 }
+  ];
+
+  let idCounter = 1;
+
+  monthDistributions.forEach(dist => {
+    const isCurrent = dist.month === 'Aug 26';
+    const totalCount = dist.count;
+    const doneCount = isCurrent ? (dist.doneCount || 14) : 0;
+    const criticalTarget = dist.criticalCount;
+    let criticalAssigned = 0;
+
+    for (let i = 0; i < totalCount; i++) {
+      const p = projectsList[i % projectsList.length];
+      const tmpl = milestoneTemplates[(i + idCounter) % milestoneTemplates.length];
+      const isDone = i < doneCount;
+      const shouldBeCritical = !isDone && (criticalAssigned < criticalTarget);
+      if (shouldBeCritical) criticalAssigned++;
+
+      // 10 Constraints
+      let contractorApp = 'Done';
+      let drawing = 'Done';
+      let workFront = 'Done';
+      let contractorMob = 'Done';
+      let materialDelivery = 'Done';
+      let labourAvailability = 'Done';
+      let clientDecision = 'Done';
+      let govtApproval = 'Done';
+      let crm = 'Done';
+      let other = 'Done';
+      const failingConstraints: string[] = [];
+
+      if (!isDone) {
+        if (tmpl.bn === 'Work Front Availability') { workFront = 'Not Done'; failingConstraints.push('Work Front Availability'); }
+        else if (tmpl.bn === 'Drawing / GFC') { drawing = 'Not Done'; failingConstraints.push('Drawing / GFC'); }
+        else if (tmpl.bn === 'Material Delivery') { materialDelivery = 'Not Done'; failingConstraints.push('Material Delivery'); }
+        else if (tmpl.bn === 'Labour Availability') { labourAvailability = 'Not Done'; failingConstraints.push('Labour Availability'); }
+        else if (tmpl.bn === 'Client Decision') { clientDecision = 'Not Done'; failingConstraints.push('Client Decision'); }
+        else if (tmpl.bn === 'Contractor App.') { contractorApp = 'Not Done'; failingConstraints.push('Contractor App.'); }
+        else if (tmpl.bn === 'Contractor Mob.') { contractorMob = 'Not Done'; failingConstraints.push('Contractor Mob.'); }
+        else if (tmpl.bn === 'Govt Approval') { govtApproval = 'Not Done'; failingConstraints.push('Govt Approval'); }
+        else if (tmpl.bn === 'CRM') { crm = 'Not Done'; failingConstraints.push('CRM'); }
+        else if (tmpl.bn === 'Other') { other = 'Not Done'; failingConstraints.push('Other'); }
+        
+        // Add secondary constraint for critical items
+        if (shouldBeCritical) {
+          if (drawing === 'Done') { drawing = 'Not Done'; failingConstraints.push('Drawing / GFC'); }
+        }
+      }
+
+      result.push({
+        id: `MSTONE-${dist.month}-${idCounter++}`,
+        projectCode: p.code,
+        projectName: p.name,
+        building: p.bldg,
+        leader: p.leader,
+        vp: p.vp,
+        milestone: `${tmpl.name} (${tmpl.cat})`,
+        category: tmpl.cat,
+        status: isDone ? 'Done' : 'Not Done',
+        plannedWeek: tmpl.week,
+        isCritical: shouldBeCritical,
+        criticalRaw: shouldBeCritical ? 'C' : '',
+        reshuffle: '',
+        month: dist.month,
+        contractorApp,
+        drawing,
+        workFront,
+        contractorMob,
+        materialDelivery,
+        labourAvailability,
+        clientDecision,
+        govtApproval,
+        crm,
+        other,
+        remark: isDone ? 'Successfully commissioned' : `Pending from ${dist.month} due to ${failingConstraints.join(', ')}`,
+        failingConstraints,
+        primaryBottleneck: isDone ? 'None (Achieved)' : (failingConstraints[0] || 'On-Site Execution'),
+        actionRecommendation: isDone ? 'Milestone successfully achieved.' : tmpl.rec
+      });
+    }
+  });
+
+  return result;
+};
+
+export const DEMO_SOFTWARE3_MILESTONES: Software3Milestone[] = generateDemoSoftware3Milestones();
+
 export function useGoogleSheets() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [user, setUser] = useState<any | null>(null);
@@ -445,7 +643,7 @@ export function useGoogleSheets() {
   
   const [projects, setProjects] = useState<Project[]>(DEMO_PROJECTS);
   const [software2Projects, setSoftware2Projects] = useState<Software2Project[]>(DEMO_SOFTWARE2_PROJECTS);
-  const [software3Milestones, setSoftware3Milestones] = useState<Software3Milestone[]>([]);
+  const [software3Milestones, setSoftware3Milestones] = useState<Software3Milestone[]>(DEMO_SOFTWARE3_MILESTONES);
   const [isUsingDemo, setIsUsingDemo] = useState<boolean>(false);
   
   const [sheetRows, setSheetRows] = useState<string[][]>([]);

@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { Project, Software2Project, FiscalYearKey } from '@/src/types';
+import { useFilter } from '@/src/context/FilterContext';
 import { isTempProject } from '@/src/utils/customOrder';
 import { getFiscalYearConfig, getStoredFiscalYear } from '@/src/utils/fiscalYear';
 import { 
@@ -156,15 +157,20 @@ export default function KeyInsights({
   const fyConfig = useMemo(() => getFiscalYearConfig(activeFy), [activeFy]);
   const FY_MONTHS = useMemo(() => fyConfig.months.map(m => m.key), [fyConfig]);
 
-  // 3 Layers of Filter States
-  const [selectedVP, setSelectedVP] = useState<string>('all');
-  const [selectedLeader, setSelectedLeader] = useState<string>('all');
-  const [selectedProjectCode, setSelectedProjectCode] = useState<string>('all');
-
-  // Metric and Forecast Tab States
-  const [activeMetric, setActiveMetric] = useState<MetricType>('vowd');
+  // 3 Layers of Filter States from global FilterContext
+  const {
+    selectedVP,
+    setSelectedVP,
+    selectedLeader,
+    setSelectedLeader,
+    selectedProjectCode,
+    setSelectedProjectCode,
+    insightsMetric: activeMetric,
+    setInsightsMetric: setActiveMetric,
+    insightsScenario: forecastScenario,
+    setInsightsScenario: setForecastScenario
+  } = useFilter();
   const [selectedPlanType, setSelectedPlanType] = useState<'r1' | 'r0'>('r1');
-  const [forecastScenario, setForecastScenario] = useState<ForecastScenario>('all');
 
   // Searchable project dropdown state
   const [isProjectComboboxOpen, setIsProjectComboboxOpen] = useState<boolean>(false);
@@ -463,11 +469,15 @@ export default function KeyInsights({
       <div className="bg-slate-950/95 text-white p-3.5 rounded-2xl shadow-2xl border border-slate-700/80 text-xs backdrop-blur-md space-y-2 min-w-[200px]">
         <div className="font-bold border-b border-slate-800 pb-1.5 flex justify-between items-center text-slate-300">
           <span>{label}</span>
-          <span className="text-[10px] text-slate-400 font-mono">{METRIC_CONFIGS[activeMetric].unit}</span>
+          <span className="text-[10px] text-slate-400 font-mono">
+            {activeMetric === 'vowd' ? '₹ Cr.' : METRIC_CONFIGS[activeMetric].unit}
+          </span>
         </div>
         <div className="space-y-1">
           {payload.map((entry: any, i: number) => {
             if (entry.value === null || entry.value === undefined) return null;
+            const formattedNum = typeof entry.value === 'number' ? entry.value.toLocaleString() : entry.value;
+            const displayVal = activeMetric === 'vowd' ? `₹ ${formattedNum} Cr.` : `${formattedNum} ${METRIC_CONFIGS[activeMetric].unit}`;
             return (
               <div key={i} className="flex justify-between items-center text-[11px] gap-3">
                 <span className="flex items-center gap-1.5" style={{ color: entry.color }}>
@@ -475,7 +485,7 @@ export default function KeyInsights({
                   <span>{entry.name}:</span>
                 </span>
                 <span className="font-bold font-mono text-slate-100">
-                  {typeof entry.value === 'number' ? entry.value.toLocaleString() : entry.value}
+                  {displayVal}
                 </span>
               </div>
             );
@@ -485,7 +495,108 @@ export default function KeyInsights({
     );
   };
 
+  // Data label renderer for Last Completed Month & Last Month (e.g. Mar 27)
+  const renderPointDataLabel = (props: any, labelType: 'actual' | 'plan' | 'opt' | 'likely' | 'pess') => {
+    const { x, y, value, index } = props;
+    if (value === undefined || value === null || isNaN(value)) return null;
+
+    const isLastCompleted = index === lastCompletedMonthIndex;
+    const isLastMonth = index === forecastSeries.length - 1;
+
+    let shouldShow = false;
+    let labelPrefix = '';
+    let bgColor = '#1e293b';
+    let textColor = '#ffffff';
+    let yOffset = -22;
+
+    if (labelType === 'actual' && isLastCompleted) {
+      shouldShow = true;
+      labelPrefix = 'Actual: ';
+      bgColor = currentCfg.colorAch;
+      textColor = '#ffffff';
+      yOffset = -22;
+    } else if (labelType === 'plan') {
+      if (isLastCompleted) {
+        shouldShow = true;
+        labelPrefix = 'Plan: ';
+        bgColor = '#475569';
+        textColor = '#ffffff';
+        yOffset = 18;
+      } else if (isLastMonth) {
+        shouldShow = true;
+        labelPrefix = 'Target: ';
+        bgColor = '#334155';
+        textColor = '#ffffff';
+        yOffset = -22;
+      }
+    } else if (labelType === 'opt' && isLastMonth) {
+      shouldShow = true;
+      labelPrefix = 'Opt: ';
+      bgColor = '#059669';
+      textColor = '#ffffff';
+      yOffset = -38;
+    } else if (labelType === 'likely' && isLastMonth) {
+      shouldShow = true;
+      labelPrefix = 'Likely: ';
+      bgColor = '#4338ca';
+      textColor = '#ffffff';
+      yOffset = -22;
+    } else if (labelType === 'pess' && isLastMonth) {
+      shouldShow = true;
+      labelPrefix = 'Pess: ';
+      bgColor = '#e11d48';
+      textColor = '#ffffff';
+      yOffset = 18;
+    }
+
+    if (!shouldShow) return null;
+
+    const formattedVal = typeof value === 'number' 
+      ? (value >= 100 ? Math.round(value).toLocaleString() : Number(value.toFixed(1)).toLocaleString())
+      : value;
+    const textStr = activeMetric === 'vowd'
+      ? `${labelPrefix}₹ ${formattedVal} Cr.`
+      : `${labelPrefix}${formattedVal}`;
+    const boxWidth = Math.max(textStr.length * 6.5 + 14, 58);
+
+    return (
+      <g className="animate-in fade-in duration-150">
+        <rect
+          x={x - boxWidth / 2}
+          y={y + yOffset}
+          width={boxWidth}
+          height={18}
+          rx={5}
+          fill={bgColor}
+          stroke="#ffffff"
+          strokeWidth={1.5}
+        />
+        <text
+          x={x}
+          y={y + yOffset + 12.5}
+          fill={textColor}
+          textAnchor="middle"
+          fontSize={9.5}
+          fontWeight={900}
+          fontFamily="ui-sans-serif, system-ui, sans-serif"
+        >
+          {textStr}
+        </text>
+      </g>
+    );
+  };
+
   const currentCfg = METRIC_CONFIGS[activeMetric];
+
+  // Metric value formatting helper ensuring VOWD is always ₹ Value Cr.
+  const formatMetricVal = (val: number | undefined | null, suffix = ''): string => {
+    if (val === undefined || val === null || isNaN(val)) return '-';
+    const formatted = val % 1 === 0 ? val.toLocaleString() : (val >= 100 ? Math.round(val).toLocaleString() : val.toFixed(1));
+    if (activeMetric === 'vowd') {
+      return `₹ ${formatted} Cr.${suffix ? ` ${suffix}` : ''}`;
+    }
+    return `${formatted} ${currentCfg.unit}${suffix ? ` ${suffix}` : ''}`;
+  };
 
   return (
     <div className="space-y-6 font-sans" id="key-insights-root-container">
@@ -525,159 +636,7 @@ export default function KeyInsights({
         </div>
       </div>
 
-      {/* 2. 3-LAYER CASCADED FILTER BAR */}
-      <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-xs space-y-4" id="key-insights-3layer-filter">
-        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-          <div className="flex items-center space-x-2">
-            <Sliders className="w-4 h-4 text-indigo-600" />
-            <h3 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider">
-              3-Layer Analytical Filter Matrix
-            </h3>
-          </div>
-          {(selectedVP !== 'all' || selectedLeader !== 'all' || selectedProjectCode !== 'all') && (
-            <button
-              onClick={handleResetFilters}
-              className="px-2.5 py-1 text-xs font-bold text-slate-600 hover:text-indigo-600 bg-slate-100 hover:bg-indigo-50 rounded-xl transition-all flex items-center space-x-1 cursor-pointer"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span>Reset All Filters</span>
-            </button>
-          )}
-        </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          
-          {/* Layer 1: Vice President (VP) */}
-          <div className="space-y-1.5">
-            <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-blue-600" />
-              <span>Layer 1: Vice President (VP)</span>
-            </label>
-            <select
-              value={selectedVP}
-              onChange={(e) => handleVPChange(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-blue-500 focus:bg-white rounded-xl px-3 py-2 text-xs font-bold text-slate-800 transition-all outline-none cursor-pointer"
-            >
-              <option value="all">All VPs ({vpList.length} Divisions)</option>
-              {vpList.map(vp => (
-                <option key={vp} value={vp}>{vp}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Layer 2: General Manager / Project Leader */}
-          <div className="space-y-1.5">
-            <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-indigo-600" />
-              <span>Layer 2: General Manager / Leader</span>
-            </label>
-            <select
-              value={selectedLeader}
-              onChange={(e) => handleLeaderChange(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 focus:border-indigo-500 focus:bg-white rounded-xl px-3 py-2 text-xs font-bold text-slate-800 transition-all outline-none cursor-pointer"
-            >
-              <option value="all">All Leaders ({leaderList.length} in Scope)</option>
-              {leaderList.map(leader => (
-                <option key={leader} value={leader}>{leader}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Layer 3: Searchable Project Combobox */}
-          <div className="space-y-1.5 relative" ref={projectComboboxRef}>
-            <label className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-emerald-600" />
-              <span>Layer 3: Project Selection</span>
-            </label>
-            <div 
-              onClick={() => setIsProjectComboboxOpen(!isProjectComboboxOpen)}
-              className="w-full bg-slate-50 border border-slate-200 hover:border-slate-300 focus-within:border-emerald-500 focus-within:bg-white rounded-xl px-3 py-2 text-xs font-bold text-slate-800 transition-all flex items-center justify-between cursor-pointer"
-            >
-              <span className="truncate">
-                {selectedProjectCode === 'all' 
-                  ? `All Projects (${projectList.length} in Scope)` 
-                  : (activeSingleProject?.name || selectedProjectCode)}
-              </span>
-              <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
-            </div>
-
-            {/* Combobox Dropdown Menu */}
-            {isProjectComboboxOpen && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 p-2 space-y-1 animate-in fade-in zoom-in-95 duration-100">
-                <div className="relative">
-                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
-                  <input
-                    type="text"
-                    placeholder="Search project name or code..."
-                    value={projectSearchTerm}
-                    onChange={(e) => setProjectSearchTerm(e.target.value)}
-                    className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:border-indigo-500 focus:bg-white"
-                    autoFocus
-                  />
-                </div>
-                <div className="max-h-56 overflow-y-auto space-y-0.5 pr-1 scrollbar-thin scrollbar-thumb-slate-200">
-                  <div
-                    onClick={() => {
-                      setSelectedProjectCode('all');
-                      setIsProjectComboboxOpen(false);
-                      setProjectSearchTerm('');
-                    }}
-                    className={`px-3 py-2 rounded-xl text-xs font-bold cursor-pointer transition-colors flex items-center justify-between ${
-                      selectedProjectCode === 'all' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-700 hover:bg-slate-50'
-                    }`}
-                  >
-                    <span>All Projects ({projectList.length})</span>
-                    {selectedProjectCode === 'all' && <Check className="w-3.5 h-3.5 text-indigo-600" />}
-                  </div>
-                  {projectList
-                    .filter(p => 
-                      (p.name && p.name.toLowerCase().includes(projectSearchTerm.toLowerCase())) ||
-                      (p.code && p.code.toLowerCase().includes(projectSearchTerm.toLowerCase()))
-                    )
-                    .map(p => (
-                      <div
-                        key={p.code}
-                        onClick={() => {
-                          setSelectedProjectCode(p.code);
-                          setIsProjectComboboxOpen(false);
-                          setProjectSearchTerm('');
-                        }}
-                        className={`px-3 py-2 rounded-xl text-xs font-medium cursor-pointer transition-colors flex items-center justify-between ${
-                          selectedProjectCode === p.code ? 'bg-emerald-50 text-emerald-800 font-bold' : 'text-slate-700 hover:bg-slate-50'
-                        }`}
-                      >
-                        <div className="truncate pr-2">
-                          <span className="font-bold text-slate-900 block truncate">{p.name}</span>
-                          <span className="font-mono text-[10px] text-slate-400 block">{p.code} • {p.leader || 'No Leader'}</span>
-                        </div>
-                        {selectedProjectCode === p.code && <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />}
-                      </div>
-                    ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Selected Scope Badge Bar */}
-        <div className="flex items-center gap-2 pt-2 border-t border-slate-100 flex-wrap text-xs">
-          <span className="text-[10px] font-extrabold uppercase text-slate-400 tracking-wider">Active Analytical Scope:</span>
-          <span className="px-2.5 py-0.5 bg-blue-50 text-blue-800 border border-blue-100 rounded-full font-bold">
-            VP: {selectedVP === 'all' ? 'All Divisions' : selectedVP}
-          </span>
-          <span className="px-2.5 py-0.5 bg-indigo-50 text-indigo-800 border border-indigo-100 rounded-full font-bold">
-            Leader: {selectedLeader === 'all' ? 'All Leads' : selectedLeader}
-          </span>
-          <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-800 border border-emerald-100 rounded-full font-bold">
-            Project: {selectedProjectCode === 'all' ? `${scopedProjects.length} Projects Combined` : (activeSingleProject?.name || selectedProjectCode)}
-          </span>
-          {activeSingleProject && (
-            <span className="px-2.5 py-0.5 bg-slate-100 text-slate-700 rounded-full font-mono text-[11px]">
-              SPI: {activeSingleProject.spi || '1.0'} | Stage: {activeSingleProject.stage || 'Ongoing'}
-            </span>
-          )}
-        </div>
-      </div>
 
       {/* 3. PARAMETER SELECTOR TABS (5 Software 2 Deliverables) */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3" id="key-insights-parameter-tabs">
@@ -737,15 +696,13 @@ export default function KeyInsights({
               <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Plan to Date</span>
                 <span className="text-lg font-black text-slate-900 block mt-0.5">
-                  {performanceToDate.totalCumPlanToDate.toLocaleString()}
-                  <span className="text-xs font-normal text-slate-400 ml-1">{currentCfg.unit}</span>
+                  {formatMetricVal(performanceToDate.totalCumPlanToDate)}
                 </span>
               </div>
               <div className="bg-indigo-50/50 p-3 rounded-2xl border border-indigo-100">
                 <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider block">Actual Achieved</span>
                 <span className="text-lg font-black text-indigo-900 block mt-0.5">
-                  {performanceToDate.totalCumAchToDate.toLocaleString()}
-                  <span className="text-xs font-normal text-indigo-400 ml-1">{currentCfg.unit}</span>
+                  {formatMetricVal(performanceToDate.totalCumAchToDate)}
                 </span>
               </div>
             </div>
@@ -765,21 +722,21 @@ export default function KeyInsights({
                 <span className="font-bold text-slate-600">Shortfall Deficit:</span>
                 <span className={`font-extrabold ${performanceToDate.shortfallGap > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
                   {performanceToDate.shortfallGap > 0 
-                    ? `- ${performanceToDate.shortfallGap.toLocaleString()} ${currentCfg.unit}` 
+                    ? `- ${formatMetricVal(performanceToDate.shortfallGap)}` 
                     : 'Zero Shortfall (On Track)'}
                 </span>
               </div>
               <div className="flex justify-between items-center text-xs">
                 <span className="font-bold text-slate-600">Avg Monthly Run-Rate:</span>
                 <span className="font-mono font-bold text-slate-800">
-                  {performanceToDate.historicalMonthlyRunRate.toLocaleString()} {currentCfg.unit}/mo
+                  {formatMetricVal(performanceToDate.historicalMonthlyRunRate, '/mo')}
                 </span>
               </div>
             </div>
           </div>
 
           <p className="text-[11px] text-slate-500 italic bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-            Diagnosis: From {fyConfig.startMonthKey} to {lastCompletedMonthName}, {scopedProjects.length} scoped project(s) achieved {performanceToDate.achPctToDate}% of cumulative baseline milestones.
+            Diagnosis: From {fyConfig.startMonthKey} to {lastCompletedMonthName}, {scopedProjects.length} scoped project(s) achieved {performanceToDate.achPctToDate}% of cumulative baseline deliverables.
           </p>
         </div>
 
@@ -802,15 +759,13 @@ export default function KeyInsights({
               <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Full Year FY Target</span>
                 <span className="text-lg font-black text-slate-900 block mt-0.5">
-                  {performanceToDate.fullYearTarget.toLocaleString()}
-                  <span className="text-xs font-normal text-slate-400 ml-1">{currentCfg.unit}</span>
+                  {formatMetricVal(performanceToDate.fullYearTarget)}
                 </span>
               </div>
               <div className="bg-purple-50/50 p-3 rounded-2xl border border-purple-100">
                 <span className="text-[10px] font-bold text-purple-700 uppercase tracking-wider block">Remaining Target</span>
                 <span className="text-lg font-black text-purple-900 block mt-0.5">
-                  {performanceToDate.remainingTarget.toLocaleString()}
-                  <span className="text-xs font-normal text-purple-400 ml-1">{currentCfg.unit}</span>
+                  {formatMetricVal(performanceToDate.remainingTarget)}
                 </span>
               </div>
             </div>
@@ -819,7 +774,7 @@ export default function KeyInsights({
               <div className="flex justify-between items-center text-xs border-b border-indigo-900/60 pb-2">
                 <span className="text-slate-300 font-bold">Required Monthly Run-Rate:</span>
                 <span className="font-mono font-black text-emerald-300 text-sm">
-                  {performanceToDate.requiredMonthlyRunRate.toLocaleString()} {currentCfg.unit}/mo
+                  {formatMetricVal(performanceToDate.requiredMonthlyRunRate, '/mo')}
                 </span>
               </div>
               <div className="flex justify-between items-center text-xs">
@@ -839,8 +794,8 @@ export default function KeyInsights({
             <span className="text-[10px] font-black text-indigo-900 uppercase tracking-wider block">Strategic Recovery Action</span>
             <p className="text-[11px] text-slate-700 leading-snug">
               {performanceToDate.velocityMultiplier > 1.2
-                ? `Deploy additional subcontracting manpower fronts and expedite billing certification logs to sustain ${performanceToDate.requiredMonthlyRunRate.toLocaleString()} ${currentCfg.unit}/month.`
-                : `Maintain disciplined weekly micro-schedule milestones to achieve the remaining ${performanceToDate.remainingTarget.toLocaleString()} ${currentCfg.unit} target by March 2027.`}
+                ? `Deploy additional subcontracting manpower fronts and expedite billing certification logs to sustain ${formatMetricVal(performanceToDate.requiredMonthlyRunRate, '/mo')}.`
+                : `Maintain disciplined weekly micro-schedule milestones to achieve the remaining ${formatMetricVal(performanceToDate.remainingTarget)} target by March 2027.`}
             </p>
           </div>
         </div>
@@ -873,7 +828,7 @@ export default function KeyInsights({
                 </div>
                 <div className="text-right">
                   <span className="text-sm font-black text-emerald-900 block font-mono">
-                    {yearEndProjections.optimistic.total.toLocaleString()} {currentCfg.unit}
+                    {formatMetricVal(yearEndProjections.optimistic.total)}
                   </span>
                   <span className="text-[10px] font-extrabold text-emerald-600 block">
                     {yearEndProjections.optimistic.pct}% of Target
@@ -892,7 +847,7 @@ export default function KeyInsights({
                 </div>
                 <div className="text-right">
                   <span className="text-sm font-black text-blue-900 block font-mono">
-                    {yearEndProjections.mostLikely.total.toLocaleString()} {currentCfg.unit}
+                    {formatMetricVal(yearEndProjections.mostLikely.total)}
                   </span>
                   <span className="text-[10px] font-extrabold text-blue-600 block">
                     {yearEndProjections.mostLikely.pct}% of Target
@@ -911,7 +866,7 @@ export default function KeyInsights({
                 </div>
                 <div className="text-right">
                   <span className="text-sm font-black text-rose-900 block font-mono">
-                    {yearEndProjections.pessimistic.total.toLocaleString()} {currentCfg.unit}
+                    {formatMetricVal(yearEndProjections.pessimistic.total)}
                   </span>
                   <span className="text-[10px] font-extrabold text-rose-600 block">
                     {yearEndProjections.pessimistic.pct}% of Target
@@ -1005,6 +960,7 @@ export default function KeyInsights({
                 strokeWidth={2}
                 strokeDasharray="4 4"
                 dot={{ r: 3, fill: '#64748b' }}
+                label={(props) => renderPointDataLabel(props, 'plan')}
               />
 
               {/* Completed Actual Cumulative S-Curve */}
@@ -1015,6 +971,7 @@ export default function KeyInsights({
                 stroke={currentCfg.colorAch}
                 strokeWidth={3.5}
                 dot={{ r: 5, fill: currentCfg.colorAch }}
+                label={(props) => renderPointDataLabel(props, 'actual')}
               />
 
               {/* Optimistic Scenario Curve */}
@@ -1027,6 +984,7 @@ export default function KeyInsights({
                   strokeWidth={2.5}
                   strokeDasharray="5 5"
                   dot={{ r: 4, fill: '#10b981' }}
+                  label={(props) => renderPointDataLabel(props, 'opt')}
                 />
               )}
 
@@ -1040,6 +998,7 @@ export default function KeyInsights({
                   strokeWidth={2.5}
                   strokeDasharray="5 5"
                   dot={{ r: 4, fill: '#4f46e5' }}
+                  label={(props) => renderPointDataLabel(props, 'likely')}
                 />
               )}
 
@@ -1053,6 +1012,7 @@ export default function KeyInsights({
                   strokeWidth={2.5}
                   strokeDasharray="5 5"
                   dot={{ r: 4, fill: '#f43f5e' }}
+                  label={(props) => renderPointDataLabel(props, 'pess')}
                 />
               )}
             </ComposedChart>
@@ -1077,19 +1037,19 @@ export default function KeyInsights({
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
+          <table className="w-full text-center border-collapse text-xs">
             <thead>
               <tr className="bg-slate-50 text-slate-600 font-extrabold uppercase text-[10px] tracking-wider border-y border-slate-200">
-                <th className="py-3 px-3">Month</th>
+                <th className="py-3 px-3 text-center">Month</th>
                 <th className="py-3 px-3 text-center">Status</th>
-                <th className="py-3 px-3 text-right">Plan Target</th>
-                <th className="py-3 px-3 text-right text-indigo-700">Actual Achieved</th>
-                <th className="py-3 px-3 text-right">Ach %</th>
-                <th className="py-3 px-3 text-right text-emerald-700">Optimistic</th>
-                <th className="py-3 px-3 text-right text-blue-700">Most Likely</th>
-                <th className="py-3 px-3 text-right text-rose-700">Pessimistic</th>
-                <th className="py-3 px-3 text-right font-black">Cum Plan</th>
-                <th className="py-3 px-3 text-right font-black text-indigo-900">Cum Projected</th>
+                <th className="py-3 px-3 text-center">Plan Target</th>
+                <th className="py-3 px-3 text-center text-indigo-700">Actual Achieved</th>
+                <th className="py-3 px-3 text-center">Ach %</th>
+                <th className="py-3 px-3 text-center text-emerald-700">Optimistic</th>
+                <th className="py-3 px-3 text-center text-blue-700">Most Likely</th>
+                <th className="py-3 px-3 text-center text-rose-700">Pessimistic</th>
+                <th className="py-3 px-3 text-center font-black">Cum Plan</th>
+                <th className="py-3 px-3 text-center font-black text-indigo-900">Cum Projected</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-150 font-medium text-slate-700">
@@ -1103,7 +1063,7 @@ export default function KeyInsights({
 
                 return (
                   <tr key={row.month} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
-                    <td className="py-2.5 px-3 font-bold text-slate-900">{row.month}</td>
+                    <td className="py-2.5 px-3 font-bold text-slate-900 text-center">{row.month}</td>
                     <td className="py-2.5 px-3 text-center">
                       <span className={`inline-block px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${
                         isCompleted ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'
@@ -1111,28 +1071,28 @@ export default function KeyInsights({
                         {isCompleted ? 'Completed' : 'Forecast'}
                       </span>
                     </td>
-                    <td className="py-2.5 px-3 text-right font-semibold text-slate-700">{row.plan.toLocaleString()}</td>
-                    <td className="py-2.5 px-3 text-right font-bold text-indigo-700">
+                    <td className="py-2.5 px-3 text-center font-semibold text-slate-700">{row.plan.toLocaleString()}</td>
+                    <td className="py-2.5 px-3 text-center font-bold text-indigo-700">
                       {isCompleted ? row.actual?.toLocaleString() : '—'}
                     </td>
-                    <td className="py-2.5 px-3 text-right font-bold">
+                    <td className="py-2.5 px-3 text-center font-bold">
                       {isCompleted ? (
                         <span className={row.actualPct !== null && row.actualPct >= 90 ? 'text-emerald-600' : row.actualPct !== null && row.actualPct >= 75 ? 'text-amber-600' : 'text-rose-600'}>
                           {row.actualPct}%
                         </span>
                       ) : '—'}
                     </td>
-                    <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-700">
+                    <td className="py-2.5 px-3 text-center font-mono font-bold text-emerald-700">
                       {isCompleted ? row.actual?.toLocaleString() : row.forecastOpt?.toLocaleString()}
                     </td>
-                    <td className="py-2.5 px-3 text-right font-mono font-bold text-blue-700">
+                    <td className="py-2.5 px-3 text-center font-mono font-bold text-blue-700">
                       {isCompleted ? row.actual?.toLocaleString() : row.forecastLikely?.toLocaleString()}
                     </td>
-                    <td className="py-2.5 px-3 text-right font-mono font-bold text-rose-700">
+                    <td className="py-2.5 px-3 text-center font-mono font-bold text-rose-700">
                       {isCompleted ? row.actual?.toLocaleString() : row.forecastPess?.toLocaleString()}
                     </td>
-                    <td className="py-2.5 px-3 text-right font-black text-slate-900">{row.cumPlan.toLocaleString()}</td>
-                    <td className="py-2.5 px-3 text-right font-black font-mono text-indigo-900">
+                    <td className="py-2.5 px-3 text-center font-black text-slate-900">{row.cumPlan.toLocaleString()}</td>
+                    <td className="py-2.5 px-3 text-center font-black font-mono text-indigo-900">
                       {cumProjectedVal?.toLocaleString()}
                     </td>
                   </tr>

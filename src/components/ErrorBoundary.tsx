@@ -1,4 +1,4 @@
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import React, { ErrorInfo, ReactNode } from 'react';
 import { AlertTriangle, RefreshCw, RotateCcw } from 'lucide-react';
 
 interface Props {
@@ -11,12 +11,27 @@ interface State {
   errorInfo: ErrorInfo | null;
 }
 
-export default class ErrorBoundary extends Component<Props, State> {
-  public state: State = {
+export default class ErrorBoundary extends React.Component<Props, State> {
+  state: State = {
     hasError: false,
     error: null,
     errorInfo: null
   };
+
+  props: Props;
+
+  constructor(props: Props) {
+    super(props);
+    this.props = props;
+  }
+
+  public setState(newState: Partial<State> | ((prevState: State) => Partial<State>)): void {
+    if (typeof newState === 'function') {
+      this.state = { ...this.state, ...newState(this.state) };
+    } else {
+      this.state = { ...this.state, ...newState };
+    }
+  }
 
   public static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error, errorInfo: null };

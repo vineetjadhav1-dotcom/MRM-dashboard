@@ -579,22 +579,7 @@ export async function generateFullMRMReport(options: MRMReportExportOptions): Pr
       });
     });
 
-    // 2.4 Leader Attention Needed Slide
-    slides.push({
-      type: 'attention',
-      label: `Leader ${leader.name} - Attention Needed`,
-      element: (
-        <AttentionNeededSlide
-          title={`Attention Needed — Critical Projects (${leader.name})`}
-          subtitle={`Key operational deliverable variances & prioritized recovery roadmap under ${leader.name}.`}
-          teamName={`Team ${leader.name}`}
-          projects={leaderProjects}
-          software2Projects={s2List}
-        />
-      )
-    });
-
-    // 2.5 Leader Project Cards Slides (Paginated in 6 cards per page)
+    // 2.4 Leader Project Cards Slides (Paginated in 6 cards per page)
     if (sortedActive.length > 0) {
       for (let i = 0; i < sortedActive.length; i += 6) {
         const chunk = sortedActive.slice(i, i + 6);
@@ -611,6 +596,21 @@ export async function generateFullMRMReport(options: MRMReportExportOptions): Pr
         });
       }
     }
+
+    // 2.5 Leader Attention Needed Slide (comes AFTER project cards)
+    slides.push({
+      type: 'attention',
+      label: `Leader ${leader.name} - Attention Needed`,
+      element: (
+        <AttentionNeededSlide
+          title={`Attention Needed — Top 7 Critical Projects`}
+          subtitle={`In-depth performance diagnosis analyzing data from April 2026 to Aug-26. Highlights lagging deliverable parameters, shortfall gaps, labour productivity, efficiency, speed of construction, and executive recovery actions.`}
+          teamName={`Team ${leader.name}`}
+          projects={leaderProjects}
+          software2Projects={s2List}
+        />
+      )
+    });
   });
 
   const totalSlides = slides.length;
@@ -656,14 +656,26 @@ export async function generateFullMRMReport(options: MRMReportExportOptions): Pr
       // Render slide component into container
       root.render(slide.element);
 
-      // Delay for React 18 DOM flush, Recharts layout, and SVG rendering
-      await new Promise((resolve) => setTimeout(resolve, 450));
+      // Fast async wait for React 18 DOM flush and SVG painting
+      await new Promise((resolve) => setTimeout(resolve, 120));
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
       let imgData = '';
       try {
+        // High-speed native SVG foreignObject image capture
+        imgData = await toJpeg(container, {
+          quality: 0.92,
+          pixelRatio: 1.5,
+          backgroundColor: '#ffffff',
+          width: 1122,
+          height: 794,
+          skipFonts: true,
+          cacheBust: false
+        });
+      } catch (fastErr) {
+        console.warn('toJpeg fast capture warning, using html2canvas fallback:', fastErr);
         const canvas = await html2canvas(container, {
-          scale: 2,
+          scale: 1.5,
           useCORS: true,
           allowTaint: true,
           backgroundColor: '#ffffff',
@@ -671,18 +683,7 @@ export async function generateFullMRMReport(options: MRMReportExportOptions): Pr
           height: 794,
           logging: false
         });
-        imgData = canvas.toDataURL('image/jpeg', 0.95);
-      } catch (canvasErr) {
-        console.warn('html2canvas capture warning, attempting toJpeg fallback:', canvasErr);
-        imgData = await toJpeg(container, {
-          quality: 0.95,
-          pixelRatio: 2,
-          backgroundColor: '#ffffff',
-          width: 1122,
-          height: 794,
-          skipFonts: true,
-          cacheBust: false
-        });
+        imgData = canvas.toDataURL('image/jpeg', 0.92);
       }
 
       if (index > 0) {

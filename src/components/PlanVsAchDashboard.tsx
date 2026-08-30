@@ -37,12 +37,12 @@ const parseNumericValue = (val: string | number | undefined): number => {
   return isNaN(parsed) ? 0 : parsed;
 };
 
-// Formatter for values (handles currency formats gracefully as Cr.)
+// Formatter for values (handles currency formats gracefully as ₹ Cr.)
 const formatValue = (val: number, isCurrency: boolean) => {
   if (isCurrency) {
-    // VOWD is represented in Cr. (crore)
+    // VOWD is represented in ₹ Cr. (crore)
     const formatted = val % 1 === 0 ? val.toLocaleString() : val.toFixed(2);
-    return `${formatted} Cr.`;
+    return `₹ ${formatted} Cr.`;
   }
   return Math.round(val).toLocaleString();
 };

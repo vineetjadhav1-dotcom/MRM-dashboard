@@ -257,7 +257,7 @@ export default function ProjectDetailsModal({ project, onClose }: ProjectDetails
 
                 {/* Baseline 1 Finish */}
                 <div className="bg-slate-50/50 border border-slate-100 rounded-2xl p-3 text-xs">
-                  <span className="text-[10px] text-slate-400 block uppercase font-bold tracking-wider">Baseline 1 Finish</span>
+                  <span className="text-[10px] text-slate-400 block uppercase font-bold tracking-wider">Baseline1 Finish</span>
                   <span className="font-semibold text-slate-600 block mt-1">{project.baseline1Finish || 'N/A'}</span>
                 </div>
 
@@ -299,10 +299,10 @@ export default function ProjectDetailsModal({ project, onClose }: ProjectDetails
                 Monthly Performance Metrics (Row 3 & Row 4)
               </span>
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs text-slate-700">
+                <table className="w-full text-center text-xs text-slate-700">
                   <thead>
                     <tr className="border-b border-slate-200 text-slate-400 font-bold uppercase tracking-wider text-[9px] pb-2">
-                      <th className="py-2 pl-1">Category</th>
+                      <th className="py-2 text-center">Category</th>
                       <th className="py-2 text-center">Plan</th>
                       <th className="py-2 text-center">Achievement</th>
                       <th className="py-2 text-center">% Achieved</th>
@@ -312,14 +312,16 @@ export default function ProjectDetailsModal({ project, onClose }: ProjectDetails
                   <tbody className="divide-y divide-slate-150 font-medium">
                     {/* Milestones */}
                     <tr>
-                      <td className="py-3 font-bold text-slate-800 flex items-center space-x-1.5 pl-1">
-                        <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
-                        <span>Milestones</span>
+                      <td className="py-3 font-bold text-slate-800 text-center">
+                        <div className="flex items-center justify-center space-x-1.5">
+                          <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
+                          <span>Milestones</span>
+                        </div>
                       </td>
                       <td className="py-3 text-center font-mono text-slate-900">{project.milestonePlan || 'N/A'}</td>
                       <td className="py-3 text-center font-mono text-slate-900">{project.milestoneAch || 'N/A'}</td>
                       <td className="py-3 text-center">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold inline-block ${
                           project.milestonePctAch && project.milestonePctAch !== 'N/A' && parseFloat(project.milestonePctAch) >= 90 ? 'bg-emerald-50 text-emerald-700' :
                           project.milestonePctAch && project.milestonePctAch !== 'N/A' && parseFloat(project.milestonePctAch) >= 75 ? 'bg-amber-50 text-amber-700' :
                           'bg-slate-100 text-slate-600'
@@ -331,14 +333,16 @@ export default function ProjectDetailsModal({ project, onClose }: ProjectDetails
                     </tr>
                     {/* VOWD */}
                     <tr>
-                      <td className="py-3 font-bold text-slate-800 flex items-center space-x-1.5 pl-1">
-                        <span className="w-2 h-2 rounded-full bg-violet-500 shrink-0" />
-                        <span>VOWD</span>
+                      <td className="py-3 font-bold text-slate-800 text-center">
+                        <div className="flex items-center justify-center space-x-1.5">
+                          <span className="w-2 h-2 rounded-full bg-violet-500 shrink-0" />
+                          <span>VOWD</span>
+                        </div>
                       </td>
                       <td className="py-3 text-center font-mono text-slate-900">{project.vowdPlan || 'N/A'}</td>
                       <td className="py-3 text-center font-mono text-slate-900">{project.vowdAch || 'N/A'}</td>
                       <td className="py-3 text-center">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold inline-block ${
                           project.vowdPctAch && project.vowdPctAch !== 'N/A' && parseFloat(project.vowdPctAch) >= 90 ? 'bg-emerald-50 text-emerald-700' :
                           project.vowdPctAch && project.vowdPctAch !== 'N/A' && parseFloat(project.vowdPctAch) >= 75 ? 'bg-amber-50 text-amber-700' :
                           'bg-slate-100 text-slate-600'
@@ -350,14 +354,16 @@ export default function ProjectDetailsModal({ project, onClose }: ProjectDetails
                     </tr>
                     {/* Labour */}
                     <tr>
-                      <td className="py-3 font-bold text-slate-800 flex items-center space-x-1.5 pl-1">
-                        <span className="w-2 h-2 rounded-full bg-indigo-500 shrink-0" />
-                        <span>Labour</span>
+                      <td className="py-3 font-bold text-slate-800 text-center">
+                        <div className="flex items-center justify-center space-x-1.5">
+                          <span className="w-2 h-2 rounded-full bg-indigo-500 shrink-0" />
+                          <span>Labour</span>
+                        </div>
                       </td>
                       <td className="py-3 text-center font-mono text-slate-900">{project.labourPlan || 'N/A'}</td>
                       <td className="py-3 text-center font-mono text-slate-900">{project.labourAch || 'N/A'}</td>
                       <td className="py-3 text-center">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold inline-block ${
                           project.labourPctAch && project.labourPctAch !== 'N/A' && parseFloat(project.labourPctAch) >= 90 ? 'bg-emerald-50 text-emerald-700' :
                           project.labourPctAch && project.labourPctAch !== 'N/A' && parseFloat(project.labourPctAch) >= 75 ? 'bg-amber-50 text-amber-700' :
                           'bg-slate-100 text-slate-600'

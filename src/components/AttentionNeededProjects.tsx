@@ -12,7 +12,7 @@ import {
   ChevronDown, 
   ChevronUp, 
   ShieldAlert, 
-  Flame, 
+  AlertTriangle, 
   Sparkles,
   Zap,
   Gauge,
@@ -451,7 +451,7 @@ export default function AttentionNeededProjects({
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-rose-100 pb-5">
         <div className="flex items-start space-x-3.5">
           <div className="p-3 bg-rose-500 text-white rounded-2xl shadow-md shadow-rose-500/20 shrink-0">
-            <Flame className="w-6 h-6 animate-pulse" />
+            <AlertTriangle className="w-6 h-6" />
           </div>
           <div>
             <div className="flex items-center gap-2.5 flex-wrap">
@@ -567,14 +567,14 @@ export default function AttentionNeededProjects({
                       </span>
                     </div>
                     <span className="text-sm font-black text-slate-900 block">
-                      ₹{selectedProjectAnalysis.vowd.ach.toFixed(1)} <span className="text-[10px] text-slate-400 font-normal">/ {selectedProjectAnalysis.vowd.plan.toFixed(1)} Cr.</span>
+                      ₹ {selectedProjectAnalysis.vowd.ach.toFixed(1)} <span className="text-[10px] text-slate-400 font-normal">/ ₹ {selectedProjectAnalysis.vowd.plan.toFixed(1)} Cr.</span>
                     </span>
                     <div className="flex items-center justify-between mt-1 text-[10px]">
                       <span className={`font-black ${selectedProjectAnalysis.vowd.pct >= 90 ? 'text-emerald-600' : 'text-rose-600'}`}>
                         {selectedProjectAnalysis.vowd.pct.toFixed(0)}% Achieved
                       </span>
                       {selectedProjectAnalysis.vowd.gap > 0 && (
-                        <span className="text-rose-600 font-bold">-₹{selectedProjectAnalysis.vowd.gap.toFixed(1)} Cr</span>
+                        <span className="text-rose-600 font-bold">-₹ {selectedProjectAnalysis.vowd.gap.toFixed(1)} Cr.</span>
                       )}
                     </div>
                   </div>

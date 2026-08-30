@@ -1,18 +1,13 @@
 /**
  * Custom order definitions as requested for VP & Leader dropdown/selector ordering:
- * - VP filter sequence: KM, K-PK, K-AS
- * - Leader filter sequence:
- *   - Under KM: SP, VB, GK, SD, NW, KM
- *   - Under K-PK: K-SS, K-HF, K-PK
- *   - Under K-AS: K-AS, K-KD
+ * - VP filter sequence: KM, K-PK, K-KD, K-AS
+ * - Leader filter sequence: SP, VB, MP, KM, GK, SD, K-PK, K-SS, K-AS, K-VK, K-ZK
  */
 
-export const CUSTOM_VP_ORDER = ['KM', 'K-PK', 'K-AS'];
+export const CUSTOM_VP_ORDER = ['KM', 'K-PK', 'K-KD', 'K-AS'];
 
 export const CUSTOM_LEADER_ORDER = [
-  'SP', 'VB', 'GK', 'SD', 'NW', 'KM',
-  'K-SS', 'K-HF', 'K-PK',
-  'K-AS', 'K-KD'
+  'SP', 'VB', 'MP', 'KM', 'GK', 'SD', 'K-PK', 'K-SS', 'K-AS', 'K-VK', 'K-ZK'
 ];
 
 /**
@@ -21,12 +16,46 @@ export const CUSTOM_LEADER_ORDER = [
 export function getVpRank(vpName: string): number {
   if (!vpName) return 999;
   const clean = vpName.trim().toUpperCase();
+
+  // 1. Exact match
   for (let i = 0; i < CUSTOM_VP_ORDER.length; i++) {
     const target = CUSTOM_VP_ORDER[i].toUpperCase();
-    if (clean === target || clean.startsWith(target) || clean.includes(target)) {
+    if (clean === target) {
       return i;
     }
   }
+
+  // 2. Delimited prefix/suffix match
+  for (let i = 0; i < CUSTOM_VP_ORDER.length; i++) {
+    const target = CUSTOM_VP_ORDER[i].toUpperCase();
+    if (
+      clean.startsWith(target + ' ') ||
+      clean.startsWith(target + '-') ||
+      clean.startsWith(target + ':') ||
+      clean.startsWith(target + '/') ||
+      clean.startsWith(target + '(') ||
+      clean.endsWith(' ' + target) ||
+      clean.endsWith('-' + target) ||
+      clean.endsWith('/' + target) ||
+      clean.endsWith('(' + target + ')')
+    ) {
+      return i;
+    }
+  }
+
+  // 3. Delimited word match
+  for (let i = 0; i < CUSTOM_VP_ORDER.length; i++) {
+    const target = CUSTOM_VP_ORDER[i].toUpperCase();
+    if (
+      clean.includes(' ' + target + ' ') ||
+      clean.includes('(' + target + ')') ||
+      clean.includes('[' + target + ']') ||
+      clean.includes(target)
+    ) {
+      return i;
+    }
+  }
+
   return 99;
 }
 
@@ -47,15 +76,39 @@ export function getLeaderRank(leaderName: string, vpName?: string): number {
   if (!leaderName) return 999;
   const cleanLeader = leaderName.trim().toUpperCase();
 
-  // Check exact/prefix match in CUSTOM_LEADER_ORDER
+  // 1. Exact match
+  for (let i = 0; i < CUSTOM_LEADER_ORDER.length; i++) {
+    const code = CUSTOM_LEADER_ORDER[i].toUpperCase();
+    if (cleanLeader === code) {
+      return i;
+    }
+  }
+
+  // 2. Delimited prefix/suffix match
   for (let i = 0; i < CUSTOM_LEADER_ORDER.length; i++) {
     const code = CUSTOM_LEADER_ORDER[i].toUpperCase();
     if (
-      cleanLeader === code ||
       cleanLeader.startsWith(code + ' ') ||
       cleanLeader.startsWith(code + '-') ||
       cleanLeader.startsWith(code + ':') ||
+      cleanLeader.startsWith(code + '/') ||
+      cleanLeader.startsWith(code + '(') ||
       cleanLeader.endsWith(' ' + code) ||
+      cleanLeader.endsWith('-' + code) ||
+      cleanLeader.endsWith('/' + code) ||
+      cleanLeader.endsWith('(' + code + ')')
+    ) {
+      return i;
+    }
+  }
+
+  // 3. Delimited word match
+  for (let i = 0; i < CUSTOM_LEADER_ORDER.length; i++) {
+    const code = CUSTOM_LEADER_ORDER[i].toUpperCase();
+    if (
+      cleanLeader.includes(' ' + code + ' ') ||
+      cleanLeader.includes('(' + code + ')') ||
+      cleanLeader.includes('[' + code + ']') ||
       cleanLeader.includes(code)
     ) {
       return i;
@@ -191,5 +244,3 @@ export function isTempProject(code?: string): boolean {
   if (!code) return false;
   return code.trim().toLowerCase().startsWith('temp');
 }
-
-

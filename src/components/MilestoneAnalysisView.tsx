@@ -1,8 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { Software3Milestone, Project, Software2Project } from '@/src/types';
+import { useFilter } from '@/src/context/FilterContext';
+import { sortVpNames, sortLeaderNames } from '@/src/utils/customOrder';
+import { SearchableCombobox } from './HorizontalFilterBar';
 import { 
   Search, 
-  Filter, 
   Flag, 
   AlertTriangle, 
   CheckCircle2, 
@@ -22,8 +24,35 @@ import {
   Info,
   ChevronDown,
   Layers,
-  FileSpreadsheet
+  FileSpreadsheet,
+  BarChart3,
+  TrendingDown,
+  AlertCircle,
+  BrainCircuit,
+  Target,
+  ArrowUpRight,
+  PieChart as PieIcon,
+  Activity,
+  Lightbulb,
+  CheckCircle,
+  HelpCircle,
+  Filter,
+  X
 } from 'lucide-react';
+import { 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  Tooltip, 
+  ResponsiveContainer, 
+  Cell, 
+  LabelList,
+  CartesianGrid,
+  Legend,
+  ComposedChart,
+  Line
+} from 'recharts';
 
 interface MilestoneAnalysisViewProps {
   milestones: Software3Milestone[];
@@ -33,6 +62,33 @@ interface MilestoneAnalysisViewProps {
   isLoading?: boolean;
 }
 
+// Helper to sort months chronologically (e.g. Apr 26 -> May 26 -> Jun 26 -> Jul 26 -> Aug 26)
+const parseMonthToChronologicalWeight = (mStr: string): number => {
+  if (!mStr) return 9999;
+  const clean = mStr.trim();
+  const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+  
+  // Look for 2-digit or 4-digit year e.g. 26 or 2026
+  const yearMatch = clean.match(/20(\d{2})|(\d{2})$/);
+  let year = 26; // Default FY base year 2026
+  if (yearMatch) {
+    year = parseInt(yearMatch[1] || yearMatch[2], 10);
+  }
+
+  // Find month index
+  const mLower = clean.toLowerCase();
+  let mIdx = -1;
+  for (let i = 0; i < months.length; i++) {
+    if (mLower.includes(months[i])) {
+      mIdx = i;
+      break;
+    }
+  }
+
+  if (mIdx === -1) return 9999;
+  return year * 12 + mIdx;
+};
+
 export default function MilestoneAnalysisView({
   milestones = [],
   projects = [],
@@ -40,30 +96,45 @@ export default function MilestoneAnalysisView({
   onRefresh,
   isLoading = false
 }: MilestoneAnalysisViewProps) {
-  // Filters state
-  const [selectedVP, setSelectedVP] = useState<string>('all');
-  const [selectedLeader, setSelectedLeader] = useState<string>('all');
-  const [selectedProject, setSelectedProject] = useState<string>('all');
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [selectedStatus, setSelectedStatus] = useState<string>('all');
-  const [selectedWeek, setSelectedWeek] = useState<string>('all');
-  const [selectedMonth, setSelectedMonth] = useState<string>('all');
-  const [criticalOnly, setCriticalOnly] = useState<boolean>(false);
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [selectedBottleneckFilter, setSelectedBottleneckFilter] = useState<string>('all');
+  // Filters state from global FilterContext
+  const {
+    selectedVP,
+    setSelectedVP,
+    selectedLeader,
+    setSelectedLeader,
+    selectedProjectCode: selectedProject,
+    setSelectedProjectCode: setSelectedProject,
+    milestoneCategory: selectedCategory,
+    setMilestoneCategory: setSelectedCategory,
+    milestoneStatus: selectedStatus,
+    setMilestoneStatus: setSelectedStatus,
+    milestoneWeek: selectedWeek,
+    setMilestoneWeek: setSelectedWeek,
+    milestoneMonth: selectedMonth,
+    setMilestoneMonth: setSelectedMonth,
+    milestoneCriticalOnly: criticalOnly,
+    setMilestoneCriticalOnly: setCriticalOnly,
+    milestoneBottleneckFilter: selectedBottleneckFilter,
+    setMilestoneBottleneckFilter: setSelectedBottleneckFilter,
+    searchQuery,
+    setSearchQuery
+  } = useFilter();
 
   // Pagination & Sorting
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const [pageSize, setPageSize] = useState<number>(20);
+  const [pageSize, setPageSize] = useState<number>(50);
   const [sortField, setSortField] = useState<string>('isCritical');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+
+  // Active sub-view tab: 'overview' | 'intelligence'
+  const [activeAnalysisTab, setActiveAnalysisTab] = useState<'overview' | 'intelligence'>('overview');
 
   // Derive distinct filter dropdown options
   const vpOptions = useMemo(() => {
     const set = new Set<string>();
     milestones.forEach(m => { if (m.vp) set.add(m.vp); });
     projects.forEach(p => { if (p.vp) set.add(p.vp); });
-    return Array.from(set).sort();
+    return Array.from(set).sort(sortVpNames);
   }, [milestones, projects]);
 
   const leaderOptions = useMemo(() => {
@@ -73,19 +144,24 @@ export default function MilestoneAnalysisView({
         if (m.leader) set.add(m.leader);
       }
     });
-    return Array.from(set).sort();
+    return Array.from(set).sort(sortLeaderNames);
   }, [milestones, selectedVP]);
 
   const projectOptions = useMemo(() => {
-    const map = new Map<string, string>();
+    const map = new Map<string, { code: string; label: string; leader?: string; vp?: string }>();
     milestones.forEach(m => {
       const matchVP = selectedVP === 'all' || m.vp === selectedVP;
       const matchLeader = selectedLeader === 'all' || m.leader === selectedLeader;
       if (matchVP && matchLeader && m.projectCode) {
-        map.set(m.projectCode, m.projectName ? `${m.projectCode} - ${m.projectName}` : m.projectCode);
+        map.set(m.projectCode, { 
+          code: m.projectCode, 
+          label: m.projectName ? m.projectName : m.projectCode,
+          leader: m.leader,
+          vp: m.vp
+        });
       }
     });
-    return Array.from(map.entries()).map(([code, label]) => ({ code, label })).sort((a, b) => a.label.localeCompare(b.label));
+    return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label));
   }, [milestones, selectedVP, selectedLeader]);
 
   const categoryOptions = useMemo(() => {
@@ -97,7 +173,7 @@ export default function MilestoneAnalysisView({
   const monthOptions = useMemo(() => {
     const set = new Set<string>();
     milestones.forEach(m => { if (m.month) set.add(m.month); });
-    return Array.from(set).sort();
+    return Array.from(set).sort((a, b) => parseMonthToChronologicalWeight(a) - parseMonthToChronologicalWeight(b));
   }, [milestones]);
 
   // Filtered milestones list
@@ -130,7 +206,7 @@ export default function MilestoneAnalysisView({
       // 8. Critical Only filter
       if (criticalOnly && !item.isCritical) return false;
 
-      // 9. Bottleneck quick filter
+      // 9. Bottleneck quick filter (across all 10 constraints)
       if (selectedBottleneckFilter !== 'all') {
         if (selectedBottleneckFilter === 'Work Front' && item.workFront !== 'Not Done') return false;
         if (selectedBottleneckFilter === 'Drawing' && item.drawing !== 'Not Done') return false;
@@ -139,6 +215,9 @@ export default function MilestoneAnalysisView({
         if (selectedBottleneckFilter === 'Client Decision' && item.clientDecision !== 'Not Done') return false;
         if (selectedBottleneckFilter === 'Contractor App' && item.contractorApp !== 'Not Done') return false;
         if (selectedBottleneckFilter === 'Contractor Mob' && item.contractorMob !== 'Not Done') return false;
+        if (selectedBottleneckFilter === 'Govt Approval' && item.govtApproval !== 'Not Done') return false;
+        if (selectedBottleneckFilter === 'CRM' && item.crm !== 'Not Done') return false;
+        if (selectedBottleneckFilter === 'Other' && item.other !== 'Not Done') return false;
       }
 
       // 10. Search query
@@ -164,7 +243,7 @@ export default function MilestoneAnalysisView({
     searchQuery
   ]);
 
-  // Statistics across current filtered view
+  // Comprehensive statistics, graphical aggregates & intelligent insights calculation
   const stats = useMemo(() => {
     const total = filteredMilestones.length;
     let done = 0;
@@ -172,7 +251,7 @@ export default function MilestoneAnalysisView({
     let critical = 0;
     let criticalPending = 0;
 
-    // 7 Bottlenecks counters
+    // 10 Bottlenecks counters (7 site enabling + Govt Approval, CRM, Other)
     let workFrontBlock = 0;
     let drawingBlock = 0;
     let materialBlock = 0;
@@ -180,17 +259,92 @@ export default function MilestoneAnalysisView({
     let clientDecisionBlock = 0;
     let contractorAppBlock = 0;
     let contractorMobBlock = 0;
+    let govtApprovalBlock = 0;
+    let crmBlock = 0;
+    let otherBlock = 0;
+
+    // Month aging map for pending milestones
+    const monthAgingMap = new Map<string, { month: string; total: number; critical: number; normal: number }>();
+
+    // Week distribution map
+    const weekMap = new Map<string, { week: string; done: number; pending: number; critical: number; total: number }>();
+    ['W1', 'W2', 'W3', 'W4'].forEach(w => weekMap.set(w, { week: w, done: 0, pending: 0, critical: 0, total: 0 }));
+
+    // Consolidated Category map (Start, 50%, Finish, General)
+    const categoryMap = new Map<string, { category: string; done: number; pending: number; total: number; achPct: number }>();
+
+    // Leader critical count
+    const leaderCriticalMap = new Map<string, { leader: string; criticalCount: number; pendingCount: number }>();
+
+    // VP critical count
+    const vpCriticalMap = new Map<string, { vp: string; criticalCount: number; pendingCount: number }>();
 
     filteredMilestones.forEach(m => {
-      if (m.status === 'Done') done++;
+      const isDone = m.status === 'Done';
+      if (isDone) done++;
       else notDone++;
 
       if (m.isCritical) {
         critical++;
-        if (m.status !== 'Done') criticalPending++;
+        if (!isDone) criticalPending++;
       }
 
-      if (m.status !== 'Done') {
+      // Month Aging aggregation (for pending items)
+      if (!isDone) {
+        const mKey = m.month && m.month.trim() ? m.month.trim() : 'Current';
+        if (!monthAgingMap.has(mKey)) {
+          monthAgingMap.set(mKey, { month: mKey, total: 0, critical: 0, normal: 0 });
+        }
+        const mEntry = monthAgingMap.get(mKey)!;
+        mEntry.total++;
+        if (m.isCritical) mEntry.critical++;
+        else mEntry.normal++;
+      }
+
+      // Week distribution
+      const wKey = m.plannedWeek && m.plannedWeek.trim() ? m.plannedWeek.trim().toUpperCase() : 'W1';
+      if (weekMap.has(wKey)) {
+        const wEntry = weekMap.get(wKey)!;
+        wEntry.total++;
+        if (isDone) wEntry.done++;
+        else {
+          wEntry.pending++;
+          if (m.isCritical) wEntry.critical++;
+        }
+      }
+
+      // Consolidated Category distribution (Start, 50%, Finish)
+      let catKey = 'General';
+      const c = (m.category || '').toLowerCase();
+      if (c.includes('start')) catKey = 'Start';
+      else if (c.includes('50')) catKey = '50%';
+      else if (c.includes('finish') || c.includes('100') || c.includes('complete')) catKey = 'Finish';
+      else if (m.category) catKey = m.category;
+
+      if (!categoryMap.has(catKey)) {
+        categoryMap.set(catKey, { category: catKey, done: 0, pending: 0, total: 0, achPct: 0 });
+      }
+      const catEntry = categoryMap.get(catKey)!;
+      catEntry.total++;
+      if (isDone) catEntry.done++;
+      else catEntry.pending++;
+
+      // Leader & VP Risk
+      if (!isDone && m.leader) {
+        const lEntry = leaderCriticalMap.get(m.leader) || { leader: m.leader, criticalCount: 0, pendingCount: 0 };
+        lEntry.pendingCount++;
+        if (m.isCritical) lEntry.criticalCount++;
+        leaderCriticalMap.set(m.leader, lEntry);
+      }
+      if (!isDone && m.vp) {
+        const vEntry = vpCriticalMap.get(m.vp) || { vp: m.vp, criticalCount: 0, pendingCount: 0 };
+        vEntry.pendingCount++;
+        if (m.isCritical) vEntry.criticalCount++;
+        vpCriticalMap.set(m.vp, vEntry);
+      }
+
+      // 10 Constraints checks
+      if (!isDone) {
         if (m.workFront === 'Not Done') workFrontBlock++;
         if (m.drawing === 'Not Done') drawingBlock++;
         if (m.materialDelivery === 'Not Done') materialBlock++;
@@ -198,21 +352,63 @@ export default function MilestoneAnalysisView({
         if (m.clientDecision === 'Not Done') clientDecisionBlock++;
         if (m.contractorApp === 'Not Done') contractorAppBlock++;
         if (m.contractorMob === 'Not Done') contractorMobBlock++;
+        if (m.govtApproval === 'Not Done') govtApprovalBlock++;
+        if (m.crm === 'Not Done') crmBlock++;
+        if (m.other === 'Not Done') otherBlock++;
       }
     });
 
     const completionRate = total > 0 ? Math.round((done / total) * 100) : 0;
 
-    // Rank bottlenecks
+    // Rank 10 bottlenecks
     const bottlenecks = [
-      { name: 'Work Front Availability', count: workFrontBlock, key: 'Work Front', color: 'rose' },
-      { name: 'Drawing / GFC Release', count: drawingBlock, key: 'Drawing', color: 'amber' },
-      { name: 'Material Delivery', count: materialBlock, key: 'Material', color: 'orange' },
-      { name: 'Labour Availability', count: labourBlock, key: 'Labour', color: 'purple' },
-      { name: 'Client Decision', count: clientDecisionBlock, key: 'Client Decision', color: 'blue' },
-      { name: 'Contractor Appointment', count: contractorAppBlock, key: 'Contractor App', color: 'indigo' },
-      { name: 'Contractor Mobilization', count: contractorMobBlock, key: 'Contractor Mob', color: 'teal' }
+      { name: 'Work Front Availability', count: workFrontBlock, key: 'Work Front', color: '#f43f5e', pct: notDone > 0 ? Math.round((workFrontBlock / notDone) * 100) : 0 },
+      { name: 'Drawing / GFC Release', count: drawingBlock, key: 'Drawing', color: '#f59e0b', pct: notDone > 0 ? Math.round((drawingBlock / notDone) * 100) : 0 },
+      { name: 'Material Delivery', count: materialBlock, key: 'Material', color: '#ea580c', pct: notDone > 0 ? Math.round((materialBlock / notDone) * 100) : 0 },
+      { name: 'Labour Availability', count: labourBlock, key: 'Labour', color: '#8b5cf6', pct: notDone > 0 ? Math.round((labourBlock / notDone) * 100) : 0 },
+      { name: 'Client Decision', count: clientDecisionBlock, key: 'Client Decision', color: '#3b82f6', pct: notDone > 0 ? Math.round((clientDecisionBlock / notDone) * 100) : 0 },
+      { name: 'Contractor Appointment', count: contractorAppBlock, key: 'Contractor App', color: '#6366f1', pct: notDone > 0 ? Math.round((contractorAppBlock / notDone) * 100) : 0 },
+      { name: 'Contractor Mobilization', count: contractorMobBlock, key: 'Contractor Mob', color: '#0d9488', pct: notDone > 0 ? Math.round((contractorMobBlock / notDone) * 100) : 0 },
+      { name: 'Govt Approval / NOC', count: govtApprovalBlock, key: 'Govt Approval', color: '#0284c7', pct: notDone > 0 ? Math.round((govtApprovalBlock / notDone) * 100) : 0 },
+      { name: 'CRM Handover', count: crmBlock, key: 'CRM', color: '#ec4899', pct: notDone > 0 ? Math.round((crmBlock / notDone) * 100) : 0 },
+      { name: 'Other Constraints', count: otherBlock, key: 'Other', color: '#64748b', pct: notDone > 0 ? Math.round((otherBlock / notDone) * 100) : 0 }
     ].sort((a, b) => b.count - a.count);
+
+    // Chronological order: 1st block oldest month (e.g. Apr 26) -> last block current month (e.g. Aug 26)
+    const pendingMonthsAging = Array.from(monthAgingMap.values()).sort((a, b) => {
+      return parseMonthToChronologicalWeight(a.month) - parseMonthToChronologicalWeight(b.month);
+    });
+
+    // Consolidated Category distribution array sorted by predefined sequence: Start -> 50% -> Finish -> Other
+    const predefinedCatOrder = ['Start', '50%', 'Finish'];
+    const consolidatedCategoryData = Array.from(categoryMap.values())
+      .map(item => ({
+        ...item,
+        achPct: item.total > 0 ? Math.round((item.done / item.total) * 100) : 0
+      }))
+      .sort((a, b) => {
+        const idxA = predefinedCatOrder.indexOf(a.category);
+        const idxB = predefinedCatOrder.indexOf(b.category);
+        if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+        if (idxA !== -1) return -1;
+        if (idxB !== -1) return 1;
+        return b.total - a.total;
+      });
+
+    // Weekly distribution array
+    const weeklyData = Array.from(weekMap.values());
+
+    // Top critical leaders & VPs
+    const topCriticalLeaders = Array.from(leaderCriticalMap.values()).sort((a, b) => b.criticalCount - a.criticalCount);
+    const topCriticalVPs = Array.from(vpCriticalMap.values()).sort((a, b) => b.criticalCount - a.criticalCount);
+
+    // Intelligent Summary Computations
+    const chronicBacklogCount = pendingMonthsAging
+      .filter(pm => pm.month.toLowerCase().includes('apr') || pm.month.toLowerCase().includes('may') || pm.month.toLowerCase().includes('jun'))
+      .reduce((sum, pm) => sum + pm.total, 0);
+
+    const topBlocker = bottlenecks[0] || { name: 'None', count: 0, pct: 0 };
+    const secondBlocker = bottlenecks[1] || { name: 'None', count: 0, pct: 0 };
 
     return {
       total,
@@ -221,7 +417,15 @@ export default function MilestoneAnalysisView({
       critical,
       criticalPending,
       completionRate,
-      bottlenecks
+      bottlenecks,
+      pendingMonthsAging,
+      consolidatedCategoryData,
+      weeklyData,
+      topCriticalLeaders,
+      topCriticalVPs,
+      chronicBacklogCount,
+      topBlocker,
+      secondBlocker
     };
   }, [filteredMilestones]);
 
@@ -255,15 +459,14 @@ export default function MilestoneAnalysisView({
   // Export filtered items to CSV
   const handleExportCSV = () => {
     const headers = [
-      'Project ID', 'Project Name', 'Building', 'Leader', 'VP',
+      'Project Name', 'Building', 'Leader', 'VP',
       'Milestone', 'Category', 'Status', 'Planned Week', 'Critical',
       'Pending From Month', 'Contractor App', 'Drawing', 'Work Front',
       'Contractor Mob', 'Material Delivery', 'Labour Availability',
-      'Client Decision', 'Remark', 'Primary Bottleneck', 'Recommended Action'
+      'Client Decision', 'Govt Approval', 'CRM', 'Other', 'Remark', 'Primary Bottleneck', 'Recommended Action'
     ];
 
     const rows = filteredMilestones.map(m => [
-      `"${m.projectCode}"`,
       `"${m.projectName}"`,
       `"${m.building}"`,
       `"${m.leader}"`,
@@ -281,6 +484,9 @@ export default function MilestoneAnalysisView({
       `"${m.materialDelivery}"`,
       `"${m.labourAvailability}"`,
       `"${m.clientDecision}"`,
+      `"${m.govtApproval || 'Done'}"`,
+      `"${m.crm || 'Done'}"`,
+      `"${m.other || 'Done'}"`,
       `"${(m.remark || '').replace(/"/g, '""')}"`,
       `"${m.primaryBottleneck}"`,
       `"${(m.actionRecommendation || '').replace(/"/g, '""')}"`
@@ -305,369 +511,831 @@ export default function MilestoneAnalysisView({
     }
   };
 
+  // Toggle Category selection on graph/card click
+  const handleCategoryClick = (catName: string) => {
+    if (selectedCategory === catName) {
+      setSelectedCategory('all');
+    } else {
+      setSelectedCategory(catName);
+    }
+    setCurrentPage(1);
+  };
+
+  // Toggle Constraint selection on graph/pill click
+  const handleConstraintClick = (constraintKey: string) => {
+    if (selectedBottleneckFilter === constraintKey) {
+      setSelectedBottleneckFilter('all');
+    } else {
+      setSelectedBottleneckFilter(constraintKey);
+    }
+    setCurrentPage(1);
+  };
+
   return (
-    <div className="space-y-6 pb-16">
-      {/* Header Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-6 text-white shadow-xl border border-indigo-900/50">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+    <div className="space-y-5 pb-16 font-sans" id="milestone-analysis-root">
+      
+      {/* 1. HERO EXECUTIVE BANNER */}
+      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-5 sm:p-6 text-white shadow-xl border border-indigo-900/50 relative overflow-hidden">
+        {/* Decorative background glow */}
+        <div className="absolute right-0 top-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 relative z-10">
           <div>
-            <div className="flex items-center space-x-3 mb-2">
+            <div className="flex items-center space-x-3">
               <span className="p-2.5 bg-indigo-600/30 border border-indigo-400/30 rounded-2xl backdrop-blur-md">
                 <Flag className="w-6 h-6 text-indigo-400" />
               </span>
               <div>
-                <div className="flex items-center space-x-2">
-                  <h1 className="text-2xl font-black tracking-tight">Milestone Analysis &amp; Bottleneck Diagnostics</h1>
-                  <span className="text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                    Software 3 Live
-                  </span>
-                </div>
-                <p className="text-xs text-slate-300 font-medium">
-                  Detailed category mapping, weekly planning schedules, 7-parameter constraint readings &amp; actionable bottleneck resolution
+                <h1 className="text-xl sm:text-2xl font-black tracking-tight">
+                  Milestone Analysis &amp; Backlog Diagnostics
+                </h1>
+                <p className="text-xs text-slate-300 font-medium mt-0.5">
+                  Consolidated category stages, chronological pending aging &amp; 10-parameter site constraint diagnostics
                 </p>
               </div>
             </div>
           </div>
 
-          <div className="flex items-center space-x-3">
+          <div className="flex items-center space-x-2.5 flex-wrap">
+            <div className="inline-flex p-1 bg-white/10 rounded-xl border border-white/10 text-xs font-bold">
+              <button
+                onClick={() => setActiveAnalysisTab('overview')}
+                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                  activeAnalysisTab === 'overview'
+                    ? 'bg-indigo-600 text-white shadow-xs'
+                    : 'text-slate-300 hover:text-white'
+                }`}
+              >
+                <BarChart3 className="w-3.5 h-3.5" />
+                <span>Graphical Analytics</span>
+              </button>
+              <button
+                onClick={() => setActiveAnalysisTab('intelligence')}
+                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                  activeAnalysisTab === 'intelligence'
+                    ? 'bg-indigo-600 text-white shadow-xs'
+                    : 'text-slate-300 hover:text-white'
+                }`}
+              >
+                <BrainCircuit className="w-3.5 h-3.5" />
+                <span>Executive Intelligence</span>
+              </button>
+            </div>
+
             <button
               onClick={handleExportCSV}
-              className="flex items-center space-x-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold transition-all border border-white/10"
+              className="flex items-center space-x-1.5 px-3.5 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold transition-all border border-white/10 cursor-pointer"
+              title="Download filtered milestones as CSV"
             >
-              <Download className="w-4 h-4" />
+              <Download className="w-3.5 h-3.5" />
               <span>Export CSV</span>
             </button>
             {onRefresh && (
               <button
                 onClick={onRefresh}
                 disabled={isLoading}
-                className="flex items-center space-x-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-600/30 transition-all disabled:opacity-50"
+                className="flex items-center space-x-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-600/30 transition-all disabled:opacity-50 cursor-pointer"
+                title="Synchronize live spreadsheet data"
               >
-                <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+                <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
                 <span>Sync Data</span>
               </button>
             )}
           </div>
         </div>
 
-        {/* Top 4 Primary Filters Row */}
-        <div className="mt-6 pt-5 border-t border-white/10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
-          {/* Filter 1: VP */}
-          <div>
-            <label className="text-[11px] font-bold uppercase tracking-wider text-slate-300 block mb-1.5 flex items-center gap-1.5">
-              <Building2 className="w-3.5 h-3.5 text-indigo-400" />
-              <span>VP Portfolio</span>
-            </label>
-            <select
-              value={selectedVP}
-              onChange={e => { setSelectedVP(e.target.value); setSelectedLeader('all'); setSelectedProject('all'); setCurrentPage(1); }}
-              className="w-full bg-slate-800/80 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            >
-              <option value="all">All VPs (Consolidated)</option>
-              {vpOptions.map(vp => (
-                <option key={vp} value={vp}>VP: {vp}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Filter 2: Leader */}
-          <div>
-            <label className="text-[11px] font-bold uppercase tracking-wider text-slate-300 block mb-1.5 flex items-center gap-1.5">
-              <Users className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Team Leader</span>
-            </label>
-            <select
-              value={selectedLeader}
-              onChange={e => { setSelectedLeader(e.target.value); setSelectedProject('all'); setCurrentPage(1); }}
-              className="w-full bg-slate-800/80 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            >
-              <option value="all">All Leaders</option>
-              {leaderOptions.map(l => (
-                <option key={l} value={l}>Leader: {l}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Filter 3: Project */}
-          <div>
-            <label className="text-[11px] font-bold uppercase tracking-wider text-slate-300 block mb-1.5 flex items-center gap-1.5">
-              <Layers className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Project</span>
-            </label>
-            <select
-              value={selectedProject}
-              onChange={e => { setSelectedProject(e.target.value); setCurrentPage(1); }}
-              className="w-full bg-slate-800/80 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            >
-              <option value="all">All Projects ({projectOptions.length})</option>
-              {projectOptions.map(p => (
-                <option key={p.code} value={p.code}>{p.label}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Filter 4: Category & Critical Toggle */}
-          <div>
-            <label className="text-[11px] font-bold uppercase tracking-wider text-slate-300 block mb-1.5 flex items-center gap-1.5">
-              <Flag className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Milestone Category</span>
-            </label>
-            <select
-              value={selectedCategory}
-              onChange={e => { setSelectedCategory(e.target.value); setCurrentPage(1); }}
-              className="w-full bg-slate-800/80 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            >
-              <option value="all">All Categories</option>
-              <option value="Start">Start Milestones</option>
-              <option value="50%">50% In-Progress Milestones</option>
-              <option value="Finish">Finish / 100% Completion</option>
-              {categoryOptions.filter(c => !['Start', '50%', 'Finish'].includes(c)).map(c => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-          </div>
-        </div>
       </div>
 
-      {/* Secondary Filter & Search Pills */}
-      <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-3.5">
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Status Pills */}
-          <div className="inline-flex rounded-xl bg-slate-100 p-1 border border-slate-200 text-xs font-bold">
-            <button
-              onClick={() => { setSelectedStatus('all'); setCurrentPage(1); }}
-              className={`px-3 py-1 rounded-lg transition-all ${selectedStatus === 'all' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}
-            >
-              All Status ({stats.total})
-            </button>
-            <button
-              onClick={() => { setSelectedStatus('Not Done'); setCurrentPage(1); }}
-              className={`px-3 py-1 rounded-lg transition-all ${selectedStatus === 'Not Done' ? 'bg-rose-50 text-rose-700 font-extrabold shadow-xs' : 'text-slate-600 hover:text-rose-600'}`}
-            >
-              Pending ({stats.notDone})
-            </button>
-            <button
-              onClick={() => { setSelectedStatus('Done'); setCurrentPage(1); }}
-              className={`px-3 py-1 rounded-lg transition-all ${selectedStatus === 'Done' ? 'bg-emerald-50 text-emerald-700 font-extrabold shadow-xs' : 'text-slate-600 hover:text-emerald-600'}`}
-            >
-              Done ({stats.done})
-            </button>
-          </div>
-
-          {/* Week Filter */}
-          <select
-            value={selectedWeek}
-            onChange={e => { setSelectedWeek(e.target.value); setCurrentPage(1); }}
-            className="bg-slate-50 border border-slate-200 text-slate-700 rounded-xl px-2.5 py-1.5 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-indigo-500"
-          >
-            <option value="all">Planned Week: All</option>
-            <option value="W1">Week 1 (W1)</option>
-            <option value="W2">Week 2 (W2)</option>
-            <option value="W3">Week 3 (W3)</option>
-            <option value="W4">Week 4 (W4)</option>
-          </select>
-
-          {/* Month Pending Filter */}
-          {monthOptions.length > 0 && (
-            <select
-              value={selectedMonth}
-              onChange={e => { setSelectedMonth(e.target.value); setCurrentPage(1); }}
-              className="bg-slate-50 border border-slate-200 text-slate-700 rounded-xl px-2.5 py-1.5 text-xs font-bold focus:outline-none focus:ring-1 focus:ring-indigo-500"
-            >
-              <option value="all">Pending Month: All</option>
-              {monthOptions.map(m => (
-                <option key={m} value={m}>{m}</option>
-              ))}
-            </select>
-          )}
-
-          {/* Critical Only Toggle */}
-          <button
-            onClick={() => { setCriticalOnly(!criticalOnly); setCurrentPage(1); }}
-            className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-extrabold border transition-all ${
-              criticalOnly 
-                ? 'bg-rose-600 text-white border-rose-700 shadow-sm shadow-rose-200' 
-                : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
-            }`}
-          >
-            <AlertTriangle className={`w-3.5 h-3.5 ${criticalOnly ? 'text-white' : 'text-rose-600'}`} />
-            <span>Critical Only ({stats.criticalPending} Pending)</span>
-          </button>
-        </div>
-
-        {/* Search Input */}
-        <div className="relative w-full sm:w-64">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            placeholder="Search milestones, projects, bottlenecks..."
-            value={searchQuery}
-            onChange={e => { setSearchQuery(e.target.value); setCurrentPage(1); }}
-            className="w-full pl-9 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-            >
-              <XCircle className="w-3.5 h-3.5" />
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Intelligent Bottleneck Diagnostics Summary Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* KPI 1: Completion Overview */}
-        <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-[11px] font-bold text-slate-400 uppercase">Execution Status</span>
-            <span className={`text-xs font-black px-2 py-0.5 rounded-full border ${
-              stats.completionRate >= 80 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'
-            }`}>
-              {stats.completionRate}% Done
+      {/* TOTAL MILESTONE SUMMARY METRICS (Plan & Achievement Counts) - Executive Light Theme */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" id="milestone-top-summary-kpis">
+        
+        {/* 1. Total Planned (Indigo Light) */}
+        <div className="bg-indigo-50/50 rounded-3xl p-5 border border-indigo-100 shadow-xs flex items-center justify-between relative overflow-hidden group hover:border-indigo-300 transition-all">
+          <div className="space-y-1.5 relative z-10">
+            <span className="text-[10px] font-black uppercase text-indigo-700 tracking-wider block">
+              Total Milestones (Plan) including backlog of previous months
             </span>
-          </div>
-          <div className="flex items-baseline space-x-2 mb-2">
-            <span className="text-3xl font-black text-slate-900">{stats.done}</span>
-            <span className="text-sm font-bold text-slate-500">/ {stats.total} Milestones</span>
-          </div>
-          <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-            <div 
-              className="bg-emerald-500 h-full rounded-full transition-all duration-500" 
-              style={{ width: `${stats.completionRate}%` }} 
-            />
-          </div>
-        </div>
-
-        {/* KPI 2: Critical Lags */}
-        <div className="bg-white rounded-2xl p-5 border border-rose-200 bg-rose-50/20 shadow-xs flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-[11px] font-bold text-rose-700 uppercase flex items-center gap-1">
-              <ShieldAlert className="w-3.5 h-3.5 text-rose-600" />
-              <span>Critical Milestones</span>
-            </span>
-            <span className="text-xs font-black px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-200">
-              High Risk
-            </span>
-          </div>
-          <div className="flex items-baseline space-x-2 mb-2">
-            <span className="text-3xl font-black text-rose-700">{stats.criticalPending}</span>
-            <span className="text-sm font-bold text-slate-600">Pending this month</span>
-          </div>
-          <p className="text-[11px] text-rose-800 font-medium leading-tight">
-            Milestones tagged &apos;C&apos; will compress schedule variance if not completed immediately.
-          </p>
-        </div>
-
-        {/* KPI 3 & 4: Top Constraint Bottlenecks Breakdown */}
-        <div className="lg:col-span-2 bg-white rounded-2xl p-5 border border-slate-200 shadow-xs">
-          <div className="flex items-center justify-between mb-2.5">
-            <span className="text-[11px] font-bold text-slate-500 uppercase flex items-center gap-1.5">
-              <Zap className="w-3.5 h-3.5 text-indigo-600" />
-              <span>7-Parameter Constraint Gap Diagnosis (Filterable)</span>
-            </span>
-            <span className="text-[10px] font-bold text-slate-400">Click pill to isolate</span>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            {stats.bottlenecks.map(b => {
-              const isSelected = selectedBottleneckFilter === b.key;
-              return (
-                <button
-                  key={b.name}
-                  onClick={() => setSelectedBottleneckFilter(isSelected ? 'all' : b.key)}
-                  className={`flex items-center space-x-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold border transition-all ${
-                    isSelected
-                      ? 'bg-indigo-600 text-white border-indigo-700 shadow-xs'
-                      : b.count > 0
-                      ? 'bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-200'
-                      : 'bg-slate-50/50 text-slate-400 border-slate-100 opacity-60'
-                  }`}
-                >
-                  <span>{b.name}:</span>
-                  <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-black ${
-                    isSelected ? 'bg-white/20 text-white' : b.count > 0 ? 'bg-rose-100 text-rose-700' : 'bg-slate-200 text-slate-600'
-                  }`}>
-                    {b.count}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
-      {/* Main Milestones Analysis Table */}
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
-        <div className="p-5 border-b border-slate-100 flex items-center justify-between flex-wrap gap-3">
-          <div>
-            <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
-              <span>Detailed Milestone Line-Item Analysis</span>
-              <span className="text-xs font-extrabold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
-                {filteredMilestones.length} Records
+            <div className="flex items-baseline space-x-2">
+              <span className="text-3xl font-black text-slate-900 font-mono tracking-tight">
+                {stats.total}
               </span>
-            </h3>
+              <span className="text-[11px] font-extrabold text-indigo-700 uppercase px-2.5 py-0.5 rounded-full bg-indigo-100/80 border border-indigo-200">
+                Deliverables
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-500 font-medium">Cumulative master planned targets</p>
+          </div>
+          <div className="w-12 h-12 rounded-2xl bg-indigo-100/80 text-indigo-600 flex items-center justify-center border border-indigo-200/80 shrink-0 shadow-2xs relative z-10">
+            <Target className="w-6 h-6" />
+          </div>
+        </div>
+
+        {/* 2. Total Achieved (Emerald Light) */}
+        <div className="bg-emerald-50/50 rounded-3xl p-5 border border-emerald-100 shadow-xs flex items-center justify-between relative overflow-hidden group hover:border-emerald-300 transition-all">
+          <div className="space-y-1.5 relative z-10">
+            <span className="text-[10px] font-black uppercase text-emerald-700 tracking-wider block">
+              Total Achievement
+            </span>
+            <div className="flex items-baseline space-x-2">
+              <span className="text-3xl font-black text-emerald-800 font-mono tracking-tight">
+                {stats.done}
+              </span>
+              <span className="text-[11px] font-extrabold text-emerald-700 bg-emerald-100/80 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                {stats.completionRate}% Met
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-500 font-medium">Fully completed &amp; signed-off</p>
+          </div>
+          <div className="w-12 h-12 rounded-2xl bg-emerald-100/80 text-emerald-600 flex items-center justify-center border border-emerald-200/80 shrink-0 shadow-2xs relative z-10">
+            <CheckCircle2 className="w-6 h-6" />
+          </div>
+        </div>
+
+        {/* 3. Total Pending / Backlog (Rose Light) */}
+        <div className="bg-rose-50/50 rounded-3xl p-5 border border-rose-100 shadow-xs flex items-center justify-between relative overflow-hidden group hover:border-rose-300 transition-all">
+          <div className="space-y-1.5 relative z-10">
+            <span className="text-[10px] font-black uppercase text-rose-700 tracking-wider block">
+              Total Pending Backlog
+            </span>
+            <div className="flex items-baseline space-x-2">
+              <span className="text-3xl font-black text-rose-800 font-mono tracking-tight">
+                {stats.notDone}
+              </span>
+              <span className="text-[11px] font-extrabold text-rose-700 bg-rose-100/80 px-2.5 py-0.5 rounded-full border border-rose-200">
+                {stats.total > 0 ? Math.round((stats.notDone / stats.total) * 100) : 0}% Backlog
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-500 font-medium">Pending across active aging months</p>
+          </div>
+          <div className="w-12 h-12 rounded-2xl bg-rose-100/80 text-rose-600 flex items-center justify-center border border-rose-200/80 shrink-0 shadow-2xs relative z-10">
+            <Clock className="w-6 h-6" />
+          </div>
+        </div>
+
+        {/* 4. Critical Milestones (Amber Light) */}
+        <div className="bg-amber-50/50 rounded-3xl p-5 border border-amber-100 shadow-xs flex items-center justify-between relative overflow-hidden group hover:border-amber-300 transition-all">
+          <div className="space-y-1.5 relative z-10">
+            <span className="text-[10px] font-black uppercase text-amber-800 tracking-wider block">
+              Critical Milestones
+            </span>
+            <div className="flex items-baseline space-x-2">
+              <span className="text-3xl font-black text-amber-900 font-mono tracking-tight">
+                {stats.critical}
+              </span>
+              <span className="text-[11px] font-extrabold text-amber-800 bg-amber-100/80 px-2.5 py-0.5 rounded-full border border-amber-200">
+                {stats.criticalPending} Pending
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-500 font-medium">High priority critical path deliverables</p>
+          </div>
+          <div className="w-12 h-12 rounded-2xl bg-amber-100/80 text-amber-700 flex items-center justify-center border border-amber-200/80 shrink-0 shadow-2xs relative z-10">
+            <AlertTriangle className="w-6 h-6" />
+          </div>
+        </div>
+
+      </div>
+
+      {/* 2. PENDING MONTHS AGING & BACKLOG HIGHLIGHTS (1st block = Apr 26, Last block = Aug 26) */}
+      <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200 shadow-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-3 border-b border-slate-100 pb-3">
+          <div>
+            <div className="flex items-center space-x-2">
+              <span className="p-1.5 bg-rose-50 text-rose-600 rounded-lg">
+                <Clock className="w-4 h-4" />
+              </span>
+              <h2 className="text-sm font-black text-slate-900 uppercase tracking-wide">
+                Pending Months Aging &amp; Backlog Highlights
+              </h2>
+            </div>
             <p className="text-xs text-slate-500 mt-0.5">
-              Readings across all 7 contractor, technical &amp; site enabling constraints
+              Chronological sequence from oldest month (Apr 26) to current month (Aug 26). Click any block to filter:
             </p>
           </div>
 
           <div className="flex items-center space-x-2">
-            <span className="text-xs font-bold text-slate-500">Show:</span>
-            <select
-              value={pageSize}
-              onChange={e => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
-              className="bg-slate-50 border border-slate-200 text-slate-700 rounded-lg px-2 py-1 text-xs font-bold focus:outline-none"
-            >
-              <option value={15}>15 rows</option>
-              <option value={25}>25 rows</option>
-              <option value={50}>50 rows</option>
-              <option value={100}>100 rows</option>
-            </select>
+            {selectedMonth !== 'all' && (
+              <button
+                onClick={() => setSelectedMonth('all')}
+                className="text-xs font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-2.5 py-1 rounded-lg border border-indigo-200 cursor-pointer flex items-center gap-1"
+              >
+                <span>Clear Month Filter ({selectedMonth})</span>
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+            <span className="text-xs font-extrabold px-3 py-1 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+              Total Pending Backlog: {stats.notDone} nos
+            </span>
+          </div>
+        </div>
+
+        {/* Dynamic Chronological Month Backlog Badges */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+          {stats.pendingMonthsAging.length === 0 ? (
+            <div className="col-span-full py-4 text-center text-xs text-slate-400 italic">
+              No pending milestone backlog across historical months.
+            </div>
+          ) : (
+            stats.pendingMonthsAging.map((pm, index) => {
+              const isSelected = selectedMonth === pm.month;
+              const isFirstOldest = index === 0;
+              const isLastCurrent = index === stats.pendingMonthsAging.length - 1;
+
+              return (
+                <button
+                  key={pm.month}
+                  onClick={() => setSelectedMonth(isSelected ? 'all' : pm.month)}
+                  className={`p-3.5 rounded-2xl border text-left transition-all relative overflow-hidden cursor-pointer group ${
+                    isSelected
+                      ? 'bg-indigo-600 text-white border-indigo-700 shadow-md ring-2 ring-indigo-500 ring-offset-1'
+                      : isFirstOldest
+                      ? 'bg-rose-50/90 hover:bg-rose-100 text-rose-950 border-rose-200 hover:border-rose-300'
+                      : isLastCurrent
+                      ? 'bg-emerald-50/90 hover:bg-emerald-100 text-emerald-950 border-emerald-200 hover:border-emerald-300'
+                      : 'bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-200'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className={`text-[11px] font-black uppercase tracking-wider ${
+                      isSelected ? 'text-indigo-200' : isFirstOldest ? 'text-rose-700' : isLastCurrent ? 'text-emerald-700' : 'text-slate-500'
+                    }`}>
+                      {isFirstOldest ? 'Oldest Backlog' : isLastCurrent ? 'Current Month' : 'Pending Month'}
+                    </span>
+                  </div>
+
+                  <div className="flex items-baseline justify-between mt-1">
+                    <span className="text-base font-black tracking-tight">
+                      {pm.month}
+                    </span>
+                    <span className={`text-sm font-black px-2.5 py-0.5 rounded-lg ${
+                      isSelected 
+                        ? 'bg-white/20 text-white' 
+                        : isFirstOldest
+                        ? 'bg-rose-600 text-white' 
+                        : isLastCurrent
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-slate-200 text-slate-900'
+                    }`}>
+                      {pm.total} nos
+                    </span>
+                  </div>
+
+                  <div className="mt-2.5 text-[10px] flex items-center justify-between pt-1.5 border-t border-black/5">
+                    <span className={isSelected ? 'text-white/80' : 'text-slate-500'}>
+                      {isFirstOldest ? 'High Aging Priority' : isLastCurrent ? 'Active Cycle' : 'Historical Backlog'}
+                    </span>
+                    <ChevronRight className={`w-3.5 h-3.5 transition-transform ${isSelected ? 'translate-x-0.5 text-white' : 'text-slate-400 group-hover:translate-x-0.5'}`} />
+                  </div>
+                </button>
+              );
+            })
+          )}
+        </div>
+      </div>
+
+      {/* 3. GRAPHICAL ANALYSIS SECTION (CONSOLIDATED CATEGORY ANALYSIS + 10 CONSTRAINTS) */}
+      {activeAnalysisTab === 'overview' && (
+        <div className="space-y-5 animate-in fade-in duration-200">
+          
+          {/* Row 1: Consolidated Category Graphical Analysis + 10-Parameter Constraint Breakdown */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+            
+            {/* CHART 1: Consolidated Milestone Category Graphical Analysis (Click to filter table) */}
+            <div className="lg:col-span-6 bg-white rounded-3xl p-5 border border-slate-200 shadow-xs flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-3 border-b border-slate-100 pb-3">
+                  <div>
+                    <div className="flex items-center space-x-2">
+                      <span className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg">
+                        <BarChart3 className="w-4 h-4" />
+                      </span>
+                      <h3 className="text-sm font-black text-slate-900">
+                        Consolidated Milestone Category Analysis
+                      </h3>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Click any category card/bar to instantly isolate and list those milestones below:
+                    </p>
+                  </div>
+                  {selectedCategory !== 'all' && (
+                    <button
+                      onClick={() => setSelectedCategory('all')}
+                      className="text-[11px] font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-2 py-0.5 rounded-lg border border-indigo-200 cursor-pointer"
+                    >
+                      Clear Category ({selectedCategory})
+                    </button>
+                  )}
+                </div>
+
+                {/* Interactive Category Metric Summary Cards */}
+                <div className="grid grid-cols-3 gap-2.5 mb-4">
+                  {stats.consolidatedCategoryData.slice(0, 3).map((cat) => {
+                    const isStart = cat.category.toLowerCase().includes('start');
+                    const is50 = cat.category.includes('50');
+                    const isFinish = cat.category.toLowerCase().includes('finish') || cat.category.includes('100');
+                    const isCategoryActive = selectedCategory === cat.category;
+
+                    return (
+                      <div 
+                        key={cat.category}
+                        onClick={() => handleCategoryClick(cat.category)}
+                        className={`p-3 rounded-2xl border transition-all cursor-pointer ${
+                          isCategoryActive
+                            ? 'ring-2 ring-indigo-600 bg-indigo-50/80 border-indigo-400 shadow-sm'
+                            : isStart ? 'bg-blue-50/40 hover:bg-blue-50 border-blue-200' :
+                            is50 ? 'bg-amber-50/40 hover:bg-amber-50 border-amber-200' :
+                            'bg-emerald-50/40 hover:bg-emerald-50 border-emerald-200'
+                        }`}
+                        title={`Click to filter table by ${cat.category} milestones`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-black uppercase text-slate-800 flex items-center gap-1">
+                            <span>{cat.category}</span>
+                            {isCategoryActive && <Check className="w-3 h-3 text-indigo-600" />}
+                          </span>
+                          <span className={`text-[10px] font-black px-1.5 py-0.2 rounded-md ${
+                            isStart ? 'bg-blue-100 text-blue-800' :
+                            is50 ? 'bg-amber-100 text-amber-800' :
+                            'bg-emerald-100 text-emerald-800'
+                          }`}>
+                            {cat.achPct}%
+                          </span>
+                        </div>
+                        <div className="mt-2 flex items-baseline justify-between">
+                          <span className="text-base font-black text-slate-900">
+                            {cat.total} <span className="text-[10px] font-normal text-slate-500">total</span>
+                          </span>
+                          <span className="text-xs font-bold text-slate-600">
+                            <strong className="text-emerald-700">{cat.done}</strong> / <strong className="text-rose-600">{cat.pending}</strong>
+                          </span>
+                        </div>
+                        {/* Visual Progress Bar */}
+                        <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden mt-2">
+                          <div 
+                            className={`h-full rounded-full transition-all ${
+                              isStart ? 'bg-blue-600' : is50 ? 'bg-amber-500' : 'bg-emerald-600'
+                            }`}
+                            style={{ width: `${cat.achPct}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Recharts Consolidated Category Bar Chart */}
+                <div className="h-[210px] w-full pt-1">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart 
+                      data={stats.consolidatedCategoryData} 
+                      margin={{ top: 15, right: 20, left: -20, bottom: 5 }}
+                      onClick={(e: any) => {
+                        if (e && e.activeLabel) {
+                          handleCategoryClick(String(e.activeLabel));
+                        }
+                      }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                      <XAxis dataKey="category" stroke="#64748b" fontSize={11} fontWeight={800} tickLine={false} />
+                      <YAxis stroke="#64748b" fontSize={11} fontWeight={700} tickLine={false} />
+                      <Tooltip 
+                        contentStyle={{ backgroundColor: '#0f172a', borderRadius: '14px', border: 'none', color: '#fff', fontSize: '11px', fontWeight: 'bold', padding: '10px 14px' }}
+                        formatter={(val: any, name: any) => [
+                          `${val} Milestones`, 
+                          name === 'done' ? 'Achieved (Done)' : 'Pending Backlog'
+                        ]}
+                      />
+                      <Legend 
+                        verticalAlign="top" 
+                        align="right" 
+                        iconType="circle"
+                        wrapperStyle={{ fontSize: '11px', fontWeight: 'bold', paddingBottom: '8px' }}
+                      />
+                      <Bar dataKey="done" name="Achieved (Done)" fill="#10b981" radius={[4, 4, 0, 0]} cursor="pointer">
+                        <LabelList dataKey="done" position="top" fill="#047857" fontSize={10.5} fontWeight={900} />
+                      </Bar>
+                      <Bar dataKey="pending" name="Pending Backlog" fill="#64748b" radius={[4, 4, 0, 0]} cursor="pointer">
+                        <LabelList dataKey="pending" position="top" fill="#334155" fontSize={10.5} fontWeight={900} />
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* Footnote */}
+              <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500 flex-wrap gap-2">
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" />
+                  <strong>Green Bar:</strong> Achieved Milestones (Done)
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="w-2.5 h-2.5 rounded-full bg-slate-500 inline-block" />
+                  <strong>Slate Bar:</strong> Remaining Pending Milestones
+                </span>
+              </div>
+            </div>
+
+            {/* CHART 2: 10-Parameter Site & Technical Constraint Gap Diagnostics (Click to filter table) */}
+            <div className="lg:col-span-6 bg-white rounded-3xl p-5 border border-slate-200 shadow-xs flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-3 border-b border-slate-100 pb-3">
+                  <div>
+                    <div className="flex items-center space-x-2">
+                      <span className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg">
+                        <Zap className="w-4 h-4" />
+                      </span>
+                      <h3 className="text-sm font-black text-slate-900">
+                        10-Parameter Constraint Breakdown
+                      </h3>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Click any constraint bar or pill to isolate milestones blocked by that specific roadblock:
+                    </p>
+                  </div>
+                  {selectedBottleneckFilter !== 'all' && (
+                    <button
+                      onClick={() => setSelectedBottleneckFilter('all')}
+                      className="text-[11px] font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 px-2 py-0.5 rounded-lg border border-rose-200 cursor-pointer"
+                    >
+                      Clear Constraint ({selectedBottleneckFilter})
+                    </button>
+                  )}
+                </div>
+
+                {/* Constraint Horizontal Bar Chart */}
+                <div className="h-[240px] w-full pt-1">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart 
+                      data={stats.bottlenecks} 
+                      layout="vertical" 
+                      margin={{ top: 0, right: 35, left: 10, bottom: 0 }}
+                      onClick={(e: any) => {
+                        if (e && e.activePayload && e.activePayload[0]) {
+                          const payload = e.activePayload[0].payload;
+                          if (payload && payload.key) {
+                            handleConstraintClick(payload.key);
+                          }
+                        }
+                      }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
+                      <XAxis type="number" stroke="#94a3b8" fontSize={10} tickLine={false} />
+                      <YAxis dataKey="name" type="category" stroke="#334155" fontSize={9.5} fontWeight={700} width={140} tickLine={false} />
+                      <Tooltip 
+                        contentStyle={{ backgroundColor: '#0f172a', borderRadius: '12px', border: 'none', color: '#fff', fontSize: '11px', fontWeight: 'bold' }}
+                        formatter={(val: any, _, item: any) => [`${val} Blocked Milestones (${item.payload.pct}% of pending)`, 'Constraint Count']}
+                      />
+                      <Bar dataKey="count" radius={[0, 6, 6, 0]} cursor="pointer">
+                        {stats.bottlenecks.map((entry, index) => (
+                          <Cell 
+                            key={`cell-bn-${index}`} 
+                            fill={selectedBottleneckFilter === entry.key ? '#4f46e5' : entry.color} 
+                          />
+                        ))}
+                        <LabelList dataKey="count" position="right" fill="#0f172a" fontSize={10} fontWeight={900} />
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* 10 Blocker Filter Pills */}
+              <div className="flex flex-wrap gap-1.5 mt-3 pt-3 border-t border-slate-100">
+                {stats.bottlenecks.map(b => (
+                  <button
+                    key={b.key}
+                    onClick={() => handleConstraintClick(b.key)}
+                    className={`text-[10px] font-extrabold px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
+                      selectedBottleneckFilter === b.key
+                        ? 'bg-indigo-600 text-white border-indigo-700 shadow-xs'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    {b.key}: {b.count}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+          </div>
+
+          {/* Row 2: Weekly Planned Execution Trajectory (W1 to W4) */}
+          <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-xs">
+            <div className="flex items-center justify-between mb-3 border-b border-slate-100 pb-3">
+              <div className="flex items-center space-x-2">
+                <span className="p-1.5 bg-blue-50 text-blue-600 rounded-lg">
+                  <Calendar className="w-4 h-4" />
+                </span>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900">
+                    Weekly Planned Execution Trajectory (W1 to W4)
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Milestone delivery velocity split across the 4 execution weeks of the month
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="h-[200px] w-full pt-1">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={stats.weeklyData} margin={{ top: 15, right: 15, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                  <XAxis dataKey="week" stroke="#64748b" fontSize={11} fontWeight={800} tickLine={false} />
+                  <YAxis stroke="#64748b" fontSize={11} fontWeight={700} tickLine={false} />
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: '#0f172a', borderRadius: '12px', border: 'none', color: '#fff', fontSize: '11px', fontWeight: 'bold' }}
+                  />
+                  <Legend verticalAlign="top" align="right" wrapperStyle={{ fontSize: '11px', fontWeight: 'bold' }} />
+                  <Bar dataKey="done" name="Achieved (Done)" fill="#10b981" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="pending" name="Pending" fill="#64748b" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+        </div>
+      )}
+
+      {/* 4. INTELLIGENT EXECUTIVE AI DIAGNOSTICS TAB */}
+      {activeAnalysisTab === 'intelligence' && (
+        <div className="space-y-5 animate-in fade-in duration-200">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            
+            {/* Card 1: Critical Milestone Escalation Summary */}
+            <div className="bg-gradient-to-br from-rose-950 to-slate-900 rounded-3xl p-5 text-white border border-rose-800/40 shadow-lg">
+              <div className="flex items-center space-x-2.5 mb-3">
+                <span className="p-2 bg-rose-600/30 rounded-xl border border-rose-500/40">
+                  <AlertTriangle className="w-5 h-5 text-rose-400" />
+                </span>
+                <div>
+                  <h3 className="text-sm font-black uppercase tracking-wider text-rose-200">Critical Milestone Radar</h3>
+                  <p className="text-[11px] text-rose-300">Unachievable in Current Month</p>
+                </div>
+              </div>
+
+              <div className="my-4">
+                <div className="flex items-baseline space-x-2">
+                  <span className="text-4xl font-black text-rose-400">{stats.criticalPending}</span>
+                  <span className="text-xs font-bold text-slate-300">Milestones Flagged Critical</span>
+                </div>
+                <p className="text-xs text-rose-200/90 mt-2 leading-relaxed font-medium">
+                  {stats.criticalPending > 0 
+                    ? `These ${stats.criticalPending} milestones have been verified as unattainable within the current monthly cycle and will slip into next month's review unless immediate trade interventions occur.`
+                    : 'All planned milestones are currently tracking within feasible monthly recovery thresholds.'}
+                </p>
+              </div>
+
+              <div className="pt-3 border-t border-rose-800/40 text-[11px] text-rose-300 flex items-center justify-between">
+                <span>Critical Ratio:</span>
+                <strong className="text-white font-extrabold">
+                  {stats.notDone > 0 ? Math.round((stats.criticalPending / stats.notDone) * 100) : 0}% of Total Backlog
+                </strong>
+              </div>
+            </div>
+
+            {/* Card 2: Chronic Aging Analysis */}
+            <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-xs flex flex-col justify-between">
+              <div>
+                <div className="flex items-center space-x-2.5 mb-3">
+                  <span className="p-2 bg-amber-50 text-amber-600 rounded-xl">
+                    <Clock className="w-5 h-5" />
+                  </span>
+                  <div>
+                    <h3 className="text-sm font-black uppercase tracking-wider text-slate-900">Chronic Backlog Aging</h3>
+                    <p className="text-[11px] text-slate-500">Aging from Early Quarters</p>
+                  </div>
+                </div>
+
+                <div className="my-3">
+                  <div className="flex items-baseline space-x-2">
+                    <span className="text-3xl font-black text-amber-600">{stats.chronicBacklogCount}</span>
+                    <span className="text-xs font-bold text-slate-600">Chronic Backlog (nos)</span>
+                  </div>
+                  <p className="text-xs text-slate-600 mt-2 leading-relaxed">
+                    Milestones pending from early quarters (April, May, June) carry significant cost escalation risk and require dedicated de-snagging squads.
+                  </p>
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+                <span>Dominant Constraint:</span>
+                <strong className="text-slate-900 font-bold">{stats.topBlocker.name}</strong>
+              </div>
+            </div>
+
+            {/* Card 3: Top Blocker Root Cause Correlation */}
+            <div className="bg-white rounded-3xl p-5 border border-slate-200 shadow-xs flex flex-col justify-between">
+              <div>
+                <div className="flex items-center space-x-2.5 mb-3">
+                  <span className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
+                    <Zap className="w-5 h-5" />
+                  </span>
+                  <div>
+                    <h3 className="text-sm font-black uppercase tracking-wider text-slate-900">#1 Constraint Driver</h3>
+                    <p className="text-[11px] text-slate-500">Primary Blocker Correlation</p>
+                  </div>
+                </div>
+
+                <div className="my-3">
+                  <div className="flex items-baseline space-x-2">
+                    <span className="text-3xl font-black text-indigo-600">{stats.topBlocker.count}</span>
+                    <span className="text-xs font-bold text-slate-600">Blocked on {stats.topBlocker.name}</span>
+                  </div>
+                  <p className="text-xs text-slate-600 mt-2 leading-relaxed">
+                    <strong>{stats.topBlocker.name}</strong> accounts for <strong>{stats.topBlocker.pct}%</strong> of all pending site delays, followed by <strong>{stats.secondBlocker.name}</strong> ({stats.secondBlocker.pct}%).
+                  </p>
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+                <span>Top 2 Combined:</span>
+                <strong className="text-indigo-700 font-extrabold">{stats.topBlocker.pct + stats.secondBlocker.pct}% of Total Issues</strong>
+              </div>
+            </div>
+
+          </div>
+
+          {/* Strategic Executive Directive Box */}
+          <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-6 text-white border border-indigo-800/40 shadow-xl">
+            <div className="flex items-center space-x-3 mb-4">
+              <Sparkles className="w-5 h-5 text-indigo-400" />
+              <h3 className="text-base font-black tracking-tight text-white">
+                Planedge Strategic Recovery Directives for MRM Review
+              </h3>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs leading-relaxed text-slate-200">
+              <div className="p-4 bg-white/5 rounded-2xl border border-white/10">
+                <span className="font-bold text-rose-300 block mb-1 uppercase tracking-wider text-[11px]">
+                  1. Critical Milestone Escalation
+                </span>
+                For the {stats.criticalPending} critical milestones unachievable in the current month, schedule mandatory joint sessions between Project Leaders and Executive VPs within 48 hours.
+              </div>
+
+              <div className="p-4 bg-white/5 rounded-2xl border border-white/10">
+                <span className="font-bold text-amber-300 block mb-1 uppercase tracking-wider text-[11px]">
+                  2. Constraint Resolution Priority
+                </span>
+                Immediately expedite <strong className="text-white">{stats.topBlocker.name}</strong> and <strong className="text-white">{stats.secondBlocker.name}</strong> approvals with client project management teams.
+              </div>
+
+              <div className="p-4 bg-white/5 rounded-2xl border border-white/10">
+                <span className="font-bold text-emerald-300 block mb-1 uppercase tracking-wider text-[11px]">
+                  3. Quota Recovery Target
+                </span>
+                Maintain a weekly closing velocity of at least {Math.ceil(stats.notDone / 4)} milestones/week to liquidate historical backlog before next quarter.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 6. MAIN DETAILED MILESTONE LINE-ITEM TABLE */}
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
+        <div className="p-5 border-b border-slate-100 flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <div className="flex items-center space-x-2 flex-wrap gap-y-1">
+              <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
+                <span>Detailed Milestone Line-Item Records</span>
+                <span className="text-xs font-extrabold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+                  {filteredMilestones.length} Records
+                </span>
+              </h3>
+
+              {/* Active Graph Selection Indicator Chips */}
+              {selectedCategory !== 'all' && (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold">
+                  <span>Category: <strong>{selectedCategory}</strong></span>
+                  <button onClick={() => setSelectedCategory('all')} className="hover:text-indigo-900 cursor-pointer">
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              )}
+
+              {selectedBottleneckFilter !== 'all' && (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-rose-50 text-rose-700 border border-rose-200 rounded-lg text-xs font-bold">
+                  <span>Constraint: <strong>{selectedBottleneckFilter}</strong></span>
+                  <button onClick={() => setSelectedBottleneckFilter('all')} className="hover:text-rose-900 cursor-pointer">
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              )}
+
+              {selectedMonth !== 'all' && (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 text-amber-800 border border-amber-200 rounded-lg text-xs font-bold">
+                  <span>Pending From: <strong>{selectedMonth}</strong></span>
+                  <button onClick={() => setSelectedMonth('all')} className="hover:text-amber-900 cursor-pointer">
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              )}
+            </div>
+
+            <p className="text-xs text-slate-500 mt-0.5">
+              Detailed tracking across all 10 site, contractor, technical &amp; administrative enabling constraints
+            </p>
+          </div>
+
+          <div className="flex items-center space-x-3 flex-wrap">
+            {/* Search Input in Table Header */}
+            <div className="relative w-48 sm:w-64">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Search milestones..."
+                value={searchQuery}
+                onChange={e => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+                className="w-full pl-8 pr-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                >
+                  <XCircle className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center space-x-1.5">
+              <span className="text-xs font-bold text-slate-500">Show:</span>
+              <select
+                value={pageSize}
+                onChange={e => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
+                className="bg-slate-50 border border-slate-200 text-slate-700 rounded-lg px-2 py-1 text-xs font-bold focus:outline-none cursor-pointer"
+              >
+                <option value={15}>15 rows</option>
+                <option value={25}>25 rows</option>
+                <option value={50}>50 rows</option>
+                <option value={100}>100 rows</option>
+              </select>
+            </div>
           </div>
         </div>
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
+          <table className="w-full text-center border-collapse text-xs">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-black uppercase text-slate-500 tracking-wider">
-                <th className="py-3 px-3.5">#</th>
-                <th className="py-3 px-3.5 cursor-pointer hover:text-slate-900" onClick={() => handleSort('projectCode')}>
-                  <div className="flex items-center gap-1">
+                <th className="py-3 px-3 text-center">#</th>
+                
+                {/* 1. Project Column (Only Project Name & Leader - No Project ID) */}
+                <th className="py-3 px-3 text-center cursor-pointer hover:text-slate-900" onClick={() => handleSort('projectName')}>
+                  <div className="flex items-center justify-center gap-1">
                     <span>Project</span>
                     <ArrowUpDown className="w-3 h-3" />
                   </div>
                 </th>
-                <th className="py-3 px-3.5 cursor-pointer hover:text-slate-900" onClick={() => handleSort('milestone')}>
-                  <div className="flex items-center gap-1">
+
+                {/* 2. Building Column (Separate column right next to Project) */}
+                <th className="py-3 px-3 text-center cursor-pointer hover:text-slate-900" onClick={() => handleSort('building')}>
+                  <div className="flex items-center justify-center gap-1">
+                    <span>Building</span>
+                    <ArrowUpDown className="w-3 h-3" />
+                  </div>
+                </th>
+
+                {/* 3. Milestone Name */}
+                <th className="py-3 px-3 text-center cursor-pointer hover:text-slate-900" onClick={() => handleSort('milestone')}>
+                  <div className="flex items-center justify-center gap-1">
                     <span>Milestone Name</span>
                     <ArrowUpDown className="w-3 h-3" />
                   </div>
                 </th>
-                <th className="py-3 px-3.5">Category</th>
-                <th className="py-3 px-3.5">Week</th>
-                <th className="py-3 px-3.5">Critical</th>
-                <th className="py-3 px-3.5">Pending From</th>
-                <th className="py-3 px-3.5">Status</th>
-                {/* 7 Constraint Reading Columns */}
-                <th className="py-3 px-2 text-center">Contractor App.</th>
-                <th className="py-3 px-2 text-center">Drawing</th>
-                <th className="py-3 px-2 text-center">Work Front</th>
-                <th className="py-3 px-2 text-center">Contractor Mob.</th>
-                <th className="py-3 px-2 text-center">Material</th>
-                <th className="py-3 px-2 text-center">Labour</th>
-                <th className="py-3 px-2 text-center">Client Dec.</th>
-                <th className="py-3 px-3.5 min-w-[200px]">Bottleneck &amp; Line of Action</th>
+
+                <th className="py-3 px-2.5 text-center">Category</th>
+                <th className="py-3 px-2.5 text-center">Week</th>
+                <th className="py-3 px-2.5 text-center" title="Critical = Will NOT be achieved in current month">Critical</th>
+                <th className="py-3 px-2.5 text-center cursor-pointer hover:text-slate-900" onClick={() => handleSort('month')}>
+                  <div className="flex items-center justify-center gap-1">
+                    <span>Pending</span>
+                    <ArrowUpDown className="w-3 h-3" />
+                  </div>
+                </th>
+                <th className="py-3 px-2.5 text-center">Status</th>
+
+                {/* 10 Constraint Reading Columns */}
+                <th className="py-3 px-1.5 text-center" title="Contractor Appointment">Contractor App.</th>
+                <th className="py-3 px-1.5 text-center" title="Drawing / GFC Release">Drawing</th>
+                <th className="py-3 px-1.5 text-center" title="Work Front Availability">Work Front</th>
+                <th className="py-3 px-1.5 text-center" title="Contractor Mobilization">Contractor Mob.</th>
+                <th className="py-3 px-1.5 text-center" title="Material Delivery">Material</th>
+                <th className="py-3 px-1.5 text-center" title="Labour Availability">Labour</th>
+                <th className="py-3 px-1.5 text-center" title="Client Decision">Client Dec.</th>
+                <th className="py-3 px-1.5 text-center" title="Govt Approval / NOC">Govt App.</th>
+                <th className="py-3 px-1.5 text-center" title="CRM Handover Clearance">CRM</th>
+                <th className="py-3 px-1.5 text-center" title="Other Constraints">Other</th>
+
+                <th className="py-3 px-3 min-w-[200px] text-center">Bottleneck &amp; Line of Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {paginatedMilestones.length === 0 ? (
                 <tr>
-                  <td colSpan={16} className="py-16 text-center text-slate-400 font-medium">
+                  <td colSpan={19} className="py-16 text-center text-slate-400 font-medium">
                     <Flag className="w-8 h-8 mx-auto mb-2 opacity-40 text-slate-400" />
                     <p className="text-sm font-bold text-slate-700">No milestones matching the selected criteria</p>
-                    <p className="text-xs text-slate-400 mt-1">Try resetting filters or adjusting search keywords</p>
+                    <p className="text-xs text-slate-400 mt-1">Try resetting category, constraint, or month filters</p>
                   </td>
                 </tr>
               ) : (
@@ -690,31 +1358,37 @@ export default function MilestoneAnalysisView({
                       key={m.id} 
                       className={`hover:bg-slate-50/80 transition-colors ${m.isCritical && !isDone ? 'bg-rose-50/20' : ''}`}
                     >
-                      <td className="py-3 px-3.5 font-bold text-slate-400 text-[10px]">{globalIdx}</td>
+                      <td className="py-3 px-3 font-bold text-slate-400 text-[10px] text-center">{globalIdx}</td>
 
-                      {/* Project ID & Info */}
-                      <td className="py-3 px-3.5">
-                        <div className="flex flex-col">
-                          <span className="font-black text-slate-900">{m.projectCode}</span>
-                          <span className="text-[11px] text-slate-500 font-medium truncate max-w-[140px]" title={m.projectName}>
-                            {m.projectName}
+                      {/* 1. Project Column: Project Name (No Project ID) + Leader */}
+                      <td className="py-3 px-3 max-w-[170px] text-center">
+                        <div className="flex flex-col items-center">
+                          <span className="font-extrabold text-slate-900 leading-snug truncate max-w-full" title={m.projectName}>
+                            {m.projectName || m.projectCode}
                           </span>
-                          <span className="text-[10px] text-slate-400">
-                            Lead: <strong>{m.leader || '—'}</strong> • Bldg: <strong>{m.building || '—'}</strong>
+                          <span className="text-[10px] text-slate-400 font-medium">
+                            Lead: <strong>{m.leader || '—'}</strong>
                           </span>
                         </div>
                       </td>
 
-                      {/* Milestone Name */}
-                      <td className="py-3 px-3.5 max-w-[220px]">
-                        <span className="font-bold text-slate-800 leading-snug block" title={m.milestone}>
+                      {/* 2. Separate Building Column */}
+                      <td className="py-3 px-3 max-w-[110px] text-center">
+                        <span className="font-bold text-slate-700 truncate block text-[11px] mx-auto" title={m.building}>
+                          {m.building || '—'}
+                        </span>
+                      </td>
+
+                      {/* 3. Milestone Name */}
+                      <td className="py-3 px-3 max-w-[210px] text-center">
+                        <span className="font-bold text-slate-800 leading-snug block mx-auto" title={m.milestone}>
                           {m.milestone}
                         </span>
                       </td>
 
                       {/* Category */}
-                      <td className="py-3 px-3.5">
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase border ${
+                      <td className="py-3 px-2.5 text-center">
+                        <span className={`px-2 py-0.5 rounded-full text-[9.5px] font-black uppercase border inline-block ${
                           m.category.toLowerCase().includes('start')
                             ? 'bg-blue-50 text-blue-700 border-blue-200'
                             : m.category.toLowerCase().includes('50')
@@ -728,15 +1402,19 @@ export default function MilestoneAnalysisView({
                       </td>
 
                       {/* Week */}
-                      <td className="py-3 px-3.5 font-mono font-bold text-slate-700">
+                      <td className="py-3 px-2.5 font-mono font-bold text-slate-700 text-center">
                         {m.plannedWeek || '—'}
                       </td>
 
                       {/* Critical Flag */}
-                      <td className="py-3 px-3.5">
+                      <td className="py-3 px-2.5 text-center">
                         {m.isCritical ? (
-                          <span className="px-2 py-0.5 rounded-md text-[9.5px] font-black uppercase bg-rose-600 text-white shadow-xs">
-                            Critical
+                          <span 
+                            className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase bg-rose-600 text-white shadow-xs"
+                            title="Critical: Will NOT be achieved in current month"
+                          >
+                            <AlertTriangle className="w-2.5 h-2.5 mr-0.5 text-rose-200" />
+                            <span>C</span>
                           </span>
                         ) : (
                           <span className="text-[10px] font-medium text-slate-400">—</span>
@@ -744,13 +1422,15 @@ export default function MilestoneAnalysisView({
                       </td>
 
                       {/* Pending Month */}
-                      <td className="py-3 px-3.5 font-medium text-slate-600 text-[11px]">
-                        {m.month || 'Current'}
+                      <td className="py-3 px-2.5 font-bold text-slate-700 text-[10.5px] text-center">
+                        <span className="px-1.5 py-0.5 bg-slate-100 rounded border border-slate-200 inline-block">
+                          {m.month || 'Current'}
+                        </span>
                       </td>
 
                       {/* Status */}
-                      <td className="py-3 px-3.5">
-                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase border ${
+                      <td className="py-3 px-2.5 text-center">
+                        <span className={`px-1.5 py-0.5 rounded-md text-[9.5px] font-black uppercase border inline-block ${
                           isDone 
                             ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
                             : 'bg-rose-50 text-rose-700 border-rose-200'
@@ -759,34 +1439,37 @@ export default function MilestoneAnalysisView({
                         </span>
                       </td>
 
-                      {/* 7 Checkpoints */}
-                      <td className="py-3 px-2 text-center" title={`Contractor App.: ${m.contractorApp}`}>{renderPill(m.contractorApp)}</td>
-                      <td className="py-3 px-2 text-center" title={`Drawing: ${m.drawing}`}>{renderPill(m.drawing)}</td>
-                      <td className="py-3 px-2 text-center" title={`Work Front: ${m.workFront}`}>{renderPill(m.workFront)}</td>
-                      <td className="py-3 px-2 text-center" title={`Contractor Mob.: ${m.contractorMob}`}>{renderPill(m.contractorMob)}</td>
-                      <td className="py-3 px-2 text-center" title={`Material Delivery: ${m.materialDelivery}`}>{renderPill(m.materialDelivery)}</td>
-                      <td className="py-3 px-2 text-center" title={`Labour Availability: ${m.labourAvailability}`}>{renderPill(m.labourAvailability)}</td>
-                      <td className="py-3 px-2 text-center" title={`Client Decision: ${m.clientDecision}`}>{renderPill(m.clientDecision)}</td>
+                      {/* 10 Constraint Checkpoints */}
+                      <td className="py-3 px-1.5 text-center" title={`Contractor App.: ${m.contractorApp}`}>{renderPill(m.contractorApp)}</td>
+                      <td className="py-3 px-1.5 text-center" title={`Drawing: ${m.drawing}`}>{renderPill(m.drawing)}</td>
+                      <td className="py-3 px-1.5 text-center" title={`Work Front: ${m.workFront}`}>{renderPill(m.workFront)}</td>
+                      <td className="py-3 px-1.5 text-center" title={`Contractor Mob.: ${m.contractorMob}`}>{renderPill(m.contractorMob)}</td>
+                      <td className="py-3 px-1.5 text-center" title={`Material Delivery: ${m.materialDelivery}`}>{renderPill(m.materialDelivery)}</td>
+                      <td className="py-3 px-1.5 text-center" title={`Labour Availability: ${m.labourAvailability}`}>{renderPill(m.labourAvailability)}</td>
+                      <td className="py-3 px-1.5 text-center" title={`Client Decision: ${m.clientDecision}`}>{renderPill(m.clientDecision)}</td>
+                      <td className="py-3 px-1.5 text-center" title={`Govt Approval: ${m.govtApproval || 'Done'}`}>{renderPill(m.govtApproval || 'Done')}</td>
+                      <td className="py-3 px-1.5 text-center" title={`CRM: ${m.crm || 'Done'}`}>{renderPill(m.crm || 'Done')}</td>
+                      <td className="py-3 px-1.5 text-center" title={`Other: ${m.other || 'Done'}`}>{renderPill(m.other || 'Done')}</td>
 
                       {/* Bottleneck & Line of Action */}
-                      <td className="py-3 px-3.5">
-                        <div className="space-y-1">
+                      <td className="py-3 px-3 text-center">
+                        <div className="space-y-1 max-w-[260px] mx-auto text-center">
                           {!isDone && m.failingConstraints.length > 0 ? (
-                            <div className="flex flex-wrap gap-1">
+                            <div className="flex flex-wrap gap-1 justify-center">
                               {m.failingConstraints.map(fc => (
-                                <span key={fc} className="px-1.5 py-0.2 rounded text-[9px] font-black bg-rose-100 text-rose-800">
+                                <span key={fc} className="px-1.5 py-0.2 rounded text-[8.5px] font-black bg-rose-100 text-rose-800">
                                   {fc}
                                 </span>
                               ))}
                             </div>
                           ) : null}
 
-                          <p className={`text-[11px] leading-tight font-medium ${isDone ? 'text-emerald-700' : 'text-slate-700'}`}>
+                          <p className={`text-[10.5px] leading-tight font-medium ${isDone ? 'text-emerald-700' : 'text-slate-700'}`}>
                             {m.actionRecommendation}
                           </p>
 
                           {m.remark && (
-                            <span className="text-[10px] text-slate-500 italic block">
+                            <span className="text-[9.5px] text-slate-500 italic block">
                               Remark: {m.remark}
                             </span>
                           )}
@@ -811,7 +1494,7 @@ export default function MilestoneAnalysisView({
               <button
                 onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                 disabled={currentPage === 1}
-                className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
               >
                 Previous
               </button>
@@ -827,7 +1510,7 @@ export default function MilestoneAnalysisView({
                     <button
                       key={pageNum}
                       onClick={() => setCurrentPage(pageNum)}
-                      className={`w-7 h-7 rounded-lg text-xs font-bold transition-all ${
+                      className={`w-7 h-7 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                         currentPage === pageNum
                           ? 'bg-indigo-600 text-white shadow-xs'
                           : 'text-slate-600 hover:bg-slate-100'
@@ -842,7 +1525,7 @@ export default function MilestoneAnalysisView({
               <button
                 onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                 disabled={currentPage === totalPages}
-                className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                className="px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
               >
                 Next
               </button>
