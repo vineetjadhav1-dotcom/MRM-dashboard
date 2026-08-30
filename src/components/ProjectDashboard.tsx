@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { Software2Project, MonthlyMetric, Software2Mapping, Project, FiscalYearKey } from '@/src/types';
 import { isCompleteOrLostStage, isTempProject } from '@/src/utils/customOrder';
 import { getFiscalYearConfig, getStoredFiscalYear, setStoredFiscalYear, FISCAL_YEAR_KEYS } from '@/src/utils/fiscalYear';
+import AttentionNeededProjects from './AttentionNeededProjects';
 import { 
   ResponsiveContainer, 
   BarChart, 
@@ -707,6 +708,10 @@ export default function ProjectDashboard({
       const labourProd = (labourAchTotal > 0 && vowdAchTotal > 0)
         ? Math.round((vowdAchTotal / labourAchTotal) * 10000000)
         : null;
+      const areaUnderConst = consolidatedMetrics.areaUnderConstruction || consolidatedMetrics.totalAreaSqft || 0;
+      const speedConst = (areaUnderConst > 0 && vowdAchTotal > 0)
+        ? Math.round(((vowdAchTotal * 10000000) / areaUnderConst) * 10) / 10
+        : null;
       const avgQuality = qualityCount > 0 ? Math.round((qualityTotal / qualityCount) * 10) / 10 : null;
       const avgSafety = safetyCount > 0 ? Math.round((safetyTotal / safetyCount) * 10) / 10 : null;
       const avgQhse = qhseCount > 0 ? Math.round((qhseTotal / qhseCount) * 10) / 10 : null;
@@ -715,12 +720,13 @@ export default function ProjectDashboard({
         month: m,
         spi: avgSpi,
         labourProductivity: labourProd,
+        speedOfConstruction: speedConst,
         quality: avgQuality,
         safety: avgSafety,
         qhse: avgQhse
       };
     });
-  }, [filteredProjects, activeFy]);
+  }, [filteredProjects, activeFy, consolidatedMetrics]);
 
   // Project breakdown table (filters out temp and completed/lost projects for clean tabular display)
   const projectBreakdown = useMemo(() => {
@@ -895,6 +901,18 @@ export default function ProjectDashboard({
     return (
       <text x={cx} y={y - 6} fill="#7c3aed" fontSize={8} fontWeight={800} textAnchor="middle">
         {formatted}
+      </text>
+    );
+  }, []);
+
+  const renderSpeedMonthlyLabel = useCallback((props: any) => {
+    const { x, y, width, value } = props;
+    if (value === undefined || value === null || value === 0) return null;
+    const cx = x + (width ? width / 2 : 0);
+    const num = Number(value);
+    return (
+      <text x={cx} y={y - 6} fill="#0d9488" fontSize={8} fontWeight={800} textAnchor="middle">
+        {`₹${num.toFixed(1)}`}
       </text>
     );
   }, []);
@@ -1997,7 +2015,47 @@ export default function ProjectDashboard({
             </div>
           </div>
 
-          {/* 3. Quality Rating Monthly Trend (Scale 0-10) */}
+          {/* 3. Speed of Construction Monthly Trend */}
+          <div className="bg-white border border-slate-200 hover:border-slate-300 rounded-3xl p-5 shadow-xs transition-all">
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <span className="text-[10px] font-bold text-slate-400 uppercase">Velocity</span>
+                <h4 className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                  <span>Speed of Construction</span>
+                </h4>
+              </div>
+              <span className="text-xs font-black text-teal-700 bg-teal-50 px-2 py-0.5 rounded-full border border-teal-100">
+                ₹/Sqft/Mo
+              </span>
+            </div>
+            <div className="h-[140px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={ratingsMonthlyData} margin={{ top: 15, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                  <XAxis dataKey="month" stroke="#94a3b8" fontSize={8} tickLine={false} axisLine={false} />
+                  <YAxis stroke="#94a3b8" fontSize={8} tickLine={false} axisLine={false} />
+                  <Tooltip
+                    content={({ active, payload }) => {
+                      if (active && payload && payload.length) {
+                        const val = payload[0].value;
+                        return (
+                          <div className="bg-slate-900 text-white rounded-xl px-2.5 py-1.5 text-[9px] font-bold">
+                            {payload[0].payload.month}: ₹{val ? Number(val).toFixed(1) : 'N/A'} /Sqft/Mo
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
+                  />
+                  <Bar dataKey="speedOfConstruction" fill="#14b8a6" radius={[4, 4, 0, 0]} maxBarSize={22} name="Speed">
+                    <LabelList dataKey="speedOfConstruction" content={renderSpeedMonthlyLabel} />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* 4. Quality Rating Monthly Trend (Scale 0-10) */}
           <div className="bg-white border border-slate-200 hover:border-slate-300 rounded-3xl p-5 shadow-xs transition-all">
             <div className="flex items-center justify-between mb-2">
               <div>
@@ -2219,6 +2277,18 @@ export default function ProjectDashboard({
           </div>
         )}
       </div>
+
+      {/* Attention Needed — Top 7 Critical Projects & Selected Project Detailed Diagnosis */}
+      <AttentionNeededProjects
+        projects={allProjects.length > 0 ? allProjects : (projects as any)}
+        software2Projects={projects}
+        onSelectProject={(p) => {
+          setSelectedProjectCode(p.code);
+        }}
+        selectedVP={selectedVP}
+        selectedLeader={selectedLeader}
+        selectedProjectCode={selectedProjectCode}
+      />
 
     </div>
   );

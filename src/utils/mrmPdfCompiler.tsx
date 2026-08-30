@@ -8,6 +8,7 @@ import {
   SummarySlide, 
   ProgressCurveSlide, 
   ProjectCardsSlide,
+  AttentionNeededSlide,
   LeaderStats,
   ProgressCurveMonthData
 } from '@/src/components/report/MRMReportSlides';
@@ -394,7 +395,7 @@ export function sortProjectsForSlides(projects: Project[]): Project[] {
 }
 
 interface SlideDescriptor {
-  type: 'cover' | 'summary' | 'curve' | 'cards';
+  type: 'cover' | 'summary' | 'curve' | 'cards' | 'attention';
   element: React.ReactElement;
   label: string;
 }
@@ -443,7 +444,7 @@ export async function generateFullMRMReport(options: MRMReportExportOptions): Pr
   const slides: SlideDescriptor[] = [];
 
   // =========================================================================
-  // 1. VP / PORTFOLIO SECTION (Cover + Summary + 5 Progress Curves)
+  // 1. VP / PORTFOLIO SECTION (Cover + Summary + 5 Progress Curves + Attention Needed)
   // =========================================================================
   if (scope === 'full' || scope === 'vp_only' || scope === 'vp_full' || (scope === 'current' && selectedLeaderName === 'all')) {
     // 1.1 Cover Slide
@@ -487,10 +488,25 @@ export async function generateFullMRMReport(options: MRMReportExportOptions): Pr
         )
       });
     });
+
+    // 1.4 Attention Needed Slide for VP Portfolio
+    slides.push({
+      type: 'attention',
+      label: `VP ${vpLabel} - Attention Needed`,
+      element: (
+        <AttentionNeededSlide
+          title={`Attention Needed — Critical Projects (${vpLabel})`}
+          subtitle={`Key operational deliverable variances & prioritized recovery roadmap under Team ${vpLabel}.`}
+          teamName={`Team ${vpLabel}`}
+          projects={vpProjects}
+          software2Projects={s2List}
+        />
+      )
+    });
   }
 
   // =========================================================================
-  // 2. TEAM LEADER SECTIONS (Cover -> Summary -> 5 Curves -> 6-card Project Pages)
+  // 2. TEAM LEADER SECTIONS (Cover -> Summary -> 5 Curves -> Attention Needed -> 6-card Project Pages)
   // =========================================================================
   targetLeaders.forEach((leader) => {
     const leaderProjects = leader.projects || [];
@@ -538,7 +554,22 @@ export async function generateFullMRMReport(options: MRMReportExportOptions): Pr
       });
     });
 
-    // 2.4 Leader Project Cards Slides (Paginated in 6 cards per page)
+    // 2.4 Leader Attention Needed Slide
+    slides.push({
+      type: 'attention',
+      label: `Leader ${leader.name} - Attention Needed`,
+      element: (
+        <AttentionNeededSlide
+          title={`Attention Needed — Critical Projects (${leader.name})`}
+          subtitle={`Key operational deliverable variances & prioritized recovery roadmap under ${leader.name}.`}
+          teamName={`Team ${leader.name}`}
+          projects={leaderProjects}
+          software2Projects={s2List}
+        />
+      )
+    });
+
+    // 2.5 Leader Project Cards Slides (Paginated in 6 cards per page)
     if (sortedActive.length > 0) {
       for (let i = 0; i < sortedActive.length; i += 6) {
         const chunk = sortedActive.slice(i, i + 6);

@@ -1,5 +1,4 @@
-import React from 'react';
-import { Project } from '@/src/types';
+import { Project, Software2Project } from '@/src/types';
 import PlanedgePdfLogo from './PlanedgePdfLogo';
 import { getFiscalYearConfig, getStoredFiscalYear } from '@/src/utils/fiscalYear';
 import { 
@@ -9,7 +8,13 @@ import {
   Gauge, 
   Calendar, 
   ShieldCheck, 
-  Search 
+  Search,
+  Flame,
+  DollarSign,
+  Users,
+  ShieldAlert,
+  Zap,
+  Home
 } from 'lucide-react';
 import { 
   ResponsiveContainer, 
@@ -1310,6 +1315,250 @@ export function ProjectCardsSlide({
       </div>
 
       <div className="flex justify-end items-end pt-1">
+        <PlanedgePdfLogo />
+      </div>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------
+ * 5. ATTENTION NEEDED SLIDE COMPONENT (Top Critical Projects)
+ * ------------------------------------------------------------- */
+export interface AttentionNeededSlideProps {
+  title?: string;
+  subtitle?: string;
+  teamName?: string;
+  projects: Project[];
+  software2Projects?: Software2Project[];
+}
+
+export function AttentionNeededSlide({
+  title = 'Attention Needed — Top Critical Projects',
+  subtitle,
+  teamName = 'Team Overview',
+  projects = [],
+  software2Projects = []
+}: AttentionNeededSlideProps) {
+  const activeFy = getStoredFiscalYear();
+  const fyConfig = getFiscalYearConfig(activeFy);
+
+  // Compute top 4 critical projects for this entity
+  const criticalItems = React.useMemo(() => {
+    const list: any[] = [];
+
+    projects.forEach(p => {
+      if (!p || !p.code) return;
+      const s2 = software2Projects.find(
+        s => (s.code && s.code.trim().toLowerCase() === p.code.trim().toLowerCase()) ||
+             (s.name && s.name.trim().toLowerCase() === p.name.trim().toLowerCase())
+      );
+
+      // VOWD
+      const vowdPlan = parseFloat(String(p.vowdPlan || '').replace(/,/g, '')) || 0;
+      const vowdAch = parseFloat(String(p.vowdAch || '').replace(/,/g, '')) || 0;
+      const vowdPct = vowdPlan > 0 ? (vowdAch / vowdPlan) * 100 : (vowdAch > 0 ? 100 : 0);
+      const vowdGap = Math.max(0, vowdPlan - vowdAch);
+      const isLaggingVowd = vowdPlan > 0 && (vowdPct < 85 || vowdGap >= 0.5);
+
+      // Labour
+      const labourPlan = parseFloat(String(p.labourPlan || '').replace(/,/g, '')) || 0;
+      const labourAch = parseFloat(String(p.labourAch || '').replace(/,/g, '')) || 0;
+      const labourPct = labourPlan > 0 ? (labourAch / labourPlan) * 100 : (labourAch > 0 ? 100 : 0);
+      const labourGap = Math.max(0, labourPlan - labourAch);
+      const isLaggingLabour = labourPlan > 0 && (labourPct < 85 || labourGap >= 15);
+
+      // Milestones
+      const milestonePlan = parseFloat(String(p.milestonePlan || '').replace(/,/g, '')) || 0;
+      const milestoneAch = parseFloat(String(p.milestoneAch || '').replace(/,/g, '')) || 0;
+      const milestonePct = milestonePlan > 0 ? (milestoneAch / milestonePlan) * 100 : (milestoneAch > 0 ? 100 : 0);
+      const milestoneGap = Math.max(0, milestonePlan - milestoneAch);
+      const isLaggingMilestone = milestonePlan > 0 && (milestonePct < 85 || milestoneGap >= 1);
+
+      // SPI
+      const spiNum = parseFloat(String(p.spi || s2?.spi || '1.0').replace(/%/g, '')) || 1.0;
+      const isLaggingSpi = spiNum < 0.85;
+
+      let score = 0;
+      if (isLaggingVowd) score += 35 + (vowdGap * 2);
+      if (isLaggingLabour) score += 25 + (labourGap / 50);
+      if (isLaggingMilestone) score += 25 + (milestoneGap * 3);
+      if (isLaggingSpi) score += 20 * (1 - Math.min(1, spiNum));
+
+      if (score > 0 || isLaggingVowd || isLaggingLabour || isLaggingMilestone || isLaggingSpi) {
+        // Findings
+        const findings: string[] = [];
+        if (isLaggingVowd) findings.push(`VOWD achievement is ${vowdPct.toFixed(0)}% (gap ₹${vowdGap.toFixed(1)}Cr)`);
+        if (isLaggingLabour) findings.push(`Labour deployment at ${labourPct.toFixed(0)}% (gap ${labourGap} Labours)`);
+        if (isLaggingMilestone) findings.push(`Milestones achieved ${milestoneAch}/${milestonePlan} (${milestonePct.toFixed(0)}%)`);
+        if (isLaggingSpi) findings.push(`SPI trailing at ${spiNum.toFixed(2)}`);
+
+        list.push({
+          code: p.code,
+          name: p.name || p.code,
+          vp: p.vp,
+          leader: p.leader,
+          stage: p.projectStage || 'Under Construction',
+          status: p.status || (score > 40 ? 'Red' : 'Amber'),
+          score,
+          vowd: { plan: vowdPlan, ach: vowdAch, pct: vowdPct, gap: vowdGap, isLagging: isLaggingVowd },
+          labour: { plan: labourPlan, ach: labourAch, pct: labourPct, gap: labourGap, isLagging: isLaggingLabour },
+          milestone: { plan: milestonePlan, ach: milestoneAch, pct: milestonePct, gap: milestoneGap, isLagging: isLaggingMilestone },
+          spi: spiNum,
+          findings: findings.join('; ') || 'Near threshold milestone compression observed.',
+          action: isLaggingLabour && isLaggingVowd
+            ? 'Mobilize contractor manpower augmentation and expedite billing certifications.'
+            : isLaggingMilestone
+            ? 'Enforce critical-path micro-schedules and accelerate key material deliveries.'
+            : 'Maintain close milestone monitoring and audit sub-contractor progress.'
+        });
+      }
+    });
+
+    list.sort((a, b) => b.score - a.score);
+    return list.slice(0, 4);
+  }, [projects, software2Projects]);
+
+  return (
+    <div 
+      className="w-[1280px] h-[720px] bg-white p-8 flex flex-col justify-between font-sans relative overflow-hidden"
+      style={{ boxSizing: 'border-box' }}
+    >
+      {/* Top Header */}
+      <div className="flex items-center justify-between border-b pb-3" style={{ borderColor: '#fecdd3' }}>
+        <div className="flex items-center space-x-3">
+          <div className="p-2.5 rounded-xl text-white shadow-md" style={{ backgroundColor: '#e11d48' }}>
+            <Flame className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center space-x-2">
+              <h2 className="text-xl font-black tracking-tight" style={{ color: '#0f172a' }}>
+                {title}
+              </h2>
+              <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full" style={{ backgroundColor: '#ffe4e6', color: '#be123c', border: '1px solid #fecdd3' }}>
+                Action Required
+              </span>
+            </div>
+            <p className="text-[11px] font-medium" style={{ color: '#64748b' }}>
+              {subtitle || `Critical path deliverable variances & prioritized recovery roadmap • ${teamName} • ${fyConfig.label}`}
+            </p>
+          </div>
+        </div>
+
+        <div className="text-right">
+          <span className="text-xs font-black uppercase tracking-wider block" style={{ color: '#be123c' }}>
+            {teamName}
+          </span>
+          <span className="text-[10px] font-bold" style={{ color: '#94a3b8' }}>
+            {fyConfig.label} ({fyConfig.startMonthKey}–{fyConfig.endMonthKey})
+          </span>
+        </div>
+      </div>
+
+      {/* Main Content Area: 4 Critical Project Diagnosis Cards */}
+      <div className="flex-1 my-3 flex flex-col justify-between">
+        {criticalItems.length === 0 ? (
+          <div className="flex-1 flex items-center justify-center p-12 text-center rounded-2xl border border-dashed" style={{ borderColor: '#cbd5e1', backgroundColor: '#f8fafc' }}>
+            <div>
+              <ShieldCheck className="w-12 h-12 mx-auto mb-2 text-emerald-500" />
+              <h4 className="text-base font-black text-slate-800">All Projects Operating Within Baseline Thresholds</h4>
+              <p className="text-xs text-slate-500 mt-1">No critical deliverable lags identified across {teamName} portfolio.</p>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3.5 h-full">
+            {criticalItems.map((item, idx) => (
+              <div 
+                key={item.code}
+                className="p-3.5 rounded-2xl border flex flex-col justify-between"
+                style={{ 
+                  backgroundColor: idx === 0 ? '#fff1f2' : '#ffffff', 
+                  borderColor: idx === 0 ? '#fecdd3' : '#e2e8f0',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
+                }}
+              >
+                {/* Project Header */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center space-x-2">
+                      <span className="w-5 h-5 rounded-lg text-white font-black text-[10px] flex items-center justify-center" style={{ backgroundColor: '#e11d48' }}>
+                        #{idx + 1}
+                      </span>
+                      <span className="px-1.5 py-0.2 rounded font-mono font-black text-[10px] bg-slate-100 text-slate-800 border border-slate-200">
+                        {item.code}
+                      </span>
+                      <h4 className="text-xs font-black text-slate-900 truncate max-w-[240px]">
+                        {item.name}
+                      </h4>
+                    </div>
+
+                    <span className="text-[9px] font-black px-2 py-0.2 rounded uppercase" style={{
+                      backgroundColor: item.status.toLowerCase() === 'red' ? '#ffe4e6' : '#fef3c7',
+                      color: item.status.toLowerCase() === 'red' ? '#be123c' : '#b45309'
+                    }}>
+                      {item.status} Status
+                    </span>
+                  </div>
+
+                  <div className="flex items-center space-x-3 text-[10px] font-semibold text-slate-500 mb-2">
+                    <span>VP: <strong className="text-slate-800">{item.vp}</strong></span>
+                    <span>•</span>
+                    <span>Lead: <strong className="text-slate-800">{item.leader}</strong></span>
+                    <span>•</span>
+                    <span>Stage: <strong className="text-slate-800">{item.stage}</strong></span>
+                  </div>
+
+                  {/* Key Metrics Mini-Grid */}
+                  <div className="grid grid-cols-4 gap-1.5 mb-2 text-center">
+                    <div className="p-1.5 rounded-lg bg-white border border-slate-200">
+                      <span className="text-[8px] uppercase font-bold text-blue-700 block">VOWD</span>
+                      <span className="text-[10px] font-black text-slate-900 block">₹{item.vowd.ach.toFixed(1)} <span className="text-[8px] font-normal text-slate-400">/{item.vowd.plan.toFixed(1)}Cr</span></span>
+                      <span className={`text-[8px] font-black ${item.vowd.pct >= 90 ? 'text-emerald-600' : 'text-rose-600'}`}>{item.vowd.pct.toFixed(0)}%</span>
+                    </div>
+
+                    <div className="p-1.5 rounded-lg bg-white border border-slate-200">
+                      <span className="text-[8px] uppercase font-bold text-purple-700 block">Labour</span>
+                      <span className="text-[10px] font-black text-slate-900 block">{item.labour.ach} <span className="text-[8px] font-normal text-slate-400">/{item.labour.plan}</span></span>
+                      <span className={`text-[8px] font-black ${item.labour.pct >= 90 ? 'text-emerald-600' : 'text-rose-600'}`}>{item.labour.pct.toFixed(0)}%</span>
+                    </div>
+
+                    <div className="p-1.5 rounded-lg bg-white border border-slate-200">
+                      <span className="text-[8px] uppercase font-bold text-emerald-700 block">Milestones</span>
+                      <span className="text-[10px] font-black text-slate-900 block">{item.milestone.ach} <span className="text-[8px] font-normal text-slate-400">/{item.milestone.plan}</span></span>
+                      <span className={`text-[8px] font-black ${item.milestone.pct >= 90 ? 'text-emerald-600' : 'text-rose-600'}`}>{item.milestone.pct.toFixed(0)}%</span>
+                    </div>
+
+                    <div className="p-1.5 rounded-lg bg-white border border-slate-200">
+                      <span className="text-[8px] uppercase font-bold text-indigo-700 block">SPI</span>
+                      <span className="text-[10px] font-black text-slate-900 block">{item.spi.toFixed(2)}</span>
+                      <span className={`text-[8px] font-black ${item.spi >= 0.9 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                        {item.spi >= 1.0 ? 'Target' : 'Variance'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Findings & Recovery Plan */}
+                <div className="space-y-1 text-[9.5px]">
+                  <div className="p-1.5 rounded-lg bg-rose-50 border border-rose-100">
+                    <span className="font-black uppercase text-rose-800 block text-[8px]">Executive Findings:</span>
+                    <p className="text-slate-800 leading-tight truncate">{item.findings}</p>
+                  </div>
+                  <div className="p-1.5 rounded-lg bg-blue-50 border border-blue-100">
+                    <span className="font-black uppercase text-blue-800 block text-[8px]">Recovery Roadmap:</span>
+                    <p className="text-slate-800 leading-tight truncate">{item.action}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Footer */}
+      <div className="flex justify-between items-center pt-2 border-t" style={{ borderColor: '#f1f5f9' }}>
+        <span className="text-[9px] font-bold" style={{ color: '#94a3b8' }}>
+          CONFIDENTIAL • Executive Performance Diagnostic • Planedge Management Review
+        </span>
         <PlanedgePdfLogo />
       </div>
     </div>
