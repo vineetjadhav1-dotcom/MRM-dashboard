@@ -20,6 +20,7 @@ export default function App() {
     error,
     projects,
     software2Projects,
+    software3Milestones,
     isUsingDemo,
     sheetRows,
     software2SheetRows,
@@ -154,6 +155,8 @@ export default function App() {
           userSettings={userSettings}
           onSaveUserSettings={handleSaveUserSettings}
           currentUser={currentUser}
+          software3Milestones={software3Milestones}
+          onRefresh={handleRefresh}
         />
       </main>
 

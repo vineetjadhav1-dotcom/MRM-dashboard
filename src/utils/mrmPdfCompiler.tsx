@@ -631,8 +631,8 @@ export async function generateFullMRMReport(options: MRMReportExportOptions): Pr
       // Render slide component into container
       root.render(slide.element);
 
-      // Brief delay for React 18 DOM flush, Recharts layout, and SVG rendering
-      await new Promise((resolve) => setTimeout(resolve, 400));
+      // Delay for React 18 DOM flush, Recharts layout, and SVG rendering
+      await new Promise((resolve) => setTimeout(resolve, 500));
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
       // Native browser SVG foreignObject rendering via html-to-image
@@ -642,7 +642,8 @@ export async function generateFullMRMReport(options: MRMReportExportOptions): Pr
         backgroundColor: '#ffffff',
         width: 1122,
         height: 794,
-        cacheBust: true,
+        skipFonts: true,
+        cacheBust: false,
         style: {
           position: 'static',
           top: '0',

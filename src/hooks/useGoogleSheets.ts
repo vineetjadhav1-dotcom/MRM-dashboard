@@ -1,13 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Project, ColumnMapping, Software2Project, Software2Mapping, FiscalYearKey } from '@/src/types';
+import { Project, ColumnMapping, Software2Project, Software2Mapping, FiscalYearKey, Software3Milestone } from '@/src/types';
 import { getAccessToken, initAuth } from '@/src/lib/firebase';
-import { scoreHeaderRow, detectColumnMapping, parseSheetData, parseSoftware2Data } from '@/src/utils/sheetParser';
-import { fetchPublicGoogleSheet, TARGET_SPREADSHEET_ID, TAB_SOFTWARE_1, TAB_SOFTWARE_2 } from '@/src/utils/googleSheetsApi';
+import { scoreHeaderRow, detectColumnMapping, parseSheetData, parseSoftware2Data, parseSoftware3Data } from '@/src/utils/sheetParser';
+import { fetchPublicGoogleSheet, TARGET_SPREADSHEET_ID, TAB_SOFTWARE_1, TAB_SOFTWARE_2, TAB_SOFTWARE_3 } from '@/src/utils/googleSheetsApi';
 import { getFiscalYearConfig, getStoredFiscalYear } from '@/src/utils/fiscalYear';
 
 const SPREADSHEET_ID = TARGET_SPREADSHEET_ID;
 const SHEET_NAME = TAB_SOFTWARE_1;
 const SHEET_NAME_2 = TAB_SOFTWARE_2;
+const SHEET_NAME_3 = TAB_SOFTWARE_3;
 
 // Sleek demo data for immediate preview or fallback
 export const DEMO_PROJECTS: Project[] = [
@@ -444,10 +445,12 @@ export function useGoogleSheets() {
   
   const [projects, setProjects] = useState<Project[]>(DEMO_PROJECTS);
   const [software2Projects, setSoftware2Projects] = useState<Software2Project[]>(DEMO_SOFTWARE2_PROJECTS);
+  const [software3Milestones, setSoftware3Milestones] = useState<Software3Milestone[]>([]);
   const [isUsingDemo, setIsUsingDemo] = useState<boolean>(false);
   
   const [sheetRows, setSheetRows] = useState<string[][]>([]);
   const [software2SheetRows, setSoftware2SheetRows] = useState<string[][]>([]);
+  const [software3SheetRows, setSoftware3SheetRows] = useState<string[][]>([]);
   const [software2HeaderRowIndex, setSoftware2HeaderRowIndex] = useState<number>(() => {
     const saved = localStorage.getItem('software2HeaderRowIndex');
     return saved !== null ? parseInt(saved, 10) : 3;
@@ -529,6 +532,7 @@ export function useGoogleSheets() {
     try {
       let rows: string[][] | null = null;
       let rows2: string[][] | null = null;
+      let rows3: string[][] | null = null;
 
       // 1. Try Authenticated Google Sheets API if token is present
       if (token) {
@@ -537,10 +541,13 @@ export function useGoogleSheets() {
           const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(range)}`;
           const range2 = `${SHEET_NAME_2}!A1:MT1000`;
           const url2 = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(range2)}`;
+          const range3 = `${SHEET_NAME_3}!A1:ZZ1200`;
+          const url3 = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${encodeURIComponent(range3)}`;
 
-          const [res1, res2] = await Promise.all([
+          const [res1, res2, res3] = await Promise.all([
             fetch(url, { headers: { Authorization: `Bearer ${token}` } }),
-            fetch(url2, { headers: { Authorization: `Bearer ${token}` } }).catch(() => null)
+            fetch(url2, { headers: { Authorization: `Bearer ${token}` } }).catch(() => null),
+            fetch(url3, { headers: { Authorization: `Bearer ${token}` } }).catch(() => null)
           ]);
 
           if (res1.ok) {
@@ -552,6 +559,10 @@ export function useGoogleSheets() {
               const data2 = await res2.json();
               rows2 = data2.values;
             }
+            if (res3 && res3.ok) {
+              const data3 = await res3.json();
+              rows3 = data3.values;
+            }
           }
         } catch (authErr) {
           console.warn('Authenticated fetch failed, attempting direct fetch:', authErr);
@@ -561,13 +572,15 @@ export function useGoogleSheets() {
       // 2. If no authenticated data yet, attempt direct public fetch
       if (!rows || rows.length === 0) {
         try {
-          const [pubRows1, pubRows2] = await Promise.all([
+          const [pubRows1, pubRows2, pubRows3] = await Promise.all([
             fetchPublicGoogleSheet(SPREADSHEET_ID, SHEET_NAME),
-            fetchPublicGoogleSheet(SPREADSHEET_ID, SHEET_NAME_2).catch(() => null)
+            fetchPublicGoogleSheet(SPREADSHEET_ID, SHEET_NAME_2).catch(() => null),
+            fetchPublicGoogleSheet(SPREADSHEET_ID, SHEET_NAME_3).catch(() => null)
           ]);
           if (pubRows1 && pubRows1.length > 0) {
             rows = pubRows1;
             rows2 = pubRows2;
+            rows3 = pubRows3;
           }
         } catch (pubErr: any) {
           console.warn('Direct fetch attempt note:', pubErr);
@@ -660,6 +673,13 @@ export function useGoogleSheets() {
         } else {
           setSoftware2Projects(DEMO_SOFTWARE2_PROJECTS);
         }
+      }
+
+      // 5. Parse Software3 (Milestones) if available
+      if (rows3 && rows3.length > 0) {
+        setSoftware3SheetRows(rows3);
+        const parsed3 = parseSoftware3Data(rows3, parsed && parsed.length > 0 ? parsed : DEMO_PROJECTS);
+        setSoftware3Milestones(parsed3);
       }
       
     } catch (err: any) {
@@ -792,9 +812,11 @@ export function useGoogleSheets() {
     error,
     projects,
     software2Projects,
+    software3Milestones,
     isUsingDemo,
     sheetRows,
     software2SheetRows,
+    software3SheetRows,
     headerRowIndex,
     software2HeaderRowIndex,
     mapping,

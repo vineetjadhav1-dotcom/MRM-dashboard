@@ -190,6 +190,7 @@ export type ActiveTab =
   | 'vp' 
   | 'all' 
   | 'overview'
+  | 'milestones'
   | 'userAccess';
 
 export type UserRole = 'admin' | 'user';
@@ -219,6 +220,43 @@ export interface UserPermissions {
 export interface UserManagementSettings {
   users: AppUser[];
   userPermissions: Record<string, UserPermissions>;
+}
+
+export interface Software3Milestone {
+  id: string;
+  projectCode: string;
+  projectName: string;
+  building: string;
+  leader: string;
+  vp?: string;
+  milestone: string;
+  category: string; // 'Start' | '50%' | 'Finish' | 'General'
+  status: string; // 'Done' | 'Not Done'
+  plannedWeek: string; // 'W1' | 'W2' | 'W3' | 'W4'
+  isCritical: boolean;
+  criticalRaw: string;
+  reshuffle: string;
+  month: string; // e.g. 'July-26', 'Aug-26' (month from which milestone is pending)
+  
+  // 7 Core Milestone Pre-requisites / Reading Parameters
+  contractorApp: string;
+  drawing: string;
+  workFront: string;
+  contractorMob: string;
+  materialDelivery: string;
+  labourAvailability: string;
+  clientDecision: string;
+  
+  // Additional Attributes
+  govtApproval: string;
+  crm: string;
+  other: string;
+  remark: string;
+  
+  // Computed Intelligent Analysis
+  failingConstraints: string[];
+  primaryBottleneck: string;
+  actionRecommendation: string;
 }
 
 

@@ -1,4 +1,3 @@
-import { useState, useMemo } from 'react';
 import { 
   Project, 
   ColumnMapping, 
@@ -6,7 +5,8 @@ import {
   Software2Mapping, 
   ActiveTab, 
   AppUser, 
-  UserManagementSettings 
+  UserManagementSettings,
+  Software3Milestone
 } from '@/src/types';
 import { 
   computeDashboardMetrics, 
@@ -24,6 +24,7 @@ import ProjectDashboard from './ProjectDashboard';
 import Leaderboard from './Leaderboard';
 import KeyInsights from './KeyInsights';
 import UserManagementView from './UserManagementView';
+import MilestoneAnalysisView from './MilestoneAnalysisView';
 import { Info } from 'lucide-react';
 
 interface DashboardProps {
@@ -48,13 +49,17 @@ interface DashboardProps {
   userSettings?: UserManagementSettings;
   onSaveUserSettings?: (newSettings: UserManagementSettings) => void;
   currentUser?: AppUser | null;
+  software3Milestones?: Software3Milestone[];
+  onRefresh?: () => void;
 }
 
 export default function Dashboard({
   projects,
   software2Projects,
+  software3Milestones = [],
   allProjects = [],
   allSoftware2Projects = [],
+  onRefresh,
   isUsingDemo,
   isLoading,
   error,
@@ -174,6 +179,17 @@ export default function Dashboard({
           {/* LEADER PERFORMANCE VIEW */}
           {activeTab === 'leader' && (
             <LeaderList leaderDataList={leaderData} software2Projects={software2Projects} onProjectSelect={setSelectedProject} />
+          )}
+
+          {/* MILESTONE ANALYSIS (SOFTWARE3) VIEW */}
+          {activeTab === 'milestones' && (
+            <MilestoneAnalysisView
+              milestones={software3Milestones}
+              projects={allProjects.length > 0 ? allProjects : projects}
+              software2Projects={allSoftware2Projects.length > 0 ? allSoftware2Projects : software2Projects}
+              onRefresh={onRefresh}
+              isLoading={isLoading}
+            />
           )}
 
           {/* ALL PROJECTS TABLE VIEW */}

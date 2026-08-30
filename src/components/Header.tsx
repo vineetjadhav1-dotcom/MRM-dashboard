@@ -25,7 +25,8 @@ import {
   ChevronRight,
   ChevronDown,
   ShieldCheck,
-  Calendar
+  Calendar,
+  Flag
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -64,6 +65,12 @@ const ALL_NAV_MENU_ITEMS: NavMenuItem[] = [
     label: 'MRM DASHBOARD',
     subtitle: 'Leader portfolio breakdown & interactive review slide deck',
     icon: Users
+  },
+  {
+    id: 'milestones',
+    label: 'MILESTONE ANALYSIS',
+    subtitle: 'Detailed categories, weekly plan, bottlenecks & enabler readings',
+    icon: Flag
   },
   {
     id: 'leaderboard',

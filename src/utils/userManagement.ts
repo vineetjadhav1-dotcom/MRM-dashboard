@@ -3,6 +3,7 @@ import { ActiveTab, AppUser, UserManagementSettings, UserPermissions, Project, S
 export const ALL_NAV_TABS: ActiveTab[] = [
   'projectDashboard',
   'leader',
+  'milestones',
   'leaderboard',
   'insights',
   'vp',
@@ -30,6 +31,12 @@ export const NAV_TABS_META: NavTabMeta[] = [
     label: 'MRM Dashboard',
     category: 'Executive Review',
     description: 'Leader portfolio breakdown & interactive review slide deck'
+  },
+  {
+    id: 'milestones',
+    label: 'Milestone Analysis',
+    category: 'Core Execution',
+    description: 'Detailed milestone categories, weekly planning, bottlenecks & enabler readings'
   },
   {
     id: 'leaderboard',

@@ -1,4 +1,4 @@
-import { Project, ColumnMapping, DashboardMetrics, VPData, LeaderData, AreaData, Software2Project, MonthlyMetric, Software2Mapping, FiscalYearKey } from '@/src/types';
+import { Project, ColumnMapping, DashboardMetrics, VPData, LeaderData, AreaData, Software2Project, MonthlyMetric, Software2Mapping, FiscalYearKey, Software3Milestone } from '@/src/types';
 import { sortVpNames, sortLeaderItems, isCompleteOrLostStage, isTempProject } from '@/src/utils/customOrder';
 import { getFiscalYearConfig, DEFAULT_FISCAL_YEAR } from '@/src/utils/fiscalYear';
 
@@ -1328,4 +1328,191 @@ export function parseSoftware2Data(
 
   return projects;
 }
+
+/**
+ * Parses Software3 Google Sheet data for detailed Milestone Analysis & Bottleneck Diagnostics
+ */
+export function parseSoftware3Data(rows: string[][], projects: Project[] = []): Software3Milestone[] {
+  if (!rows || rows.length < 3) return [];
+
+  // Create lookup for VP and leader by project code / name
+  const vpLookup = new Map<string, string>();
+  const leaderLookup = new Map<string, string>();
+  projects.forEach((p) => {
+    if (p.code) {
+      if (p.vp) vpLookup.set(p.code.trim().toLowerCase(), p.vp.trim());
+      if (p.leader) leaderLookup.set(p.code.trim().toLowerCase(), p.leader.trim());
+    }
+    if (p.name) {
+      if (p.vp) vpLookup.set(p.name.trim().toLowerCase(), p.vp.trim());
+      if (p.leader) leaderLookup.set(p.name.trim().toLowerCase(), p.leader.trim());
+    }
+  });
+
+  const list: Software3Milestone[] = [];
+  let currentLeader = '';
+
+  // Row 2 is headers (0-indexed row 1). Data starts at row 3 (0-indexed row 2) or row 4
+  for (let i = 2; i < rows.length; i++) {
+    const r = rows[i] || [];
+    const col0 = String(r[0] || '').trim();
+    const col1 = String(r[1] || '').trim();
+    const col2 = String(r[2] || '').trim();
+    const col3 = String(r[3] || '').trim();
+    const col4 = String(r[4] || '').trim();
+
+    // Check if this is a section header (e.g. "SP Projects")
+    if (col0 && (col0.toLowerCase().includes('projects') || col0.toLowerCase().includes('leader')) && !col4) {
+      const matchLeader = col0.replace(/projects|leader/gi, '').trim();
+      if (matchLeader) currentLeader = matchLeader;
+      continue;
+    }
+
+    // Must have at least a milestone name
+    if (!col4 && !col0) continue;
+    if (col0.toLowerCase().includes('project id') || col4.toLowerCase().includes('milestone')) continue;
+
+    const projectCode = col0;
+    const projectName = col1 || projectCode;
+    const building = col2;
+    const leader = col3 || currentLeader || leaderLookup.get(projectCode.toLowerCase()) || leaderLookup.get(projectName.toLowerCase()) || '';
+    const milestoneName = col4;
+
+    // Milestone category
+    let category = String(r[5] || '').trim();
+    if (!category) {
+      const nameLower = milestoneName.toLowerCase();
+      if (nameLower.includes('(start)') || nameLower.includes(' start')) category = 'Start';
+      else if (nameLower.includes('(50%)') || nameLower.includes(' 50%')) category = '50%';
+      else if (nameLower.includes('(100%)') || nameLower.includes('(finish)') || nameLower.includes(' finish') || nameLower.includes(' 100%')) category = 'Finish';
+      else category = 'General';
+    }
+
+    // Milestone status
+    let status = String(r[6] || '').trim();
+    if (!status) status = 'Not Done';
+    else if (status.toLowerCase().includes('done') && !status.toLowerCase().includes('not')) status = 'Done';
+    else status = 'Not Done';
+
+    // Planned Week
+    let plannedWeek = String(r[7] || '').trim().toUpperCase();
+    if (plannedWeek && !plannedWeek.startsWith('W') && !isNaN(parseInt(plannedWeek))) {
+      plannedWeek = `W${plannedWeek}`;
+    }
+
+    // Critical Flag (if this milestone will not be completed in current month)
+    const criticalRaw = String(r[8] || '').trim();
+    const isCritical = Boolean(
+      criticalRaw && 
+      (criticalRaw.toUpperCase() === 'C' || 
+       criticalRaw.toUpperCase() === 'YES' || 
+       criticalRaw.toUpperCase() === 'Y' || 
+       criticalRaw.toUpperCase() === 'CRITICAL' ||
+       criticalRaw.toUpperCase() === '1')
+    );
+
+    const reshuffle = String(r[9] || '').trim();
+    const month = String(r[10] || '').trim(); // From which month this milestone is pending
+
+    // 7 Core Milestone Pre-requisites / Reading Parameters
+    const normalizeCheck = (val: any) => {
+      const clean = String(val || '').trim();
+      if (!clean) return 'Done'; // Defaults to neutral/done if unflagged in sheet
+      if (clean.toLowerCase().includes('not') || clean.toLowerCase() === 'no' || clean.toLowerCase() === 'n' || clean.toLowerCase() === 'pending' || clean.toLowerCase() === 'p') {
+        return 'Not Done';
+      }
+      if (clean.toLowerCase().includes('done') || clean.toLowerCase() === 'yes' || clean.toLowerCase() === 'y' || clean.toLowerCase() === 'ok') {
+        return 'Done';
+      }
+      return clean;
+    };
+
+    const contractorApp = normalizeCheck(r[11]);
+    const drawing = normalizeCheck(r[12]);
+    const workFront = normalizeCheck(r[13]);
+    const contractorMob = normalizeCheck(r[14]);
+    const materialDelivery = normalizeCheck(r[15]);
+    const labourAvailability = normalizeCheck(r[16]);
+    const clientDecision = normalizeCheck(r[17]);
+
+    const govtApproval = String(r[18] || '').trim();
+    const crm = String(r[19] || '').trim();
+    const other = String(r[20] || '').trim();
+    const remark = String(r[21] || '').trim();
+
+    // VP lookup
+    const vp = vpLookup.get(projectCode.toLowerCase()) || vpLookup.get(projectName.toLowerCase()) || '';
+
+    // Collect failing constraints
+    const failingConstraints: string[] = [];
+    if (contractorApp === 'Not Done') failingConstraints.push('Contractor App.');
+    if (drawing === 'Not Done') failingConstraints.push('Drawing / GFC');
+    if (workFront === 'Not Done') failingConstraints.push('Work Front Availability');
+    if (contractorMob === 'Not Done') failingConstraints.push('Contractor Mob.');
+    if (materialDelivery === 'Not Done') failingConstraints.push('Material Delivery');
+    if (labourAvailability === 'Not Done') failingConstraints.push('Labour Availability');
+    if (clientDecision === 'Not Done') failingConstraints.push('Client Decision');
+
+    // Primary Bottleneck
+    let primaryBottleneck = failingConstraints.length > 0 ? failingConstraints[0] : (status === 'Done' ? 'None (Achieved)' : 'On-Site Execution');
+
+    // Prescriptive line of action
+    let actionRecommendation = 'Milestone on track for timely delivery.';
+    if (status === 'Not Done') {
+      if (workFront === 'Not Done') {
+        actionRecommendation = 'Expedite preceding trade completion & clear civil work front.';
+      } else if (drawing === 'Not Done') {
+        actionRecommendation = 'Urgent release of GFC drawings from architectural/structural team.';
+      } else if (materialDelivery === 'Not Done') {
+        actionRecommendation = 'Expedite vendor procurement delivery & track material in-transit.';
+      } else if (labourAvailability === 'Not Done') {
+        actionRecommendation = 'Augment contractor manpower deployment & ensure attendance monitoring.';
+      } else if (clientDecision === 'Not Done') {
+        actionRecommendation = 'Escalate pending client/management decision for rate revision or approval.';
+      } else if (contractorApp === 'Not Done') {
+        actionRecommendation = 'Finalize contractor work order / appointment documentation.';
+      } else if (contractorMob === 'Not Done') {
+        actionRecommendation = 'Ensure contractor site mobilization, machinery, and setup on-site.';
+      } else if (remark) {
+        actionRecommendation = `Address site bottleneck: ${remark}`;
+      } else {
+        actionRecommendation = 'Accelerate on-site execution and track daily productivity.';
+      }
+    }
+
+    list.push({
+      id: `${projectCode}-${i}-${milestoneName.substring(0, 10).replace(/\s+/g, '')}`,
+      projectCode,
+      projectName,
+      building,
+      leader,
+      vp,
+      milestone: milestoneName,
+      category,
+      status,
+      plannedWeek,
+      isCritical,
+      criticalRaw,
+      reshuffle,
+      month,
+      contractorApp,
+      drawing,
+      workFront,
+      contractorMob,
+      materialDelivery,
+      labourAvailability,
+      clientDecision,
+      govtApproval,
+      crm,
+      other,
+      remark,
+      failingConstraints,
+      primaryBottleneck,
+      actionRecommendation
+    });
+  }
+
+  return list;
+}
+
 

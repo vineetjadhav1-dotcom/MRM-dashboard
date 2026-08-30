@@ -1420,8 +1420,8 @@ export function AttentionNeededSlide({
 
   return (
     <div 
-      className="w-[1280px] h-[720px] bg-white p-8 flex flex-col justify-between font-sans relative overflow-hidden"
-      style={{ boxSizing: 'border-box' }}
+      className="report-slide relative flex flex-col justify-between p-8 overflow-hidden select-none font-sans" 
+      style={{ width: '1122px', height: '794px', boxSizing: 'border-box', backgroundColor: '#ffffff', color: '#0f172a' }}
     >
       {/* Top Header */}
       <div className="flex items-center justify-between border-b pb-3" style={{ borderColor: '#fecdd3' }}>
