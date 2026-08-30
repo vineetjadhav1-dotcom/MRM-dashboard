@@ -1,6 +1,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 import { toJpeg } from 'html-to-image';
 import { Project, Software2Project, LeaderData } from '@/src/types';
 import { 
@@ -22,6 +23,7 @@ import {
 } from '@/src/utils/customOrder';
 import { isUnderConstructionStage, parseBudgetValue } from '@/src/utils/sheetParser';
 import { DEMO_SOFTWARE2_PROJECTS } from '@/src/hooks/useGoogleSheets';
+import { getFiscalYearConfig, getStoredFiscalYear } from '@/src/utils/fiscalYear';
 
 export interface MRMReportExportOptions {
   title?: string;
@@ -292,18 +294,37 @@ export function calculateMonthlyCurveData(
   baselinePlan: 'r0' | 'r1' | 'both',
   software2Projects: Software2Project[]
 ): ProgressCurveMonthData[] {
+  const activeFy = getStoredFiscalYear();
+  const fyConfig = getFiscalYearConfig(activeFy);
+  const monthsList = fyConfig.months.map((m) => m.key);
+
   const projectCodes = new Set(projects.map((p) => p.code?.trim().toUpperCase()).filter(Boolean));
+  const projectNames = new Set(projects.map((p) => p.name?.trim().toUpperCase()).filter(Boolean));
 
   // Find matching Software 2 metric records
-  const matchingS2 = software2Projects.filter((s2) => {
+  let matchingS2 = software2Projects.filter((s2) => {
     const code = s2.code?.trim().toUpperCase();
-    return code && projectCodes.has(code);
+    const name = s2.name?.trim().toUpperCase();
+    return (code && projectCodes.has(code)) || (name && projectNames.has(name));
   });
 
+  // Fallback: If code/name matching returns empty, match by leader or VP
+  if (matchingS2.length === 0 && software2Projects && software2Projects.length > 0) {
+    const leaderNames = new Set(projects.map((p) => p.leader?.trim().toUpperCase()).filter(Boolean));
+    const vpNames = new Set(projects.map((p) => p.vp?.trim().toUpperCase()).filter(Boolean));
+    matchingS2 = software2Projects.filter((s2) => {
+      const s2Leader = s2.leader?.trim().toUpperCase();
+      const s2Vp = s2.vp?.trim().toUpperCase();
+      return (s2Leader && leaderNames.has(s2Leader)) || (s2Vp && vpNames.has(s2Vp));
+    });
+  }
+
   const monthData: Record<string, { planR0: number; planR1: number; ach: number; hasAch: boolean }> = {};
-  MONTHS_LIST.forEach((m) => {
+  monthsList.forEach((m) => {
     monthData[m] = { planR0: 0, planR1: 0, ach: 0, hasAch: false };
   });
+
+  const normalizeMonth = (mStr: string) => (mStr || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
 
   matchingS2.forEach((s2Proj) => {
     let metricsArray = s2Proj.vowd;
@@ -314,10 +335,14 @@ export function calculateMonthlyCurveData(
 
     if (Array.isArray(metricsArray)) {
       metricsArray.forEach((item) => {
-        if (item && item.month && monthData[item.month]) {
-          const entry = monthData[item.month];
-          entry.planR0 += item.planR0 || item.plan || 0;
-          entry.planR1 += item.planR1 || item.plan || 0;
+        if (!item || !item.month) return;
+        const normItemMonth = normalizeMonth(item.month);
+        const targetMonth = monthsList.find((m) => normalizeMonth(m) === normItemMonth) || item.month;
+
+        if (monthData[targetMonth]) {
+          const entry = monthData[targetMonth];
+          entry.planR0 += item.planR0 !== undefined ? item.planR0 : (item.plan || 0);
+          entry.planR1 += item.planR1 !== undefined ? item.planR1 : (item.plan || 0);
           if (item.achievement !== null && item.achievement !== undefined) {
             entry.ach += item.achievement;
             entry.hasAch = true;
@@ -332,7 +357,7 @@ export function calculateMonthlyCurveData(
   let cumAch = 0;
   let reachedCompletedMonth = true;
 
-  return MONTHS_LIST.map((month) => {
+  return monthsList.map((month) => {
     const entry = monthData[month];
     const plan = baselinePlan === 'r1' ? entry.planR1 : entry.planR0;
     cumPlanR0 += entry.planR0;
@@ -356,15 +381,15 @@ export function calculateMonthlyCurveData(
 
     return {
       month,
-      Plan: plan,
-      PlanR0: entry.planR0,
-      PlanR1: entry.planR1,
-      Achievement: achievement,
+      Plan: Math.round(plan * 10) / 10,
+      PlanR0: Math.round(entry.planR0 * 10) / 10,
+      PlanR1: Math.round(entry.planR1 * 10) / 10,
+      Achievement: achievement !== null ? Math.round(achievement * 10) / 10 : null,
       'Achievement %': achPct,
-      CumPlanR0: cumPlanR0,
-      CumPlanR1: cumPlanR1,
-      CumPlan: cumPlan,
-      CumAchievement: cumAchVal,
+      CumPlanR0: Math.round(cumPlanR0 * 10) / 10,
+      CumPlanR1: Math.round(cumPlanR1 * 10) / 10,
+      CumPlan: Math.round(cumPlan * 10) / 10,
+      CumAchievement: cumAchVal !== null ? Math.round(cumAchVal * 10) / 10 : null,
       'CumAchievement %': cumAchPct
     };
   });
@@ -632,28 +657,33 @@ export async function generateFullMRMReport(options: MRMReportExportOptions): Pr
       root.render(slide.element);
 
       // Delay for React 18 DOM flush, Recharts layout, and SVG rendering
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      await new Promise((resolve) => setTimeout(resolve, 450));
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 
-      // Native browser SVG foreignObject rendering via html-to-image
-      const imgData = await toJpeg(container, {
-        quality: 0.95,
-        pixelRatio: 2,
-        backgroundColor: '#ffffff',
-        width: 1122,
-        height: 794,
-        skipFonts: true,
-        cacheBust: false,
-        style: {
-          position: 'static',
-          top: '0',
-          left: '0',
-          width: '1122px',
-          height: '794px',
-          visibility: 'visible',
-          opacity: '1'
-        }
-      });
+      let imgData = '';
+      try {
+        const canvas = await html2canvas(container, {
+          scale: 2,
+          useCORS: true,
+          allowTaint: true,
+          backgroundColor: '#ffffff',
+          width: 1122,
+          height: 794,
+          logging: false
+        });
+        imgData = canvas.toDataURL('image/jpeg', 0.95);
+      } catch (canvasErr) {
+        console.warn('html2canvas capture warning, attempting toJpeg fallback:', canvasErr);
+        imgData = await toJpeg(container, {
+          quality: 0.95,
+          pixelRatio: 2,
+          backgroundColor: '#ffffff',
+          width: 1122,
+          height: 794,
+          skipFonts: true,
+          cacheBust: false
+        });
+      }
 
       if (index > 0) {
         pdf.addPage('a4', 'landscape');
