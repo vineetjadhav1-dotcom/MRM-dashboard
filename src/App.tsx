@@ -11,6 +11,7 @@ import {
   setStoredUser, 
   getUserManagementSettings, 
   getUserEffectivePermissions,
+  subscribeUserManagementSettings,
   filterProjectsByPermissions,
   filterSoftware2ProjectsByPermissions
 } from '@/src/utils/userManagement';
@@ -60,6 +61,22 @@ export default function App() {
   // Set document title
   useEffect(() => {
     document.title = 'Planedge Executive Dashboard Portal';
+  }, []);
+
+  // Real-time synchronization of user permissions across devices
+  useEffect(() => {
+    const unsub = subscribeUserManagementSettings(setUserSettings);
+    const handleLocalChange = (e: Event) => {
+      const customEvent = e as CustomEvent<UserManagementSettings>;
+      if (customEvent.detail) {
+        setUserSettings(customEvent.detail);
+      }
+    };
+    window.addEventListener('planedge-user-settings-changed', handleLocalChange);
+    return () => {
+      unsub();
+      window.removeEventListener('planedge-user-settings-changed', handleLocalChange);
+    };
   }, []);
 
   // Ensure activeTab is always one of the permitted tabs for standard users

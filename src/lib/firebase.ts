@@ -2,16 +2,19 @@ import { initializeApp } from 'firebase/app';
 import {
   getAuth,
   signInWithPopup,
+  signInAnonymously,
   GoogleAuthProvider,
   onAuthStateChanged,
   User,
   signOut
 } from 'firebase/auth';
+import { getFirestore } from 'firebase/firestore';
 import firebaseConfig from '@/firebase-applet-config.json';
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
+export const auth = getAuth(app);
+export const db = getFirestore(app);
 
 const provider = new GoogleAuthProvider();
 provider.addScope('https://www.googleapis.com/auth/spreadsheets.readonly');
@@ -29,19 +32,32 @@ let cachedAccessToken: string | null = null;
 // Track active listeners
 const listeners = new Set<(user: User | null, token: string | null) => void>();
 
+// Ensure an authenticated session exists for Firestore cross-device access
+export const ensureFirebaseAuth = async (): Promise<User | null> => {
+  try {
+    if (auth.currentUser) return auth.currentUser;
+    const cred = await signInAnonymously(auth);
+    return cred.user;
+  } catch (err) {
+    console.warn('Anonymous auth notice:', err);
+    return auth.currentUser;
+  }
+};
+
 // Initialize auth listener
 onAuthStateChanged(auth, async (user) => {
   if (user) {
-    // If we have a user but no token cached yet, we might need to re-authenticate or wait.
-    // However, during sign-in, cachedAccessToken is set.
-    // If the page was refreshed, the token is gone from memory, so we'll need to trigger login again.
-    // This is safe since we keep token in-memory only.
     listeners.forEach((listener) => listener(user, cachedAccessToken));
   } else {
     cachedAccessToken = null;
     listeners.forEach((listener) => listener(null, null));
+    // Re-authenticate anonymously if needed for Firestore security
+    ensureFirebaseAuth().catch(() => {});
   }
 });
+
+// Auto-trigger auth check on load
+ensureFirebaseAuth().catch(() => {});
 
 export const initAuth = (
   onAuthChange: (user: User | null, token: string | null) => void

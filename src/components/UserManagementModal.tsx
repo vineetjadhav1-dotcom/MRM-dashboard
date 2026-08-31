@@ -81,7 +81,7 @@ export default function UserManagementModal({
     setShowSourceSheet(DEFAULT_USER_PERMISSIONS.planedge.showSourceSheet);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const newSettings: UserManagementSettings = {
       ...settings,
       userPermissions: {
@@ -93,8 +93,8 @@ export default function UserManagementModal({
       }
     };
 
-    saveUserManagementSettings(newSettings);
     onSaveSettings(newSettings);
+    await saveUserManagementSettings(newSettings);
     setSaveSuccess(true);
     setTimeout(() => {
       setSaveSuccess(false);

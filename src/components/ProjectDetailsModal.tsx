@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { Project } from '@/src/types';
+import { formatDateToDdMmmYy, parseBudgetValue, formatBudgetDisplay } from '@/src/utils/sheetParser';
 import { 
   X, 
   User, 
@@ -252,19 +253,19 @@ export default function ProjectDetailsModal({ project, onClose }: ProjectDetails
                 {/* Baseline Finish */}
                 <div className="bg-slate-50/50 border border-slate-100 rounded-2xl p-3 text-xs">
                   <span className="text-[10px] text-slate-400 block uppercase font-bold tracking-wider">Baseline Finish</span>
-                  <span className="font-semibold text-slate-600 block mt-1">{project.baselineFinish || 'N/A'}</span>
+                  <span className="font-semibold text-slate-600 block mt-1">{formatDateToDdMmmYy(project.baselineFinish)}</span>
                 </div>
 
                 {/* Baseline 1 Finish */}
                 <div className="bg-slate-50/50 border border-slate-100 rounded-2xl p-3 text-xs">
                   <span className="text-[10px] text-slate-400 block uppercase font-bold tracking-wider">Baseline1 Finish</span>
-                  <span className="font-semibold text-slate-600 block mt-1">{project.baseline1Finish || 'N/A'}</span>
+                  <span className="font-semibold text-slate-600 block mt-1">{formatDateToDdMmmYy(project.baseline1Finish)}</span>
                 </div>
 
                 {/* Proposed Finish */}
                 <div className="bg-slate-50/50 border border-slate-100 rounded-2xl p-3 text-xs">
                   <span className="text-[10px] text-slate-400 block uppercase font-bold tracking-wider">Proposed Finish</span>
-                  <span className="font-bold text-blue-600 block mt-1">{project.proposedFinish || 'N/A'}</span>
+                  <span className="font-bold text-blue-600 block mt-1">{formatDateToDdMmmYy(project.proposedFinish)}</span>
                 </div>
 
                 {/* PM/Site Incharge */}
@@ -276,7 +277,11 @@ export default function ProjectDetailsModal({ project, onClose }: ProjectDetails
                 {/* Total Budget */}
                 <div className="bg-slate-50/50 border border-slate-100 rounded-2xl p-3 text-xs">
                   <span className="text-[10px] text-slate-400 block uppercase font-bold tracking-wider">Total Budget</span>
-                  <span className="font-bold text-emerald-600 block mt-1">{project.totalBudget || 'N/A'}</span>
+                  <span className="font-bold text-emerald-600 block mt-1">
+                    {parseBudgetValue(project.totalBudget) > 0 
+                      ? formatBudgetDisplay(parseBudgetValue(project.totalBudget)) 
+                      : (project.totalBudget ? String(project.totalBudget).replace(/Rs\.?\s*₹|₹\s*Rs\.?/gi, '₹').trim() : 'N/A')}
+                  </span>
                 </div>
 
                 {/* Total Labours */}

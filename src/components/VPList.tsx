@@ -41,10 +41,14 @@ export default function VPList({ vpDataList, onProjectSelect }: VPListProps) {
 
   return (
     <div className="space-y-4 font-sans" id="vp-portfolio-list">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 pb-2">
+      {/* Header Banner - Uniform Light Grey Block */}
+      <div className="bg-slate-100/80 border border-slate-200/90 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-xs flex items-center space-x-3.5" id="vp-header-banner">
+        <div className="p-3 bg-blue-50 border border-blue-100 text-blue-700 rounded-2xl shadow-2xs shrink-0">
+          <Building2 className="w-6 h-6 text-blue-600" />
+        </div>
         <div>
-          <h3 className="text-base font-bold text-slate-900">Executive VP Portfolios</h3>
-          <p className="text-xs text-slate-500">Rollup metrics and direct reports grouped by VP sponsorship</p>
+          <h3 className="text-lg sm:text-xl font-extrabold text-slate-900 tracking-tight">Executive VP Portfolios</h3>
+          <p className="text-xs text-slate-500 mt-0.5 font-medium">Rollup metrics and direct reports grouped by VP sponsorship</p>
         </div>
       </div>
 

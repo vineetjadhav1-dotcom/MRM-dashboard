@@ -534,180 +534,160 @@ export default function MilestoneAnalysisView({
   return (
     <div className="space-y-5 pb-16 font-sans" id="milestone-analysis-root">
       
-      {/* 1. HERO EXECUTIVE BANNER */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-5 sm:p-6 text-white shadow-xl border border-indigo-900/50 relative overflow-hidden">
-        {/* Decorative background glow */}
-        <div className="absolute right-0 top-0 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
-
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 relative z-10">
-          <div>
-            <div className="flex items-center space-x-3">
-              <span className="p-2.5 bg-indigo-600/30 border border-indigo-400/30 rounded-2xl backdrop-blur-md">
-                <Flag className="w-6 h-6 text-indigo-400" />
-              </span>
-              <div>
-                <h1 className="text-xl sm:text-2xl font-black tracking-tight">
-                  Milestone Analysis &amp; Backlog Diagnostics
-                </h1>
-                <p className="text-xs text-slate-300 font-medium mt-0.5">
-                  Consolidated category stages, chronological pending aging &amp; 10-parameter site constraint diagnostics
-                </p>
-              </div>
-            </div>
+      {/* Header Banner - Uniform Light Grey Block */}
+      <div className="bg-slate-100/80 border border-slate-200/90 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4 relative overflow-hidden" id="milestones-main-header">
+        <div className="flex items-center space-x-3.5">
+          <div className="p-3 bg-indigo-50 border border-indigo-100 text-indigo-700 rounded-2xl shadow-2xs shrink-0">
+            <Flag className="w-6 h-6 text-indigo-600" />
           </div>
-
-          <div className="flex items-center space-x-2.5 flex-wrap">
-            <div className="inline-flex p-1 bg-white/10 rounded-xl border border-white/10 text-xs font-bold">
-              <button
-                onClick={() => setActiveAnalysisTab('overview')}
-                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                  activeAnalysisTab === 'overview'
-                    ? 'bg-indigo-600 text-white shadow-xs'
-                    : 'text-slate-300 hover:text-white'
-                }`}
-              >
-                <BarChart3 className="w-3.5 h-3.5" />
-                <span>Graphical Analytics</span>
-              </button>
-              <button
-                onClick={() => setActiveAnalysisTab('intelligence')}
-                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                  activeAnalysisTab === 'intelligence'
-                    ? 'bg-indigo-600 text-white shadow-xs'
-                    : 'text-slate-300 hover:text-white'
-                }`}
-              >
-                <BrainCircuit className="w-3.5 h-3.5" />
-                <span>Executive Intelligence</span>
-              </button>
-            </div>
-
-            <button
-              onClick={handleExportCSV}
-              className="flex items-center space-x-1.5 px-3.5 py-2 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs font-bold transition-all border border-white/10 cursor-pointer"
-              title="Download filtered milestones as CSV"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Export CSV</span>
-            </button>
-            {onRefresh && (
-              <button
-                onClick={onRefresh}
-                disabled={isLoading}
-                className="flex items-center space-x-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-indigo-600/30 transition-all disabled:opacity-50 cursor-pointer"
-                title="Synchronize live spreadsheet data"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-                <span>Sync Data</span>
-              </button>
-            )}
+          <div>
+            <h1 className="text-lg sm:text-xl font-extrabold text-slate-900 tracking-tight">
+              Milestone Analysis &amp; Backlog Diagnostics
+            </h1>
+            <p className="text-xs text-slate-500 mt-0.5 font-medium">
+              Consolidated category stages, chronological pending aging &amp; 10-parameter site constraint diagnostics
+            </p>
           </div>
         </div>
 
+        <div className="flex items-center space-x-2.5 flex-wrap">
+          <div className="inline-flex p-1 bg-white rounded-xl border border-slate-200 text-xs font-bold shadow-2xs">
+            <button
+              onClick={() => setActiveAnalysisTab('overview')}
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                activeAnalysisTab === 'overview'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <BarChart3 className="w-3.5 h-3.5" />
+              <span>Graphical Analytics</span>
+            </button>
+            <button
+              onClick={() => setActiveAnalysisTab('intelligence')}
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                activeAnalysisTab === 'intelligence'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <BrainCircuit className="w-3.5 h-3.5" />
+              <span>Executive Intelligence</span>
+            </button>
+          </div>
+
+          <button
+            onClick={handleExportCSV}
+            className="flex items-center space-x-1.5 px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold transition-all border border-slate-200 shadow-2xs cursor-pointer"
+            title="Download filtered milestones as CSV"
+          >
+            <Download className="w-3.5 h-3.5 text-slate-500" />
+            <span>Export CSV</span>
+          </button>
+          {onRefresh && (
+            <button
+              onClick={onRefresh}
+              disabled={isLoading}
+              className="flex items-center space-x-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-xs transition-all disabled:opacity-50 cursor-pointer"
+              title="Synchronize live spreadsheet data"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+              <span>Sync Live</span>
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* TOTAL MILESTONE SUMMARY METRICS (Plan & Achievement Counts) - Executive Light Theme */}
+      {/* TOTAL MILESTONE SUMMARY METRICS (Plan & Achievement Counts) - Harmonized MRM Style */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" id="milestone-top-summary-kpis">
         
-        {/* 1. Total Planned (Indigo Light) */}
-        <div className="bg-indigo-50/50 rounded-3xl p-5 border border-indigo-100 shadow-xs flex items-center justify-between relative overflow-hidden group hover:border-indigo-300 transition-all">
-          <div className="space-y-1.5 relative z-10">
-            <span className="text-[10px] font-black uppercase text-indigo-700 tracking-wider block">
-              Total Milestones (Plan) including backlog of previous months
+        {/* 1. Total Milestones (Plan) */}
+        <div className="bg-white border border-slate-200 p-4 rounded-2xl space-y-2.5 shadow-2xs hover:border-slate-300 transition-all">
+          <div className="flex justify-between items-center text-xs font-black text-slate-700 uppercase tracking-wider">
+            <span>Total Milestones</span>
+            <span className="text-indigo-700 font-black bg-indigo-50 px-2.5 py-0.5 rounded-md border border-indigo-100">
+              Plan Target
             </span>
-            <div className="flex items-baseline space-x-2">
-              <span className="text-3xl font-black text-slate-900 font-mono tracking-tight">
-                {stats.total}
-              </span>
-              <span className="text-[11px] font-extrabold text-indigo-700 uppercase px-2.5 py-0.5 rounded-full bg-indigo-100/80 border border-indigo-200">
-                Deliverables
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-500 font-medium">Cumulative master planned targets</p>
           </div>
-          <div className="w-12 h-12 rounded-2xl bg-indigo-100/80 text-indigo-600 flex items-center justify-center border border-indigo-200/80 shrink-0 shadow-2xs relative z-10">
-            <Target className="w-6 h-6" />
+          <div className="flex items-baseline space-x-1.5">
+            <span className="text-2xl font-black text-slate-900">{stats.total}</span>
+            <span className="text-xs font-bold text-slate-500">Planned Deliverables</span>
+          </div>
+          <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 font-medium">
+            <span>Includes master plan &amp; backlog</span>
+            <Target className="w-4 h-4 text-indigo-600" />
           </div>
         </div>
 
-        {/* 2. Total Achieved (Emerald Light) */}
-        <div className="bg-emerald-50/50 rounded-3xl p-5 border border-emerald-100 shadow-xs flex items-center justify-between relative overflow-hidden group hover:border-emerald-300 transition-all">
-          <div className="space-y-1.5 relative z-10">
-            <span className="text-[10px] font-black uppercase text-emerald-700 tracking-wider block">
-              Total Achievement
+        {/* 2. Total Achievement */}
+        <div className="bg-white border border-slate-200 p-4 rounded-2xl space-y-2.5 shadow-2xs hover:border-slate-300 transition-all">
+          <div className="flex justify-between items-center text-xs font-black text-slate-700 uppercase tracking-wider">
+            <span>Total Achievement</span>
+            <span className="text-emerald-700 font-black bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-100">
+              {stats.completionRate}% Met
             </span>
-            <div className="flex items-baseline space-x-2">
-              <span className="text-3xl font-black text-emerald-800 font-mono tracking-tight">
-                {stats.done}
-              </span>
-              <span className="text-[11px] font-extrabold text-emerald-700 bg-emerald-100/80 px-2.5 py-0.5 rounded-full border border-emerald-200">
-                {stats.completionRate}% Met
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-500 font-medium">Fully completed &amp; signed-off</p>
           </div>
-          <div className="w-12 h-12 rounded-2xl bg-emerald-100/80 text-emerald-600 flex items-center justify-center border border-emerald-200/80 shrink-0 shadow-2xs relative z-10">
-            <CheckCircle2 className="w-6 h-6" />
+          <div className="flex items-baseline space-x-1.5">
+            <span className="text-2xl font-black text-slate-900">{stats.done}</span>
+            <span className="text-xs font-bold text-slate-500">/ {stats.total} Completed</span>
+          </div>
+          <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 font-medium">
+            <span>Fully signed-off &amp; delivered</span>
+            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
           </div>
         </div>
 
-        {/* 3. Total Pending / Backlog (Rose Light) */}
-        <div className="bg-rose-50/50 rounded-3xl p-5 border border-rose-100 shadow-xs flex items-center justify-between relative overflow-hidden group hover:border-rose-300 transition-all">
-          <div className="space-y-1.5 relative z-10">
-            <span className="text-[10px] font-black uppercase text-rose-700 tracking-wider block">
-              Total Pending Backlog
+        {/* 3. Total Pending / Backlog */}
+        <div className="bg-white border border-slate-200 p-4 rounded-2xl space-y-2.5 shadow-2xs hover:border-slate-300 transition-all">
+          <div className="flex justify-between items-center text-xs font-black text-slate-700 uppercase tracking-wider">
+            <span>Pending Backlog</span>
+            <span className="text-rose-700 font-black bg-rose-50 px-2.5 py-0.5 rounded-md border border-rose-100">
+              {stats.total > 0 ? Math.round((stats.notDone / stats.total) * 100) : 0}% Backlog
             </span>
-            <div className="flex items-baseline space-x-2">
-              <span className="text-3xl font-black text-rose-800 font-mono tracking-tight">
-                {stats.notDone}
-              </span>
-              <span className="text-[11px] font-extrabold text-rose-700 bg-rose-100/80 px-2.5 py-0.5 rounded-full border border-rose-200">
-                {stats.total > 0 ? Math.round((stats.notDone / stats.total) * 100) : 0}% Backlog
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-500 font-medium">Pending across active aging months</p>
           </div>
-          <div className="w-12 h-12 rounded-2xl bg-rose-100/80 text-rose-600 flex items-center justify-center border border-rose-200/80 shrink-0 shadow-2xs relative z-10">
-            <Clock className="w-6 h-6" />
+          <div className="flex items-baseline space-x-1.5">
+            <span className="text-2xl font-black text-slate-900">{stats.notDone}</span>
+            <span className="text-xs font-bold text-slate-500">/ {stats.total} Pending</span>
+          </div>
+          <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 font-medium">
+            <span>Pending across aging months</span>
+            <Clock className="w-4 h-4 text-rose-600" />
           </div>
         </div>
 
-        {/* 4. Critical Milestones (Amber Light) */}
-        <div className="bg-amber-50/50 rounded-3xl p-5 border border-amber-100 shadow-xs flex items-center justify-between relative overflow-hidden group hover:border-amber-300 transition-all">
-          <div className="space-y-1.5 relative z-10">
-            <span className="text-[10px] font-black uppercase text-amber-800 tracking-wider block">
-              Critical Milestones
+        {/* 4. Critical Milestones */}
+        <div className="bg-white border border-slate-200 p-4 rounded-2xl space-y-2.5 shadow-2xs hover:border-slate-300 transition-all">
+          <div className="flex justify-between items-center text-xs font-black text-slate-700 uppercase tracking-wider">
+            <span>Critical Milestones</span>
+            <span className="text-amber-800 font-black bg-amber-50 px-2.5 py-0.5 rounded-md border border-amber-200">
+              {stats.criticalPending} Pending
             </span>
-            <div className="flex items-baseline space-x-2">
-              <span className="text-3xl font-black text-amber-900 font-mono tracking-tight">
-                {stats.critical}
-              </span>
-              <span className="text-[11px] font-extrabold text-amber-800 bg-amber-100/80 px-2.5 py-0.5 rounded-full border border-amber-200">
-                {stats.criticalPending} Pending
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-500 font-medium">High priority critical path deliverables</p>
           </div>
-          <div className="w-12 h-12 rounded-2xl bg-amber-100/80 text-amber-700 flex items-center justify-center border border-amber-200/80 shrink-0 shadow-2xs relative z-10">
-            <AlertTriangle className="w-6 h-6" />
+          <div className="flex items-baseline space-x-1.5">
+            <span className="text-2xl font-black text-slate-900">{stats.critical}</span>
+            <span className="text-xs font-bold text-slate-500">Critical Deliverables</span>
+          </div>
+          <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 font-medium">
+            <span>High priority critical path</span>
+            <AlertTriangle className="w-4 h-4 text-amber-600" />
           </div>
         </div>
 
       </div>
 
       {/* 2. PENDING MONTHS AGING & BACKLOG HIGHLIGHTS (1st block = Apr 26, Last block = Aug 26) */}
-      <div className="bg-white rounded-3xl p-4 sm:p-5 border border-slate-200 shadow-xs">
+      <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-3 border-b border-slate-100 pb-3">
           <div>
             <div className="flex items-center space-x-2">
               <span className="p-1.5 bg-rose-50 text-rose-600 rounded-lg">
                 <Clock className="w-4 h-4" />
               </span>
-              <h2 className="text-sm font-black text-slate-900 uppercase tracking-wide">
+              <h2 className="text-xs font-black text-slate-700 uppercase tracking-wider">
                 Pending Months Aging &amp; Backlog Highlights
               </h2>
             </div>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <p className="text-xs text-slate-500 mt-0.5 font-medium">
               Chronological sequence from oldest month (Apr 26) to current month (Aug 26). Click any block to filter:
             </p>
           </div>

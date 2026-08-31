@@ -601,35 +601,35 @@ export default function KeyInsights({
   return (
     <div className="space-y-6 font-sans" id="key-insights-root-container">
       
-      {/* 1. Header Banner */}
-      <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* 1. Header Banner - Uniform Light Grey Block */}
+      <div className="bg-slate-100/80 border border-slate-200/90 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4" id="key-insights-header-banner">
         <div className="flex items-start space-x-3.5">
-          <div className="p-3.5 bg-gradient-to-br from-indigo-600 to-blue-700 text-white rounded-2xl shadow-lg shadow-indigo-600/20 shrink-0">
-            <Lightbulb className="w-6 h-6 text-amber-300 animate-pulse" />
+          <div className="p-3 bg-indigo-50 border border-indigo-100 text-indigo-700 rounded-2xl shadow-2xs shrink-0">
+            <Lightbulb className="w-6 h-6 text-amber-500" />
           </div>
           <div>
             <div className="flex items-center gap-2.5 flex-wrap">
-              <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
-                Key Insights & Delivery Forecast
+              <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 tracking-tight">
+                Key Insights &amp; Delivery Forecast
               </h2>
               <span className="bg-indigo-50 text-indigo-700 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-indigo-100">
                 Multi-Tier Analysis
               </span>
             </div>
-            <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+            <p className="text-xs text-slate-500 mt-0.5 font-medium leading-relaxed">
               Drill down by <span className="font-semibold text-slate-700">VP, General Manager/Leader, and Project</span> to analyze all Software 2 deliverable parameters, evaluate performance gaps to date, and forecast execution scenarios till <span className="font-bold text-slate-700">March 2027</span>.
             </p>
           </div>
         </div>
 
         {/* Evaluation Period Summary Pill */}
-        <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 p-2.5 rounded-2xl shrink-0">
-          <div className="px-3 py-1.5 bg-white rounded-xl shadow-2xs border border-slate-150 text-center">
+        <div className="flex items-center gap-2 bg-white border border-slate-200 p-2 rounded-2xl shrink-0 shadow-2xs">
+          <div className="px-3 py-1 bg-slate-50 rounded-xl border border-slate-150 text-center">
             <span className="text-[9px] font-extrabold uppercase text-slate-400 block tracking-wider">Completed Horizon</span>
             <span className="text-xs font-black text-indigo-700 block">Apr 2026 – {lastCompletedMonthName}</span>
           </div>
           <ArrowRight className="w-4 h-4 text-slate-400" />
-          <div className="px-3 py-1.5 bg-white rounded-xl shadow-2xs border border-slate-150 text-center">
+          <div className="px-3 py-1 bg-slate-50 rounded-xl border border-slate-150 text-center">
             <span className="text-[9px] font-extrabold uppercase text-slate-400 block tracking-wider">Forecast Horizon</span>
             <span className="text-xs font-black text-emerald-700 block">{remainingMonthKeys[0]} – Mar 2027</span>
           </div>

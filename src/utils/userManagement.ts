@@ -1,4 +1,6 @@
 import { ActiveTab, AppUser, UserManagementSettings, UserPermissions, Project, Software2Project } from '../types';
+import { db, ensureFirebaseAuth } from '../lib/firebase';
+import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 
 export const ALL_NAV_TABS: ActiveTab[] = [
   'projectDashboard',
@@ -101,13 +103,7 @@ export const DEFAULT_USER_PERMISSIONS: Record<string, UserPermissions> = {
   planedge: {
     allowedNavTabs: [
       'projectDashboard',
-      'leader',
-      'leaderboard',
-      'milestones',
-      'insights',
-      'vp',
-      'all',
-      'overview'
+      'leader'
     ],
     showSourceSheet: true,
     canSyncSheet: true,
@@ -179,12 +175,105 @@ export function getUserManagementSettings(): UserManagementSettings {
   };
 }
 
-export function saveUserManagementSettings(settings: UserManagementSettings): void {
+export async function saveUserManagementSettings(settings: UserManagementSettings): Promise<boolean> {
   try {
     localStorage.setItem(USER_PERMISSIONS_KEY, JSON.stringify(settings));
+    window.dispatchEvent(new CustomEvent('planedge-user-settings-changed', { detail: settings }));
   } catch (e) {
-    console.error('Error saving user management settings:', e);
+    console.error('Error saving user management settings locally:', e);
   }
+
+  // Persist to Cloud Firestore across all devices and platforms
+  try {
+    await ensureFirebaseAuth();
+    await setDoc(doc(db, 'system_settings', 'user_management'), settings, { merge: true });
+    console.log('User management settings successfully synchronized to Cloud Firestore.');
+    return true;
+  } catch (e) {
+    console.warn('Firestore cloud sync notice:', e);
+    return false;
+  }
+}
+
+/**
+ * Subscribe to cloud user management changes so permissions stay synchronized across all devices
+ */
+export function subscribeUserManagementSettings(
+  callback: (settings: UserManagementSettings) => void
+): () => void {
+  let isSubscribed = true;
+
+  // 1. Immediate and re-trying fetch from Cloud Firestore so newly opened devices/mobiles get latest settings instantly
+  const syncFromCloud = async () => {
+    try {
+      await ensureFirebaseAuth();
+      const snapshot = await getDoc(doc(db, 'system_settings', 'user_management'));
+      if (snapshot.exists() && isSubscribed) {
+        const cloudData = snapshot.data() as UserManagementSettings;
+        if (cloudData && Array.isArray(cloudData.users) && cloudData.userPermissions) {
+          const mergedUsers = [...cloudData.users];
+          DEFAULT_USERS.forEach(defU => {
+            if (!mergedUsers.some(u => u.username.toLowerCase() === defU.username.toLowerCase())) {
+              mergedUsers.push(defU);
+            }
+          });
+          const mergedSettings: UserManagementSettings = {
+            users: mergedUsers,
+            userPermissions: { ...DEFAULT_USER_PERMISSIONS, ...cloudData.userPermissions }
+          };
+          localStorage.setItem(USER_PERMISSIONS_KEY, JSON.stringify(mergedSettings));
+          callback(mergedSettings);
+        }
+      }
+    } catch (err) {
+      console.warn('Initial Firestore user management fetch notice:', err);
+    }
+  };
+
+  syncFromCloud();
+
+  // Retry sync after a short delay to account for network / Firebase auth handshake on fresh mobile/desktop loads
+  const retryTimer = setTimeout(() => {
+    if (isSubscribed) syncFromCloud();
+  }, 2000);
+
+  // 2. Real-time snapshot listener for instant cross-device updates
+  let unsubFirestore: () => void = () => {};
+  try {
+    unsubFirestore = onSnapshot(
+      doc(db, 'system_settings', 'user_management'),
+      (snapshot) => {
+        if (snapshot.exists() && isSubscribed) {
+          const cloudData = snapshot.data() as UserManagementSettings;
+          if (cloudData && Array.isArray(cloudData.users) && cloudData.userPermissions) {
+            const mergedUsers = [...cloudData.users];
+            DEFAULT_USERS.forEach(defU => {
+              if (!mergedUsers.some(u => u.username.toLowerCase() === defU.username.toLowerCase())) {
+                mergedUsers.push(defU);
+              }
+            });
+            const mergedSettings: UserManagementSettings = {
+              users: mergedUsers,
+              userPermissions: { ...DEFAULT_USER_PERMISSIONS, ...cloudData.userPermissions }
+            };
+            localStorage.setItem(USER_PERMISSIONS_KEY, JSON.stringify(mergedSettings));
+            callback(mergedSettings);
+          }
+        }
+      },
+      (error) => {
+        console.warn('Firestore user management subscription notice:', error);
+      }
+    );
+  } catch (e) {
+    console.warn('Failed to subscribe to cloud user management:', e);
+  }
+
+  return () => {
+    isSubscribed = false;
+    clearTimeout(retryTimer);
+    unsubFirestore();
+  };
 }
 
 export function authenticateUser(usernameInput: string, passwordInput: string): AppUser | null {
@@ -214,7 +303,7 @@ export function getUserEffectivePermissions(
 ): UserPermissions {
   if (!user) {
     return {
-      allowedNavTabs: ALL_NAV_TABS.filter(t => t !== 'userAccess'),
+      allowedNavTabs: ['projectDashboard', 'leader'],
       showSourceSheet: true,
       canSyncSheet: true,
       canExportReport: true,
@@ -248,7 +337,7 @@ export function getUserEffectivePermissions(
       allowedNavTabs:
         userPerms.allowedNavTabs && userPerms.allowedNavTabs.length > 0
           ? userPerms.allowedNavTabs
-          : ['projectDashboard'],
+          : ['projectDashboard', 'leader'],
       showSourceSheet: userPerms.showSourceSheet !== undefined ? userPerms.showSourceSheet : true,
       canSyncSheet: userPerms.canSyncSheet !== undefined ? userPerms.canSyncSheet : true,
       canExportReport: userPerms.canExportReport !== undefined ? userPerms.canExportReport : true,
@@ -260,9 +349,9 @@ export function getUserEffectivePermissions(
     };
   }
 
-  // Default permissions
-  return {
-    allowedNavTabs: ALL_NAV_TABS.filter(t => t !== 'userAccess'),
+  // Default restricted permissions for standard users if not explicitly configured in settings
+  const defaultFallback = DEFAULT_USER_PERMISSIONS[user.username.toLowerCase()] || {
+    allowedNavTabs: ['projectDashboard', 'leader'],
     showSourceSheet: true,
     canSyncSheet: true,
     canExportReport: true,
@@ -272,6 +361,8 @@ export function getUserEffectivePermissions(
     allowedLeaders: ['all'],
     allowedProjectCodes: ['all']
   };
+
+  return defaultFallback;
 }
 
 /**

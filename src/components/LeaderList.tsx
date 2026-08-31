@@ -7,7 +7,7 @@ import ExportReportModal from './report/ExportReportModal';
 import { getDefaultMRMTitle } from '@/src/utils/mrmPdfCompiler';
 import AttentionNeededProjects from './AttentionNeededProjects';
 import { sortVpNames, sortLeaderItems, sortLeaderNames, isCompleteOrLostStage, isTempProject, parseSpiNumeric, getStageRankForBlankSpi } from '@/src/utils/customOrder';
-import { isUnderConstructionStage, parseBudgetValue, formatBudgetDisplay } from '@/src/utils/sheetParser';
+import { isUnderConstructionStage, parseBudgetValue, formatBudgetDisplay, formatDateToDdMmmYy } from '@/src/utils/sheetParser';
 import { getFiscalYearConfig, getStoredFiscalYear } from '@/src/utils/fiscalYear';
 import { 
   ResponsiveContainer, 
@@ -1070,21 +1070,25 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
         </div>
       </div>
 
-      {/* Upper Descriptive Header Block */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-1">
-        <div>
-          <h2 className="text-xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+      {/* Upper Descriptive Header Block - Uniform Light Grey Block */}
+      <div className="bg-slate-100/80 border border-slate-200/90 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4" id="mrm-dashboard-title-banner">
+        <div className="flex items-center space-x-3.5">
+          <div className="p-3 bg-indigo-50 border border-indigo-100 text-indigo-700 rounded-2xl shadow-2xs shrink-0">
             <Users className="w-6 h-6 text-indigo-600" />
-            Monthly Review Meeting (MRM) Dashboard
-          </h2>
-          <p className="text-xs font-semibold text-slate-500 mt-0.5">
-            Reporting Month: <span className="font-bold text-slate-800">{reportingMonthText}</span>
-          </p>
+          </div>
+          <div>
+            <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 tracking-tight">
+              Monthly Review Meeting (MRM) Dashboard
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5 font-medium">
+              Reporting Month: <span className="font-bold text-slate-800">{reportingMonthText}</span> • Executive portfolio review slide deck &amp; leader aggregates
+            </p>
+          </div>
         </div>
 
         <button
           onClick={() => setShowExportModal(true)}
-          className="inline-flex items-center px-4 py-2 border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold transition-all shadow-2xs no-print cursor-pointer shrink-0"
+          className="inline-flex items-center px-4 py-2 border border-indigo-200 bg-white hover:bg-indigo-50 text-indigo-700 rounded-xl text-xs font-bold transition-all shadow-2xs no-print cursor-pointer shrink-0"
           id="mrm-export-pdf-btn"
           title="Export Full Presentation Report formatted for A4 Landscape (matching 62-page reference)"
         >
@@ -1168,7 +1172,7 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
                     <div className="bg-white border border-slate-200/80 rounded-2xl p-3 shadow-2xs">
                       <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider block">Total Budget</span>
                       <span className="text-base sm:text-lg font-black text-slate-900 block mt-0.5 truncate">
-                        {stats.underManagement.budget > 0 ? `₹ ${stats.underManagement.budgetFormatted}` : 'N/A'}
+                        {stats.underManagement.budget > 0 ? stats.underManagement.budgetFormatted : 'N/A'}
                       </span>
                       <span className="text-[9px] text-slate-400 font-medium">Portfolio budget</span>
                     </div>
@@ -2587,7 +2591,7 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
                                 Baseline Finish:
                               </span>
                               <span className="font-extrabold text-slate-800 bg-slate-100 px-2.5 py-0.5 rounded-md">
-                                {p.baseline1Finish || p.baselineFinish || 'N/A'}
+                                {formatDateToDdMmmYy(p.baseline1Finish || p.baselineFinish)}
                               </span>
                             </div>
 
@@ -2598,7 +2602,7 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
                                 Proposed Finish:
                               </span>
                               <span className="font-extrabold text-slate-800 bg-slate-100 px-2.5 py-0.5 rounded-md">
-                                {p.proposedFinish || p.targetDate || 'N/A'}
+                                {formatDateToDdMmmYy(p.proposedFinish || p.targetDate)}
                               </span>
                             </div>
 

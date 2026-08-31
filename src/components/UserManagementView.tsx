@@ -135,12 +135,13 @@ export default function UserManagementView({
   const [saveToast, setSaveToast] = useState<string | null>(null);
 
   const selectedUser = settings.users.find(u => u.username.toLowerCase() === selectedUsername.toLowerCase()) || settings.users[0];
-  const userPerms: UserPermissions = settings.userPermissions[selectedUser.username.toLowerCase()] || {
-    allowedNavTabs: ['projectDashboard', 'leader', 'leaderboard', 'milestones', 'insights', 'vp', 'all', 'overview'],
+  const userPerms: UserPermissions = settings.userPermissions[selectedUser.username.toLowerCase()] || DEFAULT_USER_PERMISSIONS[selectedUser.username.toLowerCase()] || {
+    allowedNavTabs: ['projectDashboard', 'leader'],
     showSourceSheet: true,
     canSyncSheet: true,
     canExportReport: true,
     canEditConfig: false,
+    canChangeFiscalYear: true,
     allowedVPs: ['all'],
     allowedLeaders: ['all'],
     allowedProjectCodes: ['all']
@@ -160,8 +161,8 @@ export default function UserManagementView({
   // Synchronize local states whenever selected user changes
   const handleSelectUser = (u: AppUser) => {
     setSelectedUsername(u.username);
-    const p = settings.userPermissions[u.username.toLowerCase()] || {
-      allowedNavTabs: ['projectDashboard', 'leader', 'leaderboard', 'milestones', 'insights', 'vp', 'all', 'overview'],
+    const p = settings.userPermissions[u.username.toLowerCase()] || DEFAULT_USER_PERMISSIONS[u.username.toLowerCase()] || {
+      allowedNavTabs: ['projectDashboard', 'leader'],
       showSourceSheet: true,
       canSyncSheet: true,
       canExportReport: true,
@@ -276,7 +277,7 @@ export default function UserManagementView({
     }
   };
 
-  const handleSaveUserPermissions = () => {
+  const handleSaveUserPermissions = async () => {
     const updatedPermissions: UserPermissions = {
       allowedNavTabs: localTabs.length > 0 ? localTabs : ['projectDashboard'],
       showSourceSheet: localShowSourceSheet,
@@ -297,13 +298,17 @@ export default function UserManagementView({
       }
     };
 
-    saveUserManagementSettings(newSettings);
     onSaveSettings(newSettings);
-    setSaveToast(`Permissions updated successfully for user "${selectedUser.username}"!`);
-    setTimeout(() => setSaveToast(null), 3000);
+    const synced = await saveUserManagementSettings(newSettings);
+    if (synced) {
+      setSaveToast(`✓ Permissions updated & synced to Cloud Firestore for "${selectedUser.username}"!`);
+    } else {
+      setSaveToast(`Permissions updated locally for "${selectedUser.username}". (Cloud sync in progress)`);
+    }
+    setTimeout(() => setSaveToast(null), 4000);
   };
 
-  const handleCreateUser = (e: FormEvent) => {
+  const handleCreateUser = async (e: FormEvent) => {
     e.preventDefault();
     setCreateError(null);
 
@@ -338,7 +343,7 @@ export default function UserManagementView({
         [cleanUsername]: {
           allowedNavTabs: newRole === 'admin' 
             ? NAV_TABS_META.map(t => t.id)
-            : ['projectDashboard', 'leader', 'leaderboard', 'milestones', 'insights', 'vp', 'all', 'overview'],
+            : ['projectDashboard', 'leader'],
           showSourceSheet: true,
           canSyncSheet: true,
           canExportReport: true,
@@ -350,7 +355,6 @@ export default function UserManagementView({
       }
     };
 
-    saveUserManagementSettings(newSettings);
     onSaveSettings(newSettings);
     setShowCreateModal(false);
     setNewUsername('');
@@ -358,11 +362,12 @@ export default function UserManagementView({
     setNewDisplayName('');
     setNewRole('user');
     setSelectedUsername(cleanUsername);
-    setSaveToast(`User "${cleanUsername}" created successfully!`);
-    setTimeout(() => setSaveToast(null), 3000);
+    await saveUserManagementSettings(newSettings);
+    setSaveToast(`✓ User "${cleanUsername}" created & synced to Cloud Firestore!`);
+    setTimeout(() => setSaveToast(null), 4000);
   };
 
-  const handleDeleteUser = (usernameToDelete: string) => {
+  const handleDeleteUser = async (usernameToDelete: string) => {
     if (usernameToDelete.toLowerCase() === 'admin') {
       alert('The primary administrator account cannot be deleted.');
       return;
@@ -377,16 +382,16 @@ export default function UserManagementView({
         userPermissions: remainingPerms
       };
 
-      saveUserManagementSettings(newSettings);
       onSaveSettings(newSettings);
       setSelectedUsername(remainingUsers[0]?.username || 'admin');
-      setSaveToast(`User "${usernameToDelete}" deleted.`);
-      setTimeout(() => setSaveToast(null), 3000);
+      await saveUserManagementSettings(newSettings);
+      setSaveToast(`✓ User "${usernameToDelete}" deleted & synced to Cloud Firestore.`);
+      setTimeout(() => setSaveToast(null), 4000);
     }
   };
 
   // Parse Bulk Import Input
-  const handleBulkImport = () => {
+  const handleBulkImport = async () => {
     setImportError(null);
     if (!importText.trim()) {
       setImportError('Please paste user credentials or upload a CSV file.');
@@ -466,12 +471,12 @@ export default function UserManagementView({
       userPermissions: newPermissionsDict
     };
 
-    saveUserManagementSettings(newSettings);
     onSaveSettings(newSettings);
     setShowImportModal(false);
     setImportText('');
-    setSaveToast(`Successfully imported ${addedCount} user accounts!`);
-    setTimeout(() => setSaveToast(null), 3000);
+    await saveUserManagementSettings(newSettings);
+    setSaveToast(`✓ Successfully imported ${addedCount} user accounts & synced to Cloud Firestore!`);
+    setTimeout(() => setSaveToast(null), 4000);
   };
 
   const handleFileUpload = (e: ChangeEvent<HTMLInputElement>) => {
@@ -515,22 +520,22 @@ export default function UserManagementView({
   return (
     <div className="space-y-6 max-w-[1536px] mx-auto font-sans" id="user-management-center">
       
-      {/* Top Banner Header */}
-      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl flex items-center justify-between flex-wrap gap-4">
-        <div className="flex items-center space-x-4">
-          <div className="p-3.5 bg-purple-500/20 rounded-2xl text-purple-300 border border-purple-400/30">
-            <ShieldCheck className="w-8 h-8" />
+      {/* Top Banner Header - Uniform Light Grey Block */}
+      <div className="bg-slate-100/80 border border-slate-200/90 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-xs flex items-center justify-between flex-wrap gap-4" id="user-management-center-banner">
+        <div className="flex items-center space-x-3.5">
+          <div className="p-3 bg-purple-50 rounded-2xl text-purple-700 border border-purple-200 shadow-2xs shrink-0">
+            <ShieldCheck className="w-6 h-6 text-purple-600" />
           </div>
           <div>
-            <div className="flex items-center space-x-2.5">
-              <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white">
+            <div className="flex items-center space-x-2.5 flex-wrap">
+              <h2 className="text-lg sm:text-xl font-extrabold tracking-tight text-slate-900">
                 User Management &amp; Access Control
               </h2>
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-500/30 text-purple-300 border border-purple-400/30">
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-purple-100 text-purple-800 border border-purple-200 uppercase tracking-wider">
                 Admin Center
               </span>
             </div>
-            <p className="text-xs sm:text-sm text-slate-300 mt-1 max-w-2xl leading-relaxed">
+            <p className="text-xs text-slate-500 mt-0.5 font-medium max-w-2xl leading-relaxed">
               Create multiple user accounts, import bulk logins, and precisely control navigation tabs, VP portfolios, leader scoping, and project-level visibility.
             </p>
           </div>
@@ -541,10 +546,10 @@ export default function UserManagementView({
           <button
             type="button"
             onClick={() => setShowImportModal(true)}
-            className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs sm:text-sm font-bold rounded-xl shadow-md transition-all flex items-center space-x-2 cursor-pointer"
+            className="px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-bold rounded-xl shadow-2xs transition-all flex items-center space-x-2 cursor-pointer"
             id="import-users-btn"
           >
-            <UploadCloud className="w-4 h-4 text-blue-400" />
+            <UploadCloud className="w-4 h-4 text-blue-600" />
             <span>Import Users (CSV)</span>
           </button>
 
@@ -552,7 +557,7 @@ export default function UserManagementView({
           <button
             type="button"
             onClick={() => setShowCreateModal(true)}
-            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-bold rounded-xl shadow-lg transition-all flex items-center space-x-2 cursor-pointer"
+            className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center space-x-2 cursor-pointer"
             id="create-new-user-btn"
           >
             <UserPlus className="w-4 h-4" />

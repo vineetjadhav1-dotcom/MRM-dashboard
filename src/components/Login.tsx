@@ -60,11 +60,11 @@ export default function Login({ onLoginSuccess }: LoginProps) {
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col justify-center py-10 sm:px-6 lg:px-8 font-sans" id="login-container">
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
-        <div className="flex justify-center mb-3">
-          <PlanedgeLogo size="lg" />
+        <div className="flex justify-center mb-5">
+          <PlanedgeLogo size="login" />
         </div>
         <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-          Planedge Dashboard
+          Planedge Executive Dashboard
         </h2>
       </div>
 

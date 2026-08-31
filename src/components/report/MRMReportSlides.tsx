@@ -2,6 +2,7 @@ import React from 'react';
 import { Project, Software2Project } from '@/src/types';
 import PlanedgePdfLogo from './PlanedgePdfLogo';
 import { getFiscalYearConfig, getStoredFiscalYear } from '@/src/utils/fiscalYear';
+import { formatDateToDdMmmYy } from '@/src/utils/sheetParser';
 import { 
   Building, 
   Briefcase, 
@@ -1273,14 +1274,14 @@ export function ProjectCardsSlide({
                       <Calendar className="w-2.5 h-2.5" style={{ color: '#94a3b8' }} />
                       Baseline Finish:
                     </span>
-                    <span className="font-black" style={{ color: '#1e293b' }}>{p.baseline1Finish || p.baselineFinish || 'N/A'}</span>
+                    <span className="font-black" style={{ color: '#1e293b' }}>{formatDateToDdMmmYy(p.baseline1Finish || p.baselineFinish)}</span>
                   </div>
                   <div className="flex justify-between items-center" style={{ color: '#475569' }}>
                     <span className="flex items-center gap-1 font-semibold">
                       <Calendar className="w-2.5 h-2.5" style={{ color: '#94a3b8' }} />
                       Proposed Finish:
                     </span>
-                    <span className="font-black" style={{ color: '#1e293b' }}>{p.proposedFinish || p.targetDate || 'N/A'}</span>
+                    <span className="font-black" style={{ color: '#1e293b' }}>{formatDateToDdMmmYy(p.proposedFinish || p.targetDate)}</span>
                   </div>
 
                   <div className="grid grid-cols-2 gap-1.5 pt-0.5">

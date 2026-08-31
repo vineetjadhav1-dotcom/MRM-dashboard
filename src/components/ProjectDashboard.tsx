@@ -3,6 +3,7 @@ import { Software2Project, MonthlyMetric, Software2Mapping, Project, FiscalYearK
 import { useFilter } from '@/src/context/FilterContext';
 import { isCompleteOrLostStage, isTempProject } from '@/src/utils/customOrder';
 import { getFiscalYearConfig, getStoredFiscalYear, setStoredFiscalYear, FISCAL_YEAR_KEYS } from '@/src/utils/fiscalYear';
+import { formatDateToDdMmmYy } from '@/src/utils/sheetParser';
 import AttentionNeededProjects from './AttentionNeededProjects';
 import { 
   ResponsiveContainer, 
@@ -1062,15 +1063,15 @@ export default function ProjectDashboard({
   return (
     <div className="space-y-6 font-sans" id="project-dashboard-consolidated-root">
       
-      {/* Top Header Banner */}
-      <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs flex items-center justify-between gap-4" id="project-dashboard-header-banner">
+      {/* Top Header Banner - Uniform Light Grey Block */}
+      <div className="bg-slate-100/80 border border-slate-200/90 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-xs flex items-center justify-between gap-4" id="project-dashboard-header-banner">
         <div className="flex items-center space-x-3.5">
-          <div className="p-3 bg-blue-50 border border-blue-100 text-blue-700 rounded-2xl shadow-2xs">
+          <div className="p-3 bg-blue-50 border border-blue-100 text-blue-700 rounded-2xl shadow-2xs shrink-0">
             <Layers className="w-6 h-6" />
           </div>
           <div>
-            <h2 className="text-lg font-extrabold text-slate-900">Project Performance Dashboard</h2>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 tracking-tight">Project Performance Dashboard</h2>
+            <p className="text-xs text-slate-500 mt-0.5 font-medium">
               Consolidated Executive Window • {getFiscalYearConfig(activeFy).label} Monthly Timeline, S-Curve Trends &amp; Detailed Metric Analyzer
             </p>
           </div>
@@ -2094,14 +2095,16 @@ export default function ProjectDashboard({
         
         // 1. Baseline Finish Date (prioritize baseline1Finish if present)
         const isBaseline1 = Boolean(s1?.baseline1Finish && s1.baseline1Finish !== 'N/A' && s1.baseline1Finish.trim() !== '');
-        const baselineFinishDate = isBaseline1 
+        const rawBaselineFinishDate = isBaseline1 
           ? s1?.baseline1Finish 
           : (s1?.baselineFinish || s1?.targetDate || 'N/A');
+        const baselineFinishDate = formatDateToDdMmmYy(rawBaselineFinishDate);
         const baselineLabel = isBaseline1 ? 'Baseline1 Finish Date' : 'Baseline Finish Date';
         const baselineSubtext = isBaseline1 ? 'Revised baseline target' : 'Original baseline target';
 
         // 2. Proposed Finish Date (adjusted to Avg QHSE rating)
-        const proposedFinishDate = s2?.proposedFinish || s1?.proposedFinish || s1?.targetDate || 'N/A';
+        const rawProposedFinishDate = s2?.proposedFinish || s1?.proposedFinish || s1?.targetDate || 'N/A';
+        const proposedFinishDate = formatDateToDdMmmYy(rawProposedFinishDate);
         const avgQhse = s2?.avgQhseRating && s2.avgQhseRating !== '-' ? s2.avgQhseRating : (s1?.qualityProgress || '-');
         const qhseNum = parseFloat(String(avgQhse).replace(/%/g, ''));
 
@@ -2113,16 +2116,16 @@ export default function ProjectDashboard({
         const isMonthDelayed = delayInMonth && (delayInMonth.includes('+') || parseFloat(delayInMonth) > 0 || (parseInt(delayInMonth, 10) > 0 && delayInMonth !== '0 Days'));
 
         // 4. Monthwise Timeline Graph Data (refer Software 2 columns LZ to MK)
-        const baselineVal = parseDateToTimelineVal(baselineFinishDate);
+        const baselineVal = parseDateToTimelineVal(rawBaselineFinishDate);
         const activeMonths = getFiscalYearConfig(activeFy).months;
 
         const timelineMonthlyData = activeMonths.map(m => {
           const histItem = s2?.proposedFinishHistory?.find(h => h.month === m.key);
-          const rawStr = histItem?.finishDate || (m.key === 'Apr-26' || m.key === 'May-26' || m.key === 'Jun-26' || m.key === 'Jul-26' || m.key === 'Aug-26' ? proposedFinishDate : '');
+          const rawStr = histItem?.finishDate || (m.key === 'Apr-26' || m.key === 'May-26' || m.key === 'Jun-26' || m.key === 'Jul-26' || m.key === 'Aug-26' ? rawProposedFinishDate : '');
           const val = parseDateToTimelineVal(rawStr);
           return {
             month: m.key,
-            rawDate: rawStr || '-',
+            rawDate: formatDateToDdMmmYy(rawStr),
             proposedVal: val,
             baselineVal: baselineVal
           };

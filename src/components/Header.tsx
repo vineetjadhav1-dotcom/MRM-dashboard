@@ -189,12 +189,12 @@ export default function Header({
   return (
     <div className="sticky top-0 z-50 bg-white" ref={navContainerRef}>
       {/* Top Header Bar */}
-      <header className="border-b border-slate-200 px-3 sm:px-6 lg:px-8 py-3 bg-white font-sans relative z-30" id="app-header">
+      <header className="border-b border-slate-200 px-3 sm:px-6 lg:px-8 py-1.5 sm:py-2 bg-white font-sans relative z-30" id="app-header">
         <div className="max-w-[1536px] mx-auto flex items-center justify-between gap-2.5 sm:gap-4 flex-wrap">
           
           {/* Left Side: Logo + Full Header Title */}
           <div className="flex items-center space-x-3 shrink-0" id="header-title-container">
-            <PlanedgeLogo size="md" />
+            <PlanedgeLogo size="header" />
 
             <div>
               <div className="flex items-center space-x-2">
@@ -216,7 +216,7 @@ export default function Header({
             {/* Fiscal Year Switcher Dropdown Control */}
             {canChangeFiscalYear ? (
               <div 
-                className="relative flex items-center bg-gradient-to-r from-blue-50 via-indigo-50 to-blue-50 hover:from-blue-100 hover:to-indigo-100 border border-indigo-200 hover:border-indigo-300 rounded-xl px-2.5 sm:px-3 py-1.5 shadow-2xs transition-all group cursor-pointer"
+                className="relative flex items-center bg-gradient-to-r from-blue-50 via-indigo-50 to-blue-50 hover:from-blue-100 hover:to-indigo-100 border border-indigo-200 hover:border-indigo-300 rounded-xl px-2.5 sm:px-3 py-1 shadow-2xs transition-all group cursor-pointer"
                 id="header-fiscal-year-selector"
                 title="Select Active Reporting Fiscal Year Range"
               >
@@ -240,7 +240,7 @@ export default function Header({
               </div>
             ) : (
               <div 
-                className="flex items-center space-x-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 sm:px-3 py-1.5 shadow-2xs text-slate-700"
+                className="flex items-center space-x-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 sm:px-3 py-1 shadow-2xs text-slate-700"
                 id="header-fiscal-year-display"
                 title="Active Reporting Fiscal Year"
               >
@@ -257,7 +257,7 @@ export default function Header({
                 type="button"
                 onClick={onRefresh}
                 disabled={isLoading}
-                className="inline-flex items-center px-2.5 sm:px-3.5 py-1.5 border border-blue-200 rounded-xl text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 transition-colors cursor-pointer shadow-2xs disabled:opacity-60"
+                className="inline-flex items-center px-2.5 sm:px-3 py-1 border border-blue-200 rounded-xl text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 transition-colors cursor-pointer shadow-2xs disabled:opacity-60"
                 title="Synchronize Live Spreadsheet Data directly from Google Sheets"
                 id="sync-spreadsheet-btn"
               >
@@ -272,7 +272,7 @@ export default function Header({
                 href="https://docs.google.com/spreadsheets/d/1BDEpLJk9tIo9Y-CxJYksR2GRjaCuQalr1p2ZNTI5AJA/edit?gid=0#gid=0"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="hidden lg:inline-flex items-center px-3 py-1.5 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer shadow-2xs"
+                className="hidden lg:inline-flex items-center px-2.5 sm:px-3 py-1 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer shadow-2xs"
                 id="view-sheet-header-link"
                 title="Open Google Sheet in new tab"
               >
@@ -283,9 +283,9 @@ export default function Header({
 
             {/* User Profile Widget */}
             {currentUser && (
-              <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-xl px-2 sm:px-2.5 py-1 shadow-2xs" id="user-profile-widget">
+              <div className="flex items-center space-x-2 bg-slate-50 border border-slate-200 rounded-xl px-2 sm:px-2.5 py-0.5 shadow-2xs" id="user-profile-widget">
                 <div 
-                  className="w-7 h-7 rounded-full text-white flex items-center justify-center text-xs font-bold uppercase shadow-2xs shrink-0"
+                  className="w-6 h-6 rounded-full text-white flex items-center justify-center text-[11px] font-bold uppercase shadow-2xs shrink-0"
                   style={{ backgroundColor: currentUser.avatarBg || (isAdmin ? '#6366f1' : '#0284c7') }}
                 >
                   {currentUser.username.charAt(0).toUpperCase()}
@@ -323,13 +323,13 @@ export default function Header({
               onClick={() => setIsNavOpen(prev => !prev)}
               aria-label="Toggle Navigation Menu"
               aria-expanded={isNavOpen}
-              className="p-2 sm:p-2.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-800 transition-colors cursor-pointer shadow-2xs flex items-center justify-center"
+              className="p-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-slate-800 transition-colors cursor-pointer shadow-2xs flex items-center justify-center"
               title={isNavOpen ? 'Close Menu' : 'Open Navigation Menu'}
             >
               {isNavOpen ? (
-                <X className="w-5 h-5 text-slate-800" />
+                <X className="w-4 h-4 text-slate-800" />
               ) : (
-                <Menu className="w-5 h-5 text-slate-800" />
+                <Menu className="w-4 h-4 text-slate-800" />
               )}
             </button>
 
@@ -339,7 +339,7 @@ export default function Header({
       </header>
 
       {/* Horizontal Navigation Bar (Direct 1-Click Access) */}
-      <nav className="bg-slate-900 border-b border-slate-800 px-3 sm:px-6 lg:px-8 py-1.5 overflow-x-auto scrollbar-none shadow-inner" id="horizontal-nav-bar" aria-label="Main Navigation">
+      <nav className="bg-slate-900 border-b border-slate-800 px-3 sm:px-6 lg:px-8 py-1 overflow-x-auto scrollbar-none shadow-inner" id="horizontal-nav-bar" aria-label="Main Navigation">
         <div className="max-w-[1536px] mx-auto flex items-center space-x-1.5 sm:space-x-2 min-w-max">
           {visibleNavItems.map((item) => {
             const Icon = item.icon;
@@ -352,7 +352,7 @@ export default function Header({
                 type="button"
                 id={`navbar-tab-${item.id}`}
                 onClick={() => onSelectTab && onSelectTab(item.id)}
-                className={`flex items-center space-x-2 px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                className={`flex items-center space-x-2 px-2.5 sm:px-3 py-1 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
                   isActive
                     ? 'bg-blue-600 text-white shadow-md shadow-blue-900/30'
                     : isUserAccessTab

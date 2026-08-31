@@ -582,6 +582,88 @@ export function formatBudgetDisplay(crVal: number): string {
   return `₹ ${crVal.toFixed(2)} Cr.`;
 }
 
+const SHORT_MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const FULL_MONTH_MAP: Record<string, number> = {
+  january: 0, february: 1, march: 2, april: 3, may: 4, june: 5,
+  july: 6, august: 7, september: 8, october: 9, november: 10, december: 11,
+  jan: 0, feb: 1, mar: 2, apr: 3, jun: 5, jul: 6, aug: 7, sep: 8, sept: 8, oct: 9, nov: 10, dec: 11
+};
+
+/**
+ * Standardize any date into uniform dd-mmm-yy format (e.g. "30-Sep-26", "15-Aug-26", "05-Jan-25")
+ */
+export function formatDateToDdMmmYy(dateVal: string | number | undefined | null): string {
+  if (dateVal === undefined || dateVal === null) return '-';
+  if (typeof dateVal === 'number') {
+    if (isNaN(dateVal) || dateVal <= 0) return '-';
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) return '-';
+    const day = String(d.getDate()).padStart(2, '0');
+    const mon = SHORT_MONTH_NAMES[d.getMonth()];
+    const yr = String(d.getFullYear()).slice(-2);
+    return `${day}-${mon}-${yr}`;
+  }
+
+  const clean = String(dateVal).trim();
+  if (!clean || clean === '-' || clean === 'N/A' || clean === 'null' || clean === 'undefined') return '-';
+
+  // Check dd-mmm-yy or dd-mmm-yyyy (e.g. "30-Sep-26", "5-Sep-2026", "15-September-2026")
+  const wordMonthMatch = clean.match(/^(\d{1,2})[-/\s]([A-Za-z]+)[-/\s](\d{2,4})$/);
+  if (wordMonthMatch) {
+    const day = wordMonthMatch[1].padStart(2, '0');
+    const mStr = wordMonthMatch[2].toLowerCase();
+    const mIdx = FULL_MONTH_MAP[mStr] !== undefined ? FULL_MONTH_MAP[mStr] : SHORT_MONTH_NAMES.findIndex(m => m.toLowerCase() === mStr.slice(0, 3));
+    const mon = (mIdx >= 0 && mIdx < 12) ? SHORT_MONTH_NAMES[mIdx] : (mStr.charAt(0).toUpperCase() + mStr.slice(1, 3));
+    let yr = wordMonthMatch[3];
+    if (yr.length === 4) yr = yr.slice(-2);
+    return `${day}-${mon}-${yr}`;
+  }
+
+  // Check standard ISO yyyy-mm-dd
+  const isoMatch = clean.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+  if (isoMatch) {
+    const yr = isoMatch[1].slice(-2);
+    const mIdx = parseInt(isoMatch[2], 10) - 1;
+    const mon = (mIdx >= 0 && mIdx < 12) ? SHORT_MONTH_NAMES[mIdx] : 'Jan';
+    const day = isoMatch[3].padStart(2, '0');
+    return `${day}-${mon}-${yr}`;
+  }
+
+  // Check dd-mm-yyyy or dd/mm/yyyy
+  const dmyMatch = clean.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})$/);
+  if (dmyMatch) {
+    const day = dmyMatch[1].padStart(2, '0');
+    const mIdx = parseInt(dmyMatch[2], 10) - 1;
+    const mon = (mIdx >= 0 && mIdx < 12) ? SHORT_MONTH_NAMES[mIdx] : 'Jan';
+    let yr = dmyMatch[3];
+    if (yr.length === 4) yr = yr.slice(-2);
+    return `${day}-${mon}-${yr}`;
+  }
+
+  // Check mmm-yy or mmm-yyyy (e.g. "Sep-26", "September 2026")
+  const monYrMatch = clean.match(/^([A-Za-z]+)[-/\s](\d{2,4})$/);
+  if (monYrMatch) {
+    const mStr = monYrMatch[1].toLowerCase();
+    const mIdx = FULL_MONTH_MAP[mStr] !== undefined ? FULL_MONTH_MAP[mStr] : SHORT_MONTH_NAMES.findIndex(m => m.toLowerCase() === mStr.slice(0, 3));
+    const mon = (mIdx >= 0 && mIdx < 12) ? SHORT_MONTH_NAMES[mIdx] : 'Jan';
+    let yr = monYrMatch[2];
+    if (yr.length === 4) yr = yr.slice(-2);
+    return `01-${mon}-${yr}`;
+  }
+
+  // Parse general date string
+  const parsed = Date.parse(clean);
+  if (!isNaN(parsed)) {
+    const d = new Date(parsed);
+    const day = String(d.getDate()).padStart(2, '0');
+    const mon = SHORT_MONTH_NAMES[d.getMonth()];
+    const yr = String(d.getFullYear()).slice(-2);
+    return `${day}-${mon}-${yr}`;
+  }
+
+  return clean;
+}
+
 /**
  * Compute aggregate metrics and rollup reports
  */

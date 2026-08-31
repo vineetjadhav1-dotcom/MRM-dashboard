@@ -544,20 +544,20 @@ export default function Leaderboard({
   return (
     <div className="space-y-6 font-sans" id="leaderboard-root">
       
-      {/* Top Banner */}
-      <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+      {/* Top Banner - Uniform Light Grey Block */}
+      <div className="bg-slate-100/80 border border-slate-200/90 rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4" id="leaderboard-header-banner">
         <div className="flex items-center space-x-3.5">
-          <div className="p-3 bg-amber-500 text-white rounded-2xl shadow-md shadow-amber-500/20">
-            <Trophy className="w-6 h-6" />
+          <div className="p-3 bg-amber-50 border border-amber-200 text-amber-700 rounded-2xl shadow-2xs shrink-0">
+            <Trophy className="w-6 h-6 text-amber-600" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-lg font-extrabold text-slate-900">Executive Performance Leaderboard</h2>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 tracking-tight">Executive Performance Leaderboard</h2>
               <span className="bg-amber-100 text-amber-800 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-amber-200">
                 {fyConfig.label} Benchmarking
               </span>
             </div>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <p className="text-xs text-slate-500 mt-0.5 font-medium">
               Rankings &amp; cross-comparative efficiency metrics across <strong className="text-slate-700">VPs, Leaders &amp; Projects</strong> evaluated across the selected month timeframe.
             </p>
           </div>
@@ -704,72 +704,117 @@ export default function Leaderboard({
       </div>
 
       {/* Main Leaderboard Table Container */}
-      <div className="bg-white border border-slate-200 rounded-3xl shadow-xs overflow-hidden">
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden" id="leaderboard-table-container">
         
         {/* Table Search & Control Bar */}
-        <div className="p-4 sm:p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-50/40">
-          <div className="relative flex-1 max-w-md">
-            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              placeholder={`Search by name...`}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3.5 py-2 text-xs font-semibold bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
+        <div className="p-4 sm:p-5 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white">
+          <div>
+            <h3 className="text-xs font-black text-slate-700 uppercase tracking-wider">
+              {activeCategory === 'VP' ? 'Executive VP Rankings' : activeCategory === 'LEADER' ? 'Project Leader Rankings' : 'Project Rankings'}
+            </h3>
+            <p className="text-xs text-slate-500 mt-0.5 font-medium">
+              Evaluated across {activeMonthKeys.length} active months ({startMonth}–{toMonth}) • Click column headers to sort
+            </p>
           </div>
 
-          <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
-            <span>Showing <strong className="text-slate-900">{sortedRows.length}</strong> records</span>
-            <span className="text-slate-300">•</span>
-            <span className="text-[11px] text-slate-400">Click column headers to sort</span>
+          <div className="flex items-center space-x-3 flex-wrap">
+            <div className="relative w-48 sm:w-64">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Search by name..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-8 pr-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+
+            <div className="text-xs font-bold text-slate-500">
+              <span>Showing <strong className="text-slate-900">{sortedRows.length}</strong> records</span>
+            </div>
           </div>
         </div>
 
-        {/* Responsive Table */}
+        {/* Responsive Table matching Milestone Analysis exact typography */}
         <div className="overflow-x-auto">
-          <table className="w-full text-center border-collapse min-w-[1100px]">
+          <table className="w-full text-center border-collapse text-xs min-w-[1100px]">
             <thead>
-              <tr className="bg-slate-100/75 border-b border-slate-200 text-[10px] font-black text-slate-600 uppercase tracking-wider select-none">
-                <th className="py-3 px-3 w-14 text-center cursor-pointer" onClick={() => handleSort('rank')}>
-                  Rank
+              <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-black uppercase text-slate-500 tracking-wider select-none">
+                <th className="py-3 px-3 w-14 text-center cursor-pointer hover:text-slate-900" onClick={() => handleSort('rank')}>
+                  <div className="flex items-center justify-center gap-1">
+                    <span>Rank</span>
+                    <ArrowUpDown className="w-3 h-3" />
+                  </div>
                 </th>
-                <th className="py-3 px-4 min-w-[200px] text-center cursor-pointer" onClick={() => handleSort('name')}>
-                  {activeCategory === 'VP' ? 'Executive VP' : activeCategory === 'LEADER' ? 'Project Leader' : 'Project Name'}
+                <th className="py-3 px-4 min-w-[180px] text-center cursor-pointer hover:text-slate-900" onClick={() => handleSort('name')}>
+                  <div className="flex items-center justify-center gap-1">
+                    <span>{activeCategory === 'VP' ? 'Executive VP' : activeCategory === 'LEADER' ? 'Project Leader' : 'Project'}</span>
+                    <ArrowUpDown className="w-3 h-3" />
+                  </div>
                 </th>
-                <th className="py-3 px-3 text-center cursor-pointer" onClick={() => handleSort('vowdPct')}>
-                  VOWD (% / ₹ Cr.)
+                <th className="py-3 px-3 text-center cursor-pointer hover:text-slate-900" onClick={() => handleSort('vowdPct')}>
+                  <div className="flex items-center justify-center gap-1">
+                    <span>VOWD</span>
+                    <ArrowUpDown className="w-3 h-3" />
+                  </div>
                 </th>
-                <th className="py-3 px-3 text-center cursor-pointer" onClick={() => handleSort('milestonePct')}>
-                  Milestones
+                <th className="py-3 px-3 text-center cursor-pointer hover:text-slate-900" onClick={() => handleSort('milestonePct')}>
+                  <div className="flex items-center justify-center gap-1">
+                    <span>Milestones</span>
+                    <ArrowUpDown className="w-3 h-3" />
+                  </div>
                 </th>
-                <th className="py-3 px-3 text-center cursor-pointer" onClick={() => handleSort('labourPct')}>
-                  Labour
+                <th className="py-3 px-3 text-center cursor-pointer hover:text-slate-900" onClick={() => handleSort('labourPct')}>
+                  <div className="flex items-center justify-center gap-1">
+                    <span>Labour</span>
+                    <ArrowUpDown className="w-3 h-3" />
+                  </div>
                 </th>
-                <th className="py-3 px-3 text-center cursor-pointer" onClick={() => handleSort('urPct')}>
-                  Unit Del. (Res.)
+                <th className="py-3 px-3 text-center cursor-pointer hover:text-slate-900" onClick={() => handleSort('urPct')}>
+                  <div className="flex items-center justify-center gap-1">
+                    <span>Unit Del. (Res.)</span>
+                    <ArrowUpDown className="w-3 h-3" />
+                  </div>
                 </th>
-                <th className="py-3 px-3 text-center cursor-pointer" onClick={() => handleSort('ucPct')}>
-                  Unit Del. (Comm.)
+                <th className="py-3 px-3 text-center cursor-pointer hover:text-slate-900" onClick={() => handleSort('ucPct')}>
+                  <div className="flex items-center justify-center gap-1">
+                    <span>Unit Del. (Comm.)</span>
+                    <ArrowUpDown className="w-3 h-3" />
+                  </div>
                 </th>
-                <th className="py-3 px-3 text-center cursor-pointer" onClick={() => handleSort('labourProductivity')}>
-                  Labour Productivity
+                <th className="py-3 px-3 text-center cursor-pointer hover:text-slate-900" onClick={() => handleSort('labourProductivity')}>
+                  <div className="flex items-center justify-center gap-1">
+                    <span>Labour Productivity</span>
+                    <ArrowUpDown className="w-3 h-3" />
+                  </div>
                 </th>
-                <th className="py-3 px-3 text-center cursor-pointer" onClick={() => handleSort('labourEfficiency')}>
-                  Labour Efficiency
+                <th className="py-3 px-3 text-center cursor-pointer hover:text-slate-900" onClick={() => handleSort('labourEfficiency')}>
+                  <div className="flex items-center justify-center gap-1">
+                    <span>Labour Efficiency</span>
+                    <ArrowUpDown className="w-3 h-3" />
+                  </div>
                 </th>
-                <th className="py-3 px-3 text-center cursor-pointer" onClick={() => handleSort('speedOfConstruction')}>
-                  Speed (₹/Sqft/Mo)
+                <th className="py-3 px-3 text-center cursor-pointer hover:text-slate-900" onClick={() => handleSort('speedOfConstruction')}>
+                  <div className="flex items-center justify-center gap-1">
+                    <span>Speed (₹/Sqft)</span>
+                    <ArrowUpDown className="w-3 h-3" />
+                  </div>
                 </th>
-                <th className="py-3 px-3 text-center cursor-pointer" onClick={() => handleSort('avgSPI')}>
-                  Avg SPI ({startMonth}–{toMonth})
+                <th className="py-3 px-3 text-center cursor-pointer hover:text-slate-900" onClick={() => handleSort('avgSPI')}>
+                  <div className="flex items-center justify-center gap-1">
+                    <span>Avg SPI</span>
+                    <ArrowUpDown className="w-3 h-3" />
+                  </div>
                 </th>
-                <th className="py-3 px-4 text-center cursor-pointer" onClick={() => handleSort('compositeScore')}>
-                  Score / Grade
+                <th className="py-3 px-4 text-center cursor-pointer hover:text-slate-900" onClick={() => handleSort('compositeScore')}>
+                  <div className="flex items-center justify-center gap-1">
+                    <span>Score / Grade</span>
+                    <ArrowUpDown className="w-3 h-3" />
+                  </div>
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 text-xs">
+            <tbody className="divide-y divide-slate-100">
               {sortedRows.map((row) => {
                 const isTop1 = row.rank === 1;
                 const isTop2 = row.rank === 2;
@@ -792,16 +837,16 @@ export default function Leaderboard({
                   <tr 
                     key={row.id}
                     onClick={() => row.rawProject && onSelectProject && onSelectProject(row.rawProject)}
-                    className={`transition-colors ${
-                      row.rawProject ? 'hover:bg-blue-50/40 cursor-pointer' : 'hover:bg-slate-50/60'
+                    className={`hover:bg-slate-50/80 transition-colors ${
+                      row.rawProject ? 'cursor-pointer' : ''
                     } ${
                       isTop1 ? 'bg-amber-50/20' : isTop2 ? 'bg-slate-50/30' : ''
                     }`}
                   >
                     {/* Rank Badge */}
-                    <td className="py-3.5 px-3 text-center">
-                      <span className={`inline-flex items-center justify-center w-7 h-7 rounded-xl font-black text-xs ${
-                        isTop1 ? 'bg-amber-500 text-white shadow-xs' :
+                    <td className="py-3 px-3 text-center font-bold text-slate-400 text-[10px]">
+                      <span className={`inline-flex items-center justify-center w-6 h-6 rounded-lg font-black text-[10px] ${
+                        isTop1 ? 'bg-amber-500 text-white shadow-2xs' :
                         isTop2 ? 'bg-slate-400 text-white' :
                         isTop3 ? 'bg-amber-700 text-white' :
                         'bg-slate-100 text-slate-600 font-bold'
@@ -811,20 +856,22 @@ export default function Leaderboard({
                     </td>
 
                     {/* Entity Name & Subtitle */}
-                    <td className="py-3.5 px-4 text-center">
-                      <div className="font-extrabold text-slate-900 max-w-[240px] truncate mx-auto" title={row.name}>
-                        {row.name}
+                    <td className="py-3 px-4 text-center">
+                      <div className="flex flex-col items-center">
+                        <span className="font-extrabold text-slate-900 leading-snug truncate max-w-[200px]" title={row.name}>
+                          {row.name}
+                        </span>
+                        {row.subTitle && (
+                          <span className="text-[10px] text-slate-400 font-medium truncate max-w-[200px]">
+                            {row.subTitle}
+                          </span>
+                        )}
                       </div>
-                      {row.subTitle && (
-                        <div className="text-[10px] text-slate-400 font-medium truncate max-w-[240px] mx-auto">
-                          {row.subTitle}
-                        </div>
-                      )}
                     </td>
 
                     {/* 1. VOWD */}
-                    <td className="py-3.5 px-3 text-center whitespace-nowrap">
-                      <div className="font-extrabold text-slate-900 font-mono">
+                    <td className="py-3 px-3 text-center whitespace-nowrap">
+                      <div className="font-extrabold text-slate-900 font-mono text-xs">
                         {row.vowdPct.toFixed(0)}%
                       </div>
                       <div className="text-[10px] text-slate-400 font-medium">
@@ -833,8 +880,8 @@ export default function Leaderboard({
                     </td>
 
                     {/* 2. Milestone */}
-                    <td className="py-3.5 px-3 text-center whitespace-nowrap">
-                      <div className="font-extrabold text-slate-900 font-mono">
+                    <td className="py-3 px-3 text-center whitespace-nowrap">
+                      <div className="font-extrabold text-slate-900 font-mono text-xs">
                         {row.milestonePct.toFixed(0)}%
                       </div>
                       <div className="text-[10px] text-slate-400 font-medium">
@@ -843,8 +890,8 @@ export default function Leaderboard({
                     </td>
 
                     {/* 3. Labour */}
-                    <td className="py-3.5 px-3 text-center whitespace-nowrap">
-                      <div className="font-extrabold text-slate-900 font-mono">
+                    <td className="py-3 px-3 text-center whitespace-nowrap">
+                      <div className="font-extrabold text-slate-900 font-mono text-xs">
                         {row.labourPct.toFixed(0)}%
                       </div>
                       <div className="text-[10px] text-slate-400 font-medium">
@@ -853,8 +900,8 @@ export default function Leaderboard({
                     </td>
 
                     {/* 4. Unit Delivery - Residential */}
-                    <td className="py-3.5 px-3 text-center whitespace-nowrap">
-                      <div className="font-extrabold text-slate-900 font-mono">
+                    <td className="py-3 px-3 text-center whitespace-nowrap">
+                      <div className="font-extrabold text-slate-900 font-mono text-xs">
                         {row.urPct.toFixed(0)}%
                       </div>
                       <div className="text-[10px] text-slate-400 font-medium">
@@ -863,8 +910,8 @@ export default function Leaderboard({
                     </td>
 
                     {/* 5. Unit Delivery - Commercial */}
-                    <td className="py-3.5 px-3 text-center whitespace-nowrap">
-                      <div className="font-extrabold text-slate-900 font-mono">
+                    <td className="py-3 px-3 text-center whitespace-nowrap">
+                      <div className="font-extrabold text-slate-900 font-mono text-xs">
                         {row.ucPct.toFixed(0)}%
                       </div>
                       <div className="text-[10px] text-slate-400 font-medium">
@@ -873,32 +920,32 @@ export default function Leaderboard({
                     </td>
 
                     {/* 6. Labour Productivity */}
-                    <td className="py-3.5 px-3 text-center whitespace-nowrap font-mono">
-                      <span className="font-bold text-slate-800">
+                    <td className="py-3 px-3 text-center whitespace-nowrap">
+                      <span className="font-bold text-slate-800 font-mono text-xs">
                         ₹{row.labourProductivity > 0 ? Math.round(row.labourProductivity).toLocaleString() : '0'}
                       </span>
-                      <span className="text-[9px] text-slate-400 block font-normal">/Lab./Day</span>
+                      <span className="text-[9.5px] text-slate-400 block font-normal">/Lab./Day</span>
                     </td>
 
                     {/* 7. Labour Efficiency */}
-                    <td className="py-3.5 px-3 text-center whitespace-nowrap font-mono">
-                      <span className={`font-bold ${row.labourEfficiency >= 1.0 ? 'text-emerald-600' : 'text-slate-800'}`}>
+                    <td className="py-3 px-3 text-center whitespace-nowrap">
+                      <span className={`font-bold font-mono text-xs ${row.labourEfficiency >= 1.0 ? 'text-emerald-600' : 'text-slate-800'}`}>
                         {row.labourEfficiency > 0 ? row.labourEfficiency.toFixed(2) : '0.00'}
                       </span>
-                      <span className="text-[9px] text-slate-400 block font-normal">Cr./100 Lab.</span>
+                      <span className="text-[9.5px] text-slate-400 block font-normal">Cr./100 Lab.</span>
                     </td>
 
                     {/* 8. Speed of Construction */}
-                    <td className="py-3.5 px-3 text-center whitespace-nowrap font-mono">
-                      <span className="font-bold text-slate-800">
-                        {row.speedOfConstruction > 0 ? `₹${Math.round(row.speedOfConstruction).toLocaleString()}` : '-'}
+                    <td className="py-3 px-3 text-center whitespace-nowrap">
+                      <span className="font-bold text-slate-800 font-mono text-xs">
+                        {row.speedOfConstruction > 0 ? `₹${Math.round(row.speedOfConstruction).toLocaleString()}` : '—'}
                       </span>
-                      <span className="text-[9px] text-slate-400 block font-normal">/Sqft/Mo</span>
+                      <span className="text-[9.5px] text-slate-400 block font-normal">/Sqft/Mo</span>
                     </td>
 
                     {/* 9. Avg SPI */}
-                    <td className="py-3.5 px-3 text-center whitespace-nowrap">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-black font-mono border ${
+                    <td className="py-3 px-3 text-center whitespace-nowrap">
+                      <span className={`inline-flex items-center px-1.5 py-0.5 rounded-md text-[9.5px] font-black font-mono border uppercase ${
                         row.avgSPI >= 1.0 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
                         row.avgSPI >= 0.85 ? 'bg-amber-50 text-amber-700 border-amber-200' :
                         'bg-rose-50 text-rose-700 border-rose-200'
@@ -908,8 +955,8 @@ export default function Leaderboard({
                     </td>
 
                     {/* Overall Score & Grade */}
-                    <td className="py-3.5 px-4 text-center whitespace-nowrap">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-black border ${gradeBadge}`}>
+                    <td className="py-3 px-4 text-center whitespace-nowrap">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[9.5px] font-black uppercase border ${gradeBadge}`}>
                         {grade} ({row.compositeScore.toFixed(0)})
                       </span>
                     </td>
