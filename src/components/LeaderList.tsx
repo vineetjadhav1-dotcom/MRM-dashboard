@@ -851,7 +851,7 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
 
   const labourEfficiency = useMemo(() => {
     if (!stats || stats.labour.ach === 0) return 0;
-    return (stats.vowd.ach / stats.labour.ach) * 100;
+    return (stats.vowd.ach / stats.labour.ach) * 26 * 100;
   }, [stats]);
 
   // Handle leader selection
