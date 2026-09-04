@@ -1251,7 +1251,7 @@ export function parseSoftware2Data(
       const monthObj = fyMonths.find(m => m.regex.test(fullText));
       if (monthObj) {
         let metric25: 'spi' | 'quality' | 'safety' | 'qhse' | 'finish' | null = null;
-        if (/\bspi\b/i.test(fullText)) {
+        if (/\bspi\b|schedule\s*performance\s*index|schedule\s*performance/i.test(fullText)) {
           metric25 = 'spi';
         } else if (/\bquality\b|\bqua\b/i.test(fullText)) {
           metric25 = 'quality';
@@ -1292,22 +1292,30 @@ export function parseSoftware2Data(
       Object.entries(customMapping.metricOverrides).forEach(([paramKey, colIdx]) => {
         const parts = paramKey.split('_');
         if (parts.length === 3) {
-          const metric = parts[0] as 'vowd' | 'milestone' | 'labour' | 'ur' | 'uc';
-          const month = parts[1];
+          const metric = parts[0] as 'vowd' | 'milestone' | 'labour' | 'ur' | 'uc' | 'spi' | 'quality' | 'safety' | 'qhse' | 'finish';
+          const shortMonth = parts[1];
           const type = parts[2] as 'planR0' | 'planR1' | 'achievement';
+
+          // Match shortMonth (e.g. 'Nov' or 'Nov-26') to the actual fyMonths key
+          const matchedMonthObj = fyMonths.find(m => 
+            m.key === shortMonth || 
+            m.key.toLowerCase().startsWith(shortMonth.toLowerCase()) || 
+            m.regex.test(shortMonth)
+          );
+          const monthKey = matchedMonthObj ? matchedMonthObj.key : shortMonth;
 
           // Clear any existing colMapping mapped to this exact metric/month/type combo
           Object.keys(colMappings).forEach((idxStr) => {
             const idxVal = parseInt(idxStr, 10);
             const existing = colMappings[idxVal];
-            if (existing && existing.metric === metric && existing.month === month && existing.type === type) {
+            if (existing && existing.metric === metric && existing.month === monthKey && existing.type === type) {
               delete colMappings[idxVal];
             }
           });
 
           // Set the new manual index override if valid
           if (colIdx !== undefined && colIdx !== -1) {
-            colMappings[colIdx] = { metric, month, type };
+            colMappings[colIdx] = { metric, month: monthKey, type };
           }
         }
       });

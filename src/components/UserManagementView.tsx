@@ -1,9 +1,10 @@
-import { useState, useMemo, FormEvent, useRef, ChangeEvent } from 'react';
+import { useState, useEffect, useMemo, FormEvent, useRef, ChangeEvent } from 'react';
 import { ActiveTab, AppUser, UserManagementSettings, UserPermissions, Project, Software2Project } from '../types';
 import { 
   NAV_TABS_META, 
   saveUserManagementSettings, 
-  DEFAULT_USER_PERMISSIONS 
+  DEFAULT_USER_PERMISSIONS,
+  DEFAULT_STANDARD_TABS
 } from '../utils/userManagement';
 import { isTempProject } from '../utils/customOrder';
 import { 
@@ -136,7 +137,7 @@ export default function UserManagementView({
 
   const selectedUser = settings.users.find(u => u.username.toLowerCase() === selectedUsername.toLowerCase()) || settings.users[0];
   const userPerms: UserPermissions = settings.userPermissions[selectedUser.username.toLowerCase()] || DEFAULT_USER_PERMISSIONS[selectedUser.username.toLowerCase()] || {
-    allowedNavTabs: ['projectDashboard', 'leader'],
+    allowedNavTabs: [...DEFAULT_STANDARD_TABS],
     showSourceSheet: true,
     canSyncSheet: true,
     canExportReport: true,
@@ -148,7 +149,18 @@ export default function UserManagementView({
   };
 
   // Local state for editing currently selected user permissions
-  const [localTabs, setLocalTabs] = useState<ActiveTab[]>(userPerms.allowedNavTabs);
+  const [localTabs, setLocalTabs] = useState<ActiveTab[]>(() => {
+    let tabs = userPerms.allowedNavTabs;
+    if (
+      Array.isArray(tabs) &&
+      tabs.length === 2 &&
+      tabs.includes('projectDashboard') &&
+      tabs.includes('leader')
+    ) {
+      tabs = [...DEFAULT_STANDARD_TABS];
+    }
+    return Array.isArray(tabs) && tabs.length > 0 ? tabs : [...DEFAULT_STANDARD_TABS];
+  });
   const [localShowSourceSheet, setLocalShowSourceSheet] = useState<boolean>(userPerms.showSourceSheet);
   const [localCanSync, setLocalCanSync] = useState<boolean>(userPerms.canSyncSheet ?? true);
   const [localCanExport, setLocalCanExport] = useState<boolean>(userPerms.canExportReport ?? true);
@@ -158,11 +170,49 @@ export default function UserManagementView({
   const [localLeaders, setLocalLeaders] = useState<string[]>(userPerms.allowedLeaders || ['all']);
   const [localProjects, setLocalProjects] = useState<string[]>(userPerms.allowedProjectCodes || ['all']);
 
-  // Synchronize local states whenever selected user changes
+  // Reactive synchronization whenever selected user or global settings change
+  useEffect(() => {
+    const current = settings.users.find(u => u.username.toLowerCase() === selectedUsername.toLowerCase()) || settings.users[0];
+    if (current) {
+      const p = settings.userPermissions[current.username.toLowerCase()] || DEFAULT_USER_PERMISSIONS[current.username.toLowerCase()] || {
+        allowedNavTabs: [...DEFAULT_STANDARD_TABS],
+        showSourceSheet: true,
+        canSyncSheet: true,
+        canExportReport: true,
+        canEditConfig: false,
+        canChangeFiscalYear: true,
+        allowedVPs: ['all'],
+        allowedLeaders: ['all'],
+        allowedProjectCodes: ['all']
+      };
+
+      let tabs = p.allowedNavTabs;
+      if (
+        Array.isArray(tabs) &&
+        tabs.length === 2 &&
+        tabs.includes('projectDashboard') &&
+        tabs.includes('leader')
+      ) {
+        tabs = [...DEFAULT_STANDARD_TABS];
+      }
+
+      setLocalTabs(Array.isArray(tabs) && tabs.length > 0 ? tabs : [...DEFAULT_STANDARD_TABS]);
+      setLocalShowSourceSheet(p.showSourceSheet ?? true);
+      setLocalCanSync(p.canSyncSheet ?? true);
+      setLocalCanExport(p.canExportReport ?? true);
+      setLocalCanEditConfig(p.canEditConfig ?? false);
+      setLocalCanChangeFiscalYear(p.canChangeFiscalYear ?? true);
+      setLocalVPs(p.allowedVPs || ['all']);
+      setLocalLeaders(p.allowedLeaders || ['all']);
+      setLocalProjects(p.allowedProjectCodes || ['all']);
+    }
+  }, [selectedUsername, settings]);
+
+  // Synchronize local states whenever user clicks a user in the directory
   const handleSelectUser = (u: AppUser) => {
     setSelectedUsername(u.username);
     const p = settings.userPermissions[u.username.toLowerCase()] || DEFAULT_USER_PERMISSIONS[u.username.toLowerCase()] || {
-      allowedNavTabs: ['projectDashboard', 'leader'],
+      allowedNavTabs: [...DEFAULT_STANDARD_TABS],
       showSourceSheet: true,
       canSyncSheet: true,
       canExportReport: true,
@@ -172,7 +222,18 @@ export default function UserManagementView({
       allowedLeaders: ['all'],
       allowedProjectCodes: ['all']
     };
-    setLocalTabs(p.allowedNavTabs);
+
+    let tabs = p.allowedNavTabs;
+    if (
+      Array.isArray(tabs) &&
+      tabs.length === 2 &&
+      tabs.includes('projectDashboard') &&
+      tabs.includes('leader')
+    ) {
+      tabs = [...DEFAULT_STANDARD_TABS];
+    }
+
+    setLocalTabs(Array.isArray(tabs) && tabs.length > 0 ? tabs : [...DEFAULT_STANDARD_TABS]);
     setLocalShowSourceSheet(p.showSourceSheet);
     setLocalCanSync(p.canSyncSheet ?? true);
     setLocalCanExport(p.canExportReport ?? true);
@@ -246,40 +307,9 @@ export default function UserManagementView({
     });
   };
 
-  const handleApplyPreset = (preset: 'full' | 'executive' | 'restricted') => {
-    if (preset === 'full') {
-      setLocalTabs(NAV_TABS_META.map(t => t.id).filter(id => id !== 'userAccess'));
-      setLocalShowSourceSheet(true);
-      setLocalCanSync(true);
-      setLocalCanExport(true);
-      setLocalCanEditConfig(true);
-      setLocalCanChangeFiscalYear(true);
-      setLocalVPs(['all']);
-      setLocalLeaders(['all']);
-      setLocalProjects(['all']);
-    } else if (preset === 'executive') {
-      setLocalTabs(['projectDashboard', 'leader', 'leaderboard', 'insights', 'vp']);
-      setLocalShowSourceSheet(true);
-      setLocalCanSync(true);
-      setLocalCanExport(true);
-      setLocalCanEditConfig(false);
-      setLocalCanChangeFiscalYear(true);
-      setLocalVPs(['all']);
-      setLocalLeaders(['all']);
-      setLocalProjects(['all']);
-    } else if (preset === 'restricted') {
-      setLocalTabs(['projectDashboard', 'leader']);
-      setLocalShowSourceSheet(false);
-      setLocalCanSync(false);
-      setLocalCanExport(false);
-      setLocalCanEditConfig(false);
-      setLocalCanChangeFiscalYear(false);
-    }
-  };
-
   const handleSaveUserPermissions = async () => {
     const updatedPermissions: UserPermissions = {
-      allowedNavTabs: localTabs.length > 0 ? localTabs : ['projectDashboard'],
+      allowedNavTabs: localTabs.length > 0 ? localTabs : [...DEFAULT_STANDARD_TABS],
       showSourceSheet: localShowSourceSheet,
       canSyncSheet: localCanSync,
       canExportReport: localCanExport,
@@ -343,7 +373,7 @@ export default function UserManagementView({
         [cleanUsername]: {
           allowedNavTabs: newRole === 'admin' 
             ? NAV_TABS_META.map(t => t.id)
-            : ['projectDashboard', 'leader'],
+            : [...DEFAULT_STANDARD_TABS],
           showSourceSheet: true,
           canSyncSheet: true,
           canExportReport: true,
@@ -692,34 +722,6 @@ export default function UserManagementView({
                   </p>
                 </div>
               </div>
-
-              {/* Quick Presets */}
-              {selectedUser.role !== 'admin' && (
-                <div className="flex items-center space-x-1.5 text-xs">
-                  <span className="text-[11px] font-bold text-slate-400 mr-1">Presets:</span>
-                  <button
-                    type="button"
-                    onClick={() => handleApplyPreset('full')}
-                    className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-[11px] cursor-pointer"
-                  >
-                    Full
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleApplyPreset('executive')}
-                    className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-[11px] cursor-pointer"
-                  >
-                    Executive
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleApplyPreset('restricted')}
-                    className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-[11px] cursor-pointer"
-                  >
-                    Restricted
-                  </button>
-                </div>
-              )}
             </div>
 
             {/* Sub-tabs for Permissions Area */}
@@ -767,15 +769,23 @@ export default function UserManagementView({
             {/* TAB 1: NAVIGATION TITLES */}
             {editorTab === 'nav' && (
               <div className="space-y-3">
-                <div className="flex items-center justify-between text-xs">
+                <div className="flex items-center justify-between text-xs flex-wrap gap-2">
                   <span className="text-slate-500">
-                    Select which navigation tabs will appear in the Dropdown Menu for this user:
+                    Select which navigation windows will appear in the navigation bar &amp; dropdown menu for this user:
                   </span>
-                  <div className="space-x-2">
+                  <div className="flex items-center space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => setLocalTabs([...DEFAULT_STANDARD_TABS])}
+                      className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold rounded-lg text-[11px] cursor-pointer border border-blue-200 transition-colors"
+                      title="Set to Default 5 Modules: Project Dashboard, MRM Dashboard, Leaderboard, Milestone Analysis, Key Insights"
+                    >
+                      Default 5 Modules
+                    </button>
                     <button
                       type="button"
                       onClick={() => setLocalTabs(NAV_TABS_META.map(t => t.id).filter(id => selectedUser.role === 'admin' ? true : id !== 'userAccess'))}
-                      className="text-blue-600 font-bold hover:underline"
+                      className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg text-[11px] cursor-pointer transition-colors"
                     >
                       Enable All
                     </button>

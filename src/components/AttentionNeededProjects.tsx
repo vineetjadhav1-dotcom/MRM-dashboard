@@ -455,7 +455,7 @@ export default function AttentionNeededProjects({
           </div>
           <div>
             <div className="flex items-center gap-2.5 flex-wrap">
-              <h3 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
+              <h3 className="text-base sm:text-lg font-black text-slate-900 tracking-tight whitespace-nowrap">
                 {selectedProjectAnalysis ? `Critical Performance Diagnosis — ${selectedProjectAnalysis.name}` : 'Attention Needed — Top 7 Critical Projects'}
               </h3>
               <span className="bg-rose-100 text-rose-800 text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider border border-rose-200">

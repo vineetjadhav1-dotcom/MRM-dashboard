@@ -99,11 +99,22 @@ export const DEFAULT_USERS: AppUser[] = [
   }
 ];
 
+export const DEFAULT_STANDARD_TABS: ActiveTab[] = [
+  'projectDashboard',
+  'leader',
+  'leaderboard',
+  'milestones',
+  'insights'
+];
+
 export const DEFAULT_USER_PERMISSIONS: Record<string, UserPermissions> = {
   planedge: {
     allowedNavTabs: [
       'projectDashboard',
-      'leader'
+      'leader',
+      'leaderboard',
+      'milestones',
+      'insights'
     ],
     showSourceSheet: true,
     canSyncSheet: true,
@@ -159,6 +170,19 @@ export function getUserManagementSettings(): UserManagementSettings {
             mergedUsers.push(defU);
           }
         });
+
+        // Upgrade legacy 2-tab configuration for planedge user if not customized with other tabs
+        const planedgePerms = parsed.userPermissions['planedge'];
+        if (
+          planedgePerms &&
+          Array.isArray(planedgePerms.allowedNavTabs) &&
+          planedgePerms.allowedNavTabs.length === 2 &&
+          planedgePerms.allowedNavTabs.includes('projectDashboard') &&
+          planedgePerms.allowedNavTabs.includes('leader')
+        ) {
+          planedgePerms.allowedNavTabs = [...DEFAULT_STANDARD_TABS];
+        }
+
         return {
           users: mergedUsers,
           userPermissions: { ...DEFAULT_USER_PERMISSIONS, ...parsed.userPermissions }
@@ -217,6 +241,19 @@ export function subscribeUserManagementSettings(
               mergedUsers.push(defU);
             }
           });
+
+          // Upgrade legacy 2-tab configuration for planedge user
+          const planedgePerms = cloudData.userPermissions['planedge'];
+          if (
+            planedgePerms &&
+            Array.isArray(planedgePerms.allowedNavTabs) &&
+            planedgePerms.allowedNavTabs.length === 2 &&
+            planedgePerms.allowedNavTabs.includes('projectDashboard') &&
+            planedgePerms.allowedNavTabs.includes('leader')
+          ) {
+            planedgePerms.allowedNavTabs = [...DEFAULT_STANDARD_TABS];
+          }
+
           const mergedSettings: UserManagementSettings = {
             users: mergedUsers,
             userPermissions: { ...DEFAULT_USER_PERMISSIONS, ...cloudData.userPermissions }
@@ -252,6 +289,19 @@ export function subscribeUserManagementSettings(
                 mergedUsers.push(defU);
               }
             });
+
+            // Upgrade legacy 2-tab configuration for planedge user
+            const planedgePerms = cloudData.userPermissions['planedge'];
+            if (
+              planedgePerms &&
+              Array.isArray(planedgePerms.allowedNavTabs) &&
+              planedgePerms.allowedNavTabs.length === 2 &&
+              planedgePerms.allowedNavTabs.includes('projectDashboard') &&
+              planedgePerms.allowedNavTabs.includes('leader')
+            ) {
+              planedgePerms.allowedNavTabs = [...DEFAULT_STANDARD_TABS];
+            }
+
             const mergedSettings: UserManagementSettings = {
               users: mergedUsers,
               userPermissions: { ...DEFAULT_USER_PERMISSIONS, ...cloudData.userPermissions }
@@ -303,7 +353,7 @@ export function getUserEffectivePermissions(
 ): UserPermissions {
   if (!user) {
     return {
-      allowedNavTabs: ['projectDashboard', 'leader'],
+      allowedNavTabs: [...DEFAULT_STANDARD_TABS],
       showSourceSheet: true,
       canSyncSheet: true,
       canExportReport: true,
@@ -331,13 +381,24 @@ export function getUserEffectivePermissions(
   }
 
   // Find user-specific permissions for standard users
-  const userPerms = settings.userPermissions[user.username.toLowerCase()];
+  const userPerms = settings?.userPermissions?.[user.username.toLowerCase()];
   if (userPerms) {
+    let tabs = userPerms.allowedNavTabs;
+    // Upgrade legacy 2-tab default to full 5 default tabs if it exactly matches the old 2-tab initial setting
+    if (
+      Array.isArray(tabs) &&
+      tabs.length === 2 &&
+      tabs.includes('projectDashboard') &&
+      tabs.includes('leader')
+    ) {
+      tabs = [...DEFAULT_STANDARD_TABS];
+    }
+
     return {
       allowedNavTabs:
-        userPerms.allowedNavTabs && userPerms.allowedNavTabs.length > 0
-          ? userPerms.allowedNavTabs
-          : ['projectDashboard', 'leader'],
+        Array.isArray(tabs) && tabs.length > 0
+          ? tabs
+          : [...DEFAULT_STANDARD_TABS],
       showSourceSheet: userPerms.showSourceSheet !== undefined ? userPerms.showSourceSheet : true,
       canSyncSheet: userPerms.canSyncSheet !== undefined ? userPerms.canSyncSheet : true,
       canExportReport: userPerms.canExportReport !== undefined ? userPerms.canExportReport : true,
@@ -349,9 +410,9 @@ export function getUserEffectivePermissions(
     };
   }
 
-  // Default restricted permissions for standard users if not explicitly configured in settings
+  // Default fallback for standard users if not explicitly configured in settings
   const defaultFallback = DEFAULT_USER_PERMISSIONS[user.username.toLowerCase()] || {
-    allowedNavTabs: ['projectDashboard', 'leader'],
+    allowedNavTabs: [...DEFAULT_STANDARD_TABS],
     showSourceSheet: true,
     canSyncSheet: true,
     canExportReport: true,

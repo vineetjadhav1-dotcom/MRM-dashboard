@@ -532,7 +532,7 @@ export function SummarySlide({
               style={{ backgroundColor: '#ffffff', borderColor: '#e2e8f0' }}
             >
               <div className="flex justify-between items-center text-[9px] font-black uppercase" style={{ color: '#334155' }}>
-                <span>Value of Work Done</span>
+                <span className="whitespace-nowrap">Value of Work Done</span>
                 <span 
                   className="px-1.5 py-0.2 rounded border"
                   style={{ backgroundColor: '#f5f3ff', color: '#6d28d9', borderColor: '#ddd6fe' }}
@@ -540,17 +540,17 @@ export function SummarySlide({
                   {stats.vowd.pct}%
                 </span>
               </div>
-              <div className="flex items-baseline space-x-1">
-                <span className="text-lg font-black" style={{ color: '#0f172a' }}>{formatValue(stats.vowd.ach, true)}</span>
-                <span className="text-[9px] font-bold" style={{ color: '#64748b' }}>/ {formatValue(stats.vowd.plan, true)}</span>
+              <div className="flex items-baseline space-x-1 whitespace-nowrap overflow-hidden">
+                <span className="text-base font-black whitespace-nowrap" style={{ color: '#0f172a' }}>{formatValue(stats.vowd.ach, true)}</span>
+                <span className="text-[9px] font-bold whitespace-nowrap" style={{ color: '#64748b' }}>/ {formatValue(stats.vowd.plan, true)}</span>
               </div>
               <div 
-                className="flex items-center justify-between text-[8px] font-bold px-2 py-0.8 rounded-lg border"
+                className="flex items-center justify-between text-[8px] font-bold px-2 py-0.8 rounded-lg border whitespace-nowrap"
                 style={{ backgroundColor: '#f5f3ff', color: '#4c1d95', borderColor: '#ddd6fe' }}
               >
-                <span>Next Month Forecast:</span>
+                <span className="whitespace-nowrap">Next Month Forecast:</span>
                 <span 
-                  className="font-black px-1.5 py-0.2 rounded border"
+                  className="font-black px-1.5 py-0.2 rounded border whitespace-nowrap"
                   style={{ backgroundColor: '#ffffff', borderColor: '#ddd6fe' }}
                 >
                   {formatValue(stats.vowd.fr, true)}
@@ -749,17 +749,32 @@ export function ProgressCurveSlide({
   const config = METRIC_CONFIGS[metricKey] || METRIC_CONFIGS.vowd;
 
   const lastCompletedMonthIndex = React.useMemo(() => {
+    const fyKey = getStoredFiscalYear();
+    const fyConfig = getFiscalYearConfig(fyKey);
+    const months = fyConfig.months;
+
+    const now = new Date();
+    const prevMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const prevShort = prevMonthDate.toLocaleDateString('en-US', { month: 'short' });
+    const prevYear2Digit = String(prevMonthDate.getFullYear()).slice(-2);
+    const prevFullYear = prevMonthDate.getFullYear();
+
+    const matchedIdx = months.findIndex(m => {
+      const kNorm = m.key.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const targetNorm = `${prevShort}${prevYear2Digit}`.toLowerCase();
+      const nameMatch = m.shortName.toLowerCase() === prevShort.toLowerCase() || kNorm.includes(prevShort.toLowerCase());
+      const yearMatch = m.year ? m.year === prevFullYear : true;
+      return nameMatch && (kNorm === targetNorm || yearMatch);
+    });
+
+    if (matchedIdx >= 0) return matchedIdx;
+
     for (let i = monthlyData.length - 1; i >= 0; i--) {
       if (monthlyData[i] && monthlyData[i].Achievement !== null && monthlyData[i].Achievement !== undefined && monthlyData[i].Achievement > 0) {
         return i;
       }
     }
-    for (let i = monthlyData.length - 1; i >= 0; i--) {
-      if (monthlyData[i] && monthlyData[i].Achievement !== null && monthlyData[i].Achievement !== undefined) {
-        return i;
-      }
-    }
-    return 3;
+    return 4;
   }, [monthlyData]);
 
   // Render Bar Plan Label (R0/R1)
@@ -1478,10 +1493,10 @@ export function AttentionNeededSlide({
           </div>
           <div>
             <div className="flex items-center space-x-2.5">
-              <h2 className="text-lg font-black tracking-tight text-slate-900">
+              <h2 className="text-lg font-black tracking-tight text-slate-900 whitespace-nowrap">
                 {title}
               </h2>
-              <span className="text-[9px] font-black uppercase px-2.5 py-0.5 rounded-full" style={{ backgroundColor: '#ffe4e6', color: '#be123c', border: '1px solid #fecdd3' }}>
+              <span className="text-[9px] font-black uppercase px-2.5 py-0.5 rounded-full whitespace-nowrap" style={{ backgroundColor: '#ffe4e6', color: '#be123c', border: '1px solid #fecdd3' }}>
                 ACTION REQUIRED
               </span>
             </div>

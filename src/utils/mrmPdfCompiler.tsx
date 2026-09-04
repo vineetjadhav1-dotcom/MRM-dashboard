@@ -150,19 +150,19 @@ export function calculateEntityStats(projects: Project[]): LeaderStats {
       const st = (p.projectStage || '').toLowerCase();
       const projName = p.name || p.code || 'Unnamed';
 
-      if (st.includes('upcom') || st.includes('pipeline')) {
+      if (st.includes('upcom') || st.includes('pipeline') || st.includes('requirement')) {
         stageCounts.upcoming++;
         upcomingProjectNames.push(projName);
-      } else if (st.includes('design') || st.includes('drawing')) {
+      } else if (st.includes('design') || st.includes('drawing') || st.includes('engineering')) {
         stageCounts.design++;
         designProjectNames.push(projName);
       } else if (st.includes('excav')) {
         stageCounts.excavation++;
         excavationProjectNames.push(projName);
-      } else if (st.includes('start') || st.includes('commenc')) {
+      } else if (st.includes('construction start') || st === 'construction start' || st === 'construction start stage' || st.includes('commenc')) {
         stageCounts.constructionStart++;
         constructionStartProjectNames.push(projName);
-      } else if (st.includes('finish') || st.includes('interior')) {
+      } else if (st.includes('finish') || st.includes('interior') || st.includes('testing') || st.includes('procurement')) {
         stageCounts.finishing++;
         finishingProjectNames.push(projName);
       } else if (st.includes('near') || st.includes('closure')) {
@@ -235,9 +235,8 @@ export function calculateEntityStats(projects: Project[]): LeaderStats {
   // Calculate secondary KPIs
   const vowdAchCr = vowdAch;
   const speedOfConstruction = areaUnderConstruction > 0 ? (vowdAchCr * 10000000) / areaUnderConstruction : 0;
-  const workingDays = 26;
-  const labourProductivity = labAch > 0 ? (vowdAchCr * 10000000) / (labAch * workingDays) : 0;
-  const labourEfficiency = labAch > 0 ? (vowdAchCr / labAch) * 100 : 0;
+  const labourProductivity = labAch > 0 ? (vowdAchCr / labAch) * 10000000 : 0;
+  const labourEfficiency = labAch > 0 ? (vowdAchCr / labAch) * 26 * 100 : 0;
 
   return {
     totalArea,
@@ -627,6 +626,12 @@ export async function generateFullMRMReport(options: MRMReportExportOptions): Pr
   const pdfWidth = 297;
   const pdfHeight = 210;
 
+  // Remove any pre-existing rendering containers to ensure clean state on repeated exports
+  const existingContainer = document.getElementById('mrm-pdf-render-canvas');
+  if (existingContainer && existingContainer.parentNode) {
+    existingContainer.parentNode.removeChild(existingContainer);
+  }
+
   // Create temporary container for mounting slides visibly on-screen (behind the modal backdrop)
   const container = document.createElement('div');
   container.id = 'mrm-pdf-render-canvas';
@@ -701,28 +706,16 @@ export async function generateFullMRMReport(options: MRMReportExportOptions): Pr
     const scopeTag = scope === 'leader_only' ? `Leader_${selectedLeaderName}` : selectedVP !== 'all' ? `VP_${selectedVP}` : 'Full_MRM_Deck';
     const finalFilename = `Planedge_MRM_Report_${scopeTag}_${timestamp}.pdf`;
 
-    // Save and trigger download
+    // Save and trigger download cleanly
     pdf.save(finalFilename);
-
-    const pdfBlob = pdf.output('blob');
-    const blobUrl = URL.createObjectURL(pdfBlob);
-
-    const link = document.createElement('a');
-    link.href = blobUrl;
-    link.download = finalFilename;
-    link.style.display = 'none';
-    document.body.appendChild(link);
-    link.click();
-
-    setTimeout(() => {
-      if (document.body.contains(link)) {
-        document.body.removeChild(link);
-      }
-    }, 2000);
 
   } finally {
     // Cleanup container and React root
-    root.unmount();
+    try {
+      root.unmount();
+    } catch (e) {
+      // Ignore unmount error if already cleaned
+    }
     if (document.body.contains(container)) {
       document.body.removeChild(container);
     }

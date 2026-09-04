@@ -3,7 +3,8 @@ import { ActiveTab, UserManagementSettings, UserPermissions } from '../types';
 import { 
   NAV_TABS_META, 
   saveUserManagementSettings, 
-  DEFAULT_USER_PERMISSIONS 
+  DEFAULT_USER_PERMISSIONS,
+  DEFAULT_STANDARD_TABS
 } from '../utils/userManagement';
 import { 
   X, 
@@ -87,7 +88,7 @@ export default function UserManagementModal({
       userPermissions: {
         ...settings.userPermissions,
         [targetUser]: {
-          allowedNavTabs: selectedTabs.length > 0 ? selectedTabs : ['projectDashboard'],
+          allowedNavTabs: selectedTabs.length > 0 ? selectedTabs : [...DEFAULT_STANDARD_TABS],
           showSourceSheet
         }
       }

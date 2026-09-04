@@ -31,12 +31,12 @@ export async function generatePdfReport(options: PdfExportOptions = {}): Promise
 
   // Dynamic file name construction
   const timestamp = new Date().toISOString().slice(0, 10);
-  const filterLabel = leaderName && leaderName !== 'all' 
-    ? `Leader_${leaderName.replace(/\s+/g, '_')}` 
-    : vpName && vpName !== 'all' 
-      ? `VP_${vpName.replace(/\s+/g, '_')}` 
+  const filterLabel = leaderName && leaderName !== 'all'
+    ? `Leader_${leaderName.replace(/\s+/g, '_')}`
+    : vpName && vpName !== 'all'
+      ? `VP_${vpName.replace(/\s+/g, '_')}`
       : 'Consolidated_Portfolio';
-  
+
   const finalFilename = filename || `Planedge_MRM_Report_${filterLabel}_${timestamp}.pdf`;
 
   // Apply print export class to body to show print headers and hide action buttons

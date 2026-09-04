@@ -71,6 +71,18 @@ export default function ExportReportModal({
     return Array.from(new Set(leaders)).sort(sortLeaderNames);
   }, [leaderDataList]);
 
+  // Reset state on modal open
+  React.useEffect(() => {
+    if (isOpen) {
+      setIsGenerating(false);
+      setIsComplete(false);
+      setErrorMessage(null);
+      setProgressCurrent(0);
+      setProgressTotal(0);
+      setProgressMessage('');
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const handleStartExport = async () => {

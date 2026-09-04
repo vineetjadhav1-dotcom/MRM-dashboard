@@ -299,7 +299,7 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
 
   // State variables for MRM Dashboard Monthly Progress Curve
   const [activeFy, setActiveFy] = useState<FiscalYearKey>(() => getStoredFiscalYear());
-  const [mrmChartMetric, setMrmChartMetric] = useState<'vowd' | 'milestone' | 'labour' | 'ur' | 'uc'>('vowd');
+  const [mrmChartMetric, setMrmChartMetric] = useState<'vowd' | 'milestone' | 'labour' | 'ur' | 'uc' | 'spi'>('vowd');
   const [mrmBaselinePlan, setMrmBaselinePlan] = useState<'r0' | 'r1' | 'both'>('r1');
   const [mrmShowMonthlyBars, setMrmShowMonthlyBars] = useState<boolean>(true);
   const [mrmShowCumulativeLines, setMrmShowCumulativeLines] = useState<boolean>(true);
@@ -316,17 +316,16 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
     if (filteredLeaderDataList.length === 0) return null;
 
     if (selectedLeaderName === 'all') {
-      const leadersInVP = selectedVP === 'all'
-        ? filteredLeaderDataList
-        : filteredLeaderDataList.filter(l => l.vpName === selectedVP);
+      const combinedProjects = selectedVP === 'all'
+        ? filteredLeaderDataList.flatMap(l => l.projects)
+        : filteredLeaderDataList.flatMap(l => l.projects).filter(p => p && String(p.vp || '').trim() === selectedVP);
 
-      const combinedProjects = leadersInVP.flatMap(l => l.projects);
       const statusCounts: Record<string, number> = {};
       const areas = new Set<string>();
       let activeCount = 0;
       combinedProjects.forEach(p => {
         const isTemp = isTempProject(p.code);
-        const isCompletedOrLost = isCompleteOrLostStage(p.projectStage);
+        const isCompletedOrLost = isCompleteOrLostStage(p.projectStage || (p as any).stage);
         if (!isTemp && !isCompletedOrLost) {
           activeCount += 1;
           statusCounts[p.status] = (statusCounts[p.status] || 0) + 1;
@@ -344,11 +343,202 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
       };
     }
 
-    const found = filteredLeaderDataList.find(l => l.name === selectedLeaderName);
-    if (found) return found;
+    const found = filteredLeaderDataList.find(l => String(l.name || '').trim().toLowerCase() === selectedLeaderName.trim().toLowerCase());
+    if (found) {
+      if (selectedVP !== 'all') {
+        const vpProjects = (found.projects || []).filter(p => p && String(p.vp || '').trim() === selectedVP);
+        return {
+          ...found,
+          projects: vpProjects,
+          projectsCount: vpProjects.filter(p => !isTempProject(p.code) && !isCompleteOrLostStage(p.projectStage || (p as any).stage)).length
+        };
+      }
+      return found;
+    }
 
     return filteredLeaderDataList[0];
   }, [filteredLeaderDataList, selectedLeaderName, selectedVP]);
+
+  // Metric configuration for the graph metrics
+  const mrmMetricConfigs = useMemo(() => ({
+    vowd: {
+      label: 'VOWD (Value of Work Done)',
+      shortLabel: 'VOWD',
+      unit: 'Cr.',
+      colorPlan: '#818cf8',
+      colorAch: '#4f46e5',
+      isCurrency: true
+    },
+    milestone: {
+      label: 'Milestones Completed',
+      shortLabel: 'Milestones',
+      unit: 'Nos.',
+      colorPlan: '#38bdf8',
+      colorAch: '#0284c7',
+      isCurrency: false
+    },
+    labour: {
+      label: 'Labour Headcount',
+      shortLabel: 'Labour',
+      unit: 'Labours',
+      colorPlan: '#c084fc',
+      colorAch: '#7e22ce',
+      isCurrency: false
+    },
+    ur: {
+      label: 'Unit Delivery - Residential (UR)',
+      shortLabel: 'Residential Delivery',
+      unit: 'Units',
+      colorPlan: '#fb923c',
+      colorAch: '#c2410c',
+      isCurrency: false
+    },
+    uc: {
+      label: 'Unit Delivery - Commercial (UC)',
+      shortLabel: 'Commercial Delivery',
+      unit: 'Sqft',
+      colorPlan: '#fcd34d',
+      colorAch: '#b45309',
+      isCurrency: false
+    },
+    spi: {
+      label: 'Schedule Performance Index (SPI)',
+      shortLabel: 'SPI',
+      unit: '',
+      colorPlan: '#0284c7',
+      colorAch: '#0284c7',
+      isCurrency: false
+    }
+  }), []);
+
+  // Active software2 project data source
+  const s2List = useMemo(() => {
+    return (software2Projects && software2Projects.length > 0) ? software2Projects : DEMO_SOFTWARE2_PROJECTS;
+  }, [software2Projects]);
+
+  // Index of the last completed month in mrmMonthlyData (e.g. Aug-26 when current month is September 2026)
+  const lastCompletedMonthIndex = useMemo(() => {
+    const fyConfig = getFiscalYearConfig(activeFy);
+    const months = fyConfig.months; // [{ key: 'Apr-26', shortName: 'Apr', year: 2026, ... }, ...]
+
+    const now = new Date();
+    // For last completed month: previous calendar month relative to current live date
+    const prevMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const prevShort = prevMonthDate.toLocaleDateString('en-US', { month: 'short' });
+    const prevYear2Digit = String(prevMonthDate.getFullYear()).slice(-2);
+    const prevFullYear = prevMonthDate.getFullYear();
+
+    // Check if prevMonthDate falls within activeFy
+    const matchedIdx = months.findIndex(m => {
+      const kNorm = m.key.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const targetNorm = `${prevShort}${prevYear2Digit}`.toLowerCase();
+      const nameMatch = m.shortName.toLowerCase() === prevShort.toLowerCase() || kNorm.includes(prevShort.toLowerCase());
+      const yearMatch = m.year ? m.year === prevFullYear : true;
+      return nameMatch && (kNorm === targetNorm || yearMatch);
+    });
+
+    if (matchedIdx >= 0) {
+      return matchedIdx;
+    }
+
+    // If active FY is entirely in the past (e.g. FY 25-26 while now is Sep 2026), all 12 months are completed -> return index 11 (Mar)
+    const fyStartYear = parseInt(activeFy.split('-')[0], 10) + 2000;
+    const currentYear = now.getFullYear();
+    if (fyStartYear + 1 < currentYear || (fyStartYear + 1 === currentYear && now.getMonth() >= 3)) {
+      return months.length - 1;
+    }
+
+    // If active FY is in the future, return -1 (no completed months)
+    if (fyStartYear > currentYear || (fyStartYear === currentYear && now.getMonth() < 3)) {
+      return -1;
+    }
+
+    return 4; // Default fallback to Aug-26 (index 4) for FY 26-27
+  }, [activeFy]);
+
+  // Map activeLeader projects to Software2Project items with monthly metrics
+  const s2ProjectsForActiveLeader = useMemo(() => {
+    if (!s2List || s2List.length === 0) return [];
+
+    const norm = (s: any) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    // For parameter aggregation (VOWD, Milestones, Labour, etc.), include all projects matching the active VP and Leader
+    if (selectedLeaderName === 'all' && selectedVP === 'all') {
+      return s2List;
+    }
+
+    if (selectedLeaderName !== 'all') {
+      const byLeader = s2List.filter(s => norm(s.leader) === norm(selectedLeaderName));
+      if (selectedVP !== 'all') {
+        const byLeaderAndVp = byLeader.filter(s => norm(s.vp) === norm(selectedVP));
+        if (byLeaderAndVp.length > 0) return byLeaderAndVp;
+      }
+      if (byLeader.length > 0) return byLeader;
+    }
+
+    if (selectedVP !== 'all') {
+      const byVp = s2List.filter(s => norm(s.vp) === norm(selectedVP));
+      if (byVp.length > 0) return byVp;
+    }
+
+    if (!activeLeader || !activeLeader.projects || activeLeader.projects.length === 0) return s2List;
+
+    const matched: Software2Project[] = [];
+
+    activeLeader.projects.forEach(p => {
+      if (!p) return;
+      if ((p as any)[mrmChartMetric] && Array.isArray((p as any)[mrmChartMetric])) {
+        matched.push(p as unknown as Software2Project);
+        return;
+      }
+      const s2P = s2List.find(s => 
+        (s.code && p.code && norm(s.code) === norm(p.code)) ||
+        (s.name && p.name && (norm(s.name) === norm(p.name) || norm(s.name).includes(norm(p.name)) || norm(p.name).includes(norm(s.name))))
+      );
+      if (s2P && !matched.some(m => m.code === s2P.code)) {
+        matched.push(s2P);
+      }
+    });
+
+    return matched.length > 0 ? matched : s2List;
+  }, [activeLeader, s2List, mrmChartMetric, selectedLeaderName, selectedVP]);
+
+  // Fast lookup map for Software 2 projects by code or name
+  const s2ProjectMap = useMemo(() => {
+    const map = new Map<string, Software2Project>();
+    const norm = (s: any) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    s2List.forEach(s => {
+      if (s.code) map.set(norm(s.code), s);
+      if (s.name) map.set(norm(s.name), s);
+    });
+    return map;
+  }, [s2List]);
+
+  // Helper to resolve effective SPI for a project (Software 2 first, then fallback to p.spi)
+  const getEffectiveProjectSpi = useCallback((p: Project): { spiVal: number | null; spiStr: string } => {
+    const norm = (s: any) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const s2P = s2ProjectMap.get(norm(p.code)) || s2ProjectMap.get(norm(p.name));
+    
+    if (s2P) {
+      const fyMonthsList = getFiscalYearConfig(activeFy).months;
+      const lastMonthKey = fyMonthsList[lastCompletedMonthIndex]?.key;
+      const monthSpi = s2P.spiHistory?.find(d => d.month === lastMonthKey)?.achievement;
+      if (monthSpi !== undefined && monthSpi !== null && Number(monthSpi) > 0) {
+        return { spiVal: Number(monthSpi), spiStr: String(monthSpi) };
+      }
+      if (s2P.spi && !isNaN(parseFloat(String(s2P.spi)))) {
+        const val = parseFloat(String(s2P.spi));
+        if (val > 0) return { spiVal: val, spiStr: String(s2P.spi) };
+      }
+    }
+
+    if (p.spi && !isNaN(parseFloat(String(p.spi)))) {
+      const val = parseFloat(String(p.spi));
+      return { spiVal: val, spiStr: String(p.spi) };
+    }
+
+    return { spiVal: null, spiStr: p.spi || '' };
+  }, [s2ProjectMap, activeFy, lastCompletedMonthIndex]);
 
   // Compute stats for selected leader
   const stats = useMemo(() => {
@@ -418,8 +608,9 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
     (activeLeader.projects || []).forEach(p => {
       if (!p) return;
 
+      const stageRaw = String(p.projectStage || (p as any).stage || '').trim();
       const isTemp = isTempProject(p.code);
-      const isCompletedOrLost = isCompleteOrLostStage(p.projectStage);
+      const isCompletedOrLost = isCompleteOrLostStage(stageRaw);
       const budgetVal = parseBudgetValue(p.totalBudget);
 
       // Area
@@ -439,54 +630,56 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
         totalArea += areaVal;
         totalBudgetUnderManagement += budgetVal;
 
-        if (isUnderConstructionStage(p.projectStage)) {
+        if (isUnderConstructionStage(stageRaw)) {
           projectsUnderConstructionCount += 1;
           areaUnderConstruction += areaVal;
           totalBudgetUnderConstruction += budgetVal;
         }
 
         // Stage tracking & list population (ONLY for active non-temp projects)
-        if (p.projectStage) {
-          const stage = String(p.projectStage).trim().toLowerCase();
-          const pName = p.name || p.code || 'Project';
-          
-          if (stage.includes('upcoming')) {
-            stageCounts.upcoming++;
-            upcomingProjectNames.push(pName);
-            upcomingProjects.push(p);
-          } else if (stage.includes('design')) {
-            stageCounts.design++;
-            designProjectNames.push(pName);
-            designProjects.push(p);
-          } else if (stage.includes('excavation')) {
-            stageCounts.excavation++;
-            excavationProjectNames.push(pName);
-            excavationProjects.push(p);
-          } else if (stage.includes('construction start') || stage === 'construction start') {
-            stageCounts.constructionStart++;
-            constructionStartProjectNames.push(pName);
-            constructionStartProjects.push(p);
-          } else if (stage.includes('ongoing') || stage.includes('on going') || stage === 'on going project' || stage.includes('execution')) {
-            stageCounts.ongoing++;
-            ongoingProjectNames.push(pName);
-            ongoingProjects.push(p);
-          } else if (stage.includes('finishing')) {
-            stageCounts.finishing++;
-            finishingProjectNames.push(pName);
-            finishingProjects.push(p);
-          } else if (stage.includes('nearing completion') || stage.includes('nearing_completion')) {
-            stageCounts.nearingCompletion++;
-            nearingCompletionProjectNames.push(pName);
-            nearingCompletionProjects.push(p);
-          } else if (stage.includes('handover') || stage.includes('hand_over')) {
-            stageCounts.handover++;
-            handoverProjectNames.push(pName);
-            handoverProjects.push(p);
-          } else if (stage.includes('hold') || stage.includes('on hold')) {
-            stageCounts.hold++;
-            holdProjectNames.push(pName);
-            holdProjects.push(p);
-          }
+        const stage = stageRaw.toLowerCase();
+        const pName = p.name || p.code || 'Project';
+        
+        if (stage.includes('upcoming') || stage.includes('pipeline') || stage.includes('requirement') || stage.includes('planning') || stage.includes('proposed') || stage.includes('pre-construction')) {
+          stageCounts.upcoming++;
+          upcomingProjectNames.push(pName);
+          upcomingProjects.push(p);
+        } else if (stage.includes('design') || stage.includes('drawing') || stage.includes('engineering') || stage.includes('architectural')) {
+          stageCounts.design++;
+          designProjectNames.push(pName);
+          designProjects.push(p);
+        } else if (stage.includes('excavation') || stage.includes('excav')) {
+          stageCounts.excavation++;
+          excavationProjectNames.push(pName);
+          excavationProjects.push(p);
+        } else if (stage.includes('construction start') || stage === 'construction start' || stage === 'construction start stage' || stage.includes('commenc')) {
+          stageCounts.constructionStart++;
+          constructionStartProjectNames.push(pName);
+          constructionStartProjects.push(p);
+        } else if (stage.includes('finishing') || stage.includes('interior') || stage.includes('testing') || stage.includes('procurement') || stage.includes('fitout') || stage.includes('fit-out') || stage.includes('mep')) {
+          stageCounts.finishing++;
+          finishingProjectNames.push(pName);
+          finishingProjects.push(p);
+        } else if (stage.includes('nearing completion') || stage.includes('nearing_completion') || stage.includes('nearing comp') || stage.includes('nearing-completion') || stage.includes('closure')) {
+          stageCounts.nearingCompletion++;
+          nearingCompletionProjectNames.push(pName);
+          nearingCompletionProjects.push(p);
+        } else if (stage.includes('handover') || stage.includes('hand_over') || stage.includes('hand-over') || stage.includes('possession')) {
+          stageCounts.handover++;
+          handoverProjectNames.push(pName);
+          handoverProjects.push(p);
+        } else if (stage.includes('hold') || stage.includes('on hold') || stage.includes('on-hold') || stage.includes('stop') || stage.includes('delay') || stage.includes('paused') || stage.includes('stalled')) {
+          stageCounts.hold++;
+          holdProjectNames.push(pName);
+          holdProjects.push(p);
+        } else if (stage.includes('ongoing') || stage.includes('on going') || stage.includes('on-going') || stage === 'on going project' || stage.includes('execution') || stage.includes('structure') || stage.includes('civil') || stage.includes('in progress')) {
+          stageCounts.ongoing++;
+          ongoingProjectNames.push(pName);
+          ongoingProjects.push(p);
+        } else {
+          stageCounts.ongoing++;
+          ongoingProjectNames.push(pName);
+          ongoingProjects.push(p);
         }
       }
 
@@ -568,7 +761,25 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
       }
     });
 
-    const avgSpi = spiCount > 0 ? (spiSum / spiCount) : null;
+    // Derive Portfolio Average SPI directly from Software 2 (spiHistory for last completed month or latest spi)
+    let s2SpiSum = 0;
+    let s2SpiCount = 0;
+    const fyMonthsList = getFiscalYearConfig(activeFy).months;
+    const lastMonthKey = fyMonthsList[lastCompletedMonthIndex]?.key;
+
+    s2ProjectsForActiveLeader.forEach(s => {
+      if (!s || isTempProject(s.code) || isCompleteOrLostStage(s.stage)) return;
+      const monthSpi = s.spiHistory?.find(d => d.month === lastMonthKey)?.achievement;
+      if (monthSpi !== undefined && monthSpi !== null && Number(monthSpi) > 0) {
+        s2SpiSum += Number(monthSpi);
+        s2SpiCount++;
+      } else if (s.spi && !isNaN(parseFloat(String(s.spi)))) {
+        s2SpiSum += parseFloat(String(s.spi));
+        s2SpiCount++;
+      }
+    });
+
+    const avgSpi = s2SpiCount > 0 ? Math.round((s2SpiSum / s2SpiCount) * 100) / 100 : (spiCount > 0 ? (spiSum / spiCount) : null);
     const msPct = msPlan > 0 ? Math.round((msAch / msPlan) * 100) : 0;
     const vowdPct = vowdPlan > 0 ? Math.round((vowdAch / vowdPlan) * 100) : 0;
     const labPct = labPlan > 0 ? Math.round((labAch / labPlan) * 100) : 0;
@@ -624,6 +835,25 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
     };
   }, [activeLeader]);
 
+  // Speed of Construction (Rs./Sqft)
+  const speedOfConstruction = useMemo(() => {
+    if (!stats) return 0;
+    const area = stats.areaUnderConstruction || stats.totalArea || 0;
+    if (area === 0) return 0;
+    return (stats.vowd.ach / area) * 10000000;
+  }, [stats]);
+
+  // Labour Output: Productivity (Rs./Lab/Day) & Efficiency (Cr. per 100 labours)
+  const labourProductivity = useMemo(() => {
+    if (!stats || stats.labour.ach === 0) return 0;
+    return (stats.vowd.ach / stats.labour.ach) * 10000000;
+  }, [stats]);
+
+  const labourEfficiency = useMemo(() => {
+    if (!stats || stats.labour.ach === 0) return 0;
+    return (stats.vowd.ach / stats.labour.ach) * 100;
+  }, [stats]);
+
   // Handle leader selection
   const handleLeaderSelect = (name: string) => {
     setSelectedLeaderName(name);
@@ -636,7 +866,7 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
     return activeLeader.projects.filter(p => {
       if (!p || isTempProject(p.code)) return false;
       // Do not display complete, Complete-old, or lost projects in the flash card dashboard
-      if (isCompleteOrLostStage(p.projectStage)) {
+      if (isCompleteOrLostStage(p.projectStage || (p as any).stage)) {
         return false;
       }
       const term = (projectSearchQuery || '').toLowerCase().trim();
@@ -654,8 +884,8 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
   // For projects with SPI - blank or NA, follow sequence: Handover -> Construction Start -> Excavation -> Design -> Upcoming -> Hold
   const sortedProjects = useMemo(() => {
     return [...filteredProjects].sort((a, b) => {
-      const spiA = parseSpiNumeric(a.spi);
-      const spiB = parseSpiNumeric(b.spi);
+      const spiA = getEffectiveProjectSpi(a).spiVal;
+      const spiB = getEffectiveProjectSpi(b).spiVal;
 
       if (spiA !== null && spiB !== null) {
         return spiB - spiA;
@@ -668,104 +898,14 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
       }
 
       // Both have blank or NA SPI -> follow requested stage sequence
-      const rankA = getStageRankForBlankSpi(a.projectStage);
-      const rankB = getStageRankForBlankSpi(b.projectStage);
+      const rankA = getStageRankForBlankSpi(a.projectStage || (a as any).stage);
+      const rankB = getStageRankForBlankSpi(b.projectStage || (b as any).stage);
       if (rankA !== rankB) {
         return rankA - rankB;
       }
       return (a.code || a.name || '').localeCompare(b.code || b.name || '');
     });
-  }, [filteredProjects]);
-
-  // Metric configuration for the 5 graph metrics
-  const mrmMetricConfigs = useMemo(() => ({
-    vowd: {
-      label: 'VOWD (Value of Work Done)',
-      shortLabel: 'VOWD',
-      unit: 'Cr.',
-      colorPlan: '#818cf8',
-      colorAch: '#4f46e5',
-      isCurrency: true
-    },
-    milestone: {
-      label: 'Milestones Completed',
-      shortLabel: 'Milestones',
-      unit: 'Nos.',
-      colorPlan: '#38bdf8',
-      colorAch: '#0284c7',
-      isCurrency: false
-    },
-    labour: {
-      label: 'Labour Headcount',
-      shortLabel: 'Labour',
-      unit: 'Labours',
-      colorPlan: '#c084fc',
-      colorAch: '#7e22ce',
-      isCurrency: false
-    },
-    ur: {
-      label: 'Unit Delivery - Residential (UR)',
-      shortLabel: 'Residential Delivery',
-      unit: 'Units',
-      colorPlan: '#fb923c',
-      colorAch: '#c2410c',
-      isCurrency: false
-    },
-    uc: {
-      label: 'Unit Delivery - Commercial (UC)',
-      shortLabel: 'Commercial Delivery',
-      unit: 'Sqft',
-      colorPlan: '#fcd34d',
-      colorAch: '#b45309',
-      isCurrency: false
-    }
-  }), []);
-
-  // Active software2 project data source
-  const s2List = useMemo(() => {
-    return (software2Projects && software2Projects.length > 0) ? software2Projects : DEMO_SOFTWARE2_PROJECTS;
-  }, [software2Projects]);
-
-  // Map activeLeader projects to Software2Project items with monthly metrics
-  const s2ProjectsForActiveLeader = useMemo(() => {
-    if (!s2List || s2List.length === 0) return [];
-    if (!activeLeader || !activeLeader.projects || activeLeader.projects.length === 0) return s2List;
-
-    const norm = (s: any) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-
-    if (selectedLeaderName === 'all' && selectedVP === 'all') {
-      return s2List;
-    }
-
-    if (selectedLeaderName !== 'all') {
-      const byLeader = s2List.filter(s => norm(s.leader) === norm(selectedLeaderName));
-      if (byLeader.length > 0) return byLeader;
-    }
-
-    if (selectedVP !== 'all') {
-      const byVp = s2List.filter(s => norm(s.vp) === norm(selectedVP));
-      if (byVp.length > 0) return byVp;
-    }
-
-    const matched: Software2Project[] = [];
-
-    activeLeader.projects.forEach(p => {
-      if (!p) return;
-      if ((p as any)[mrmChartMetric] && Array.isArray((p as any)[mrmChartMetric])) {
-        matched.push(p as unknown as Software2Project);
-        return;
-      }
-      const s2P = s2List.find(s => 
-        (s.code && p.code && norm(s.code) === norm(p.code)) ||
-        (s.name && p.name && (norm(s.name) === norm(p.name) || norm(s.name).includes(norm(p.name)) || norm(p.name).includes(norm(s.name))))
-      );
-      if (s2P && !matched.some(m => m.code === s2P.code)) {
-        matched.push(s2P);
-      }
-    });
-
-    return matched.length > 0 ? matched : s2List;
-  }, [activeLeader, s2List, mrmChartMetric, selectedLeaderName, selectedVP]);
+  }, [filteredProjects, getEffectiveProjectSpi]);
 
   // Aggregated Monthly Progress Curve Data across active portfolio
   const mrmMonthlyData = useMemo(() => {
@@ -786,6 +926,55 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
       let achSum = 0;
       let hasExplicitAch = false;
 
+      // Handle SPI specifically by calculating portfolio average SPI from Software2
+      if (mrmChartMetric === 'spi') {
+        let spiTotal = 0;
+        let spiCount = 0;
+
+        s2ProjectsForActiveLeader.forEach(p => {
+          const metricList = p.spiHistory;
+          let monthSpi: number | null = null;
+          if (Array.isArray(metricList)) {
+            const mData = metricList.find(d => d.month === m);
+            if (mData && mData.achievement !== undefined && mData.achievement !== null && Number(mData.achievement) > 0) {
+              monthSpi = Number(mData.achievement);
+            }
+          }
+          if (monthSpi === null && p.spi) {
+            const parsed = parseFloat(String(p.spi));
+            if (!isNaN(parsed) && parsed > 0) {
+              monthSpi = parsed;
+            }
+          }
+
+          if (monthSpi !== null && monthSpi > 0) {
+            spiTotal += monthSpi;
+            spiCount++;
+          }
+        });
+
+        const avgMonthSpi = spiCount > 0 ? Math.round((spiTotal / spiCount) * 100) / 100 : null;
+        const targetPlan = 1.0; // Baseline SPI target is 1.0
+
+        const mIdx = months.indexOf(m);
+        const isFutureMonth = mIdx > lastCompletedMonthIndex && (avgMonthSpi === null || spiCount === 0);
+
+        return {
+          month: m,
+          Plan: targetPlan,
+          PlanR0: targetPlan,
+          PlanR1: targetPlan,
+          Achievement: isFutureMonth ? null : avgMonthSpi,
+          'Achievement %': avgMonthSpi !== null ? Math.round(avgMonthSpi * 100) : null,
+          CumPlanR0: targetPlan,
+          CumPlanR1: targetPlan,
+          CumPlan: targetPlan,
+          CumAchievement: isFutureMonth ? null : avgMonthSpi,
+          'CumAchievement %': avgMonthSpi !== null ? Math.round(avgMonthSpi * 100) : null
+        };
+      }
+
+      // Standard cumulative volume metrics (vowd, milestone, labour, ur, uc)
       s2ProjectsForActiveLeader.forEach(p => {
         const metricList = p[mrmChartMetric];
         const monthData = metricList ? metricList.find(d => d.month === m) : null;
@@ -825,7 +1014,8 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
         ? (cumR1 > 0 ? Math.round((cumAch / cumR1) * 100) : 0)
         : (cumPlan > 0 ? Math.round((cumAch / cumPlan) * 100) : 0);
 
-      const isFutureMonth = !hasExplicitAch && months.indexOf(m) > 3;
+      const mIdx = months.indexOf(m);
+      const isFutureMonth = mIdx > lastCompletedMonthIndex && !hasExplicitAch;
 
       return {
         month: m,
@@ -841,19 +1031,9 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
         'CumAchievement %': isFutureMonth ? null : cumPct
       };
     });
-  }, [s2ProjectsForActiveLeader, mrmChartMetric, mrmBaselinePlan, activeFy]);
+  }, [s2ProjectsForActiveLeader, mrmChartMetric, mrmBaselinePlan, activeFy, lastCompletedMonthIndex]);
 
   const currentMrmConfig = mrmMetricConfigs[mrmChartMetric];
-
-  // Index of the last completed month in mrmMonthlyData (e.g. Jul-26)
-  const lastCompletedMonthIndex = useMemo(() => {
-    for (let i = mrmMonthlyData.length - 1; i >= 0; i--) {
-      if (mrmMonthlyData[i].Achievement !== null && mrmMonthlyData[i].Achievement !== undefined) {
-        return i;
-      }
-    }
-    return 3; // Fallback to index 3 ("Jul-26")
-  }, [mrmMonthlyData]);
 
   // Data label renderer for Monthly Bars (Presentation-ready font size)
   const renderBarPlanLabel = useCallback((props: any) => {
@@ -894,22 +1074,22 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
     );
   }, [currentMrmConfig.colorAch]);
 
-  // Data label renderer for Cumulative Plan Line (Only for Mar 27 & Last Completed Month)
+  // Data label renderer for Cumulative Plan Line (Only for Last Completed Month and March in MRM Dashboard)
   const renderCumPlanLineLabel = useCallback((props: any) => {
     const { x, y, value, index } = props;
     if (value === undefined || value === null || value === 0) return null;
 
     const isLastCompleted = index === lastCompletedMonthIndex;
-    const isMar27 = index === mrmMonthlyData.length - 1;
-
-    if (!isLastCompleted && !isMar27) return null;
+    const isMarch = index === mrmMonthlyData.length - 1;
+    if (!isLastCompleted && !isMarch) return null;
 
     const formatted = typeof value === 'number' ? (value % 1 === 0 ? value : value.toFixed(1)) : value;
+    const labelX = isMarch ? x - 14 : x;
 
     return (
       <g>
         <rect
-          x={x - 24}
+          x={labelX - 24}
           y={y - 23}
           width={48}
           height={18}
@@ -919,7 +1099,7 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
           strokeWidth={1.5}
         />
         <text
-          x={x}
+          x={labelX}
           y={y - 10}
           fill="#1e293b"
           fontSize={10.5}
@@ -932,23 +1112,25 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
     );
   }, [lastCompletedMonthIndex, mrmMonthlyData.length]);
 
-  // Data label renderer for Cumulative Achievement Line (Only for Last Completed Month)
+  // Data label renderer for Cumulative Achievement Line (Only for Last Completed Month and March in MRM Dashboard)
   const renderCumAchLineLabel = useCallback((props: any) => {
     const { x, y, value, index } = props;
     if (value === undefined || value === null || value === 0) return null;
 
     const isLastCompleted = index === lastCompletedMonthIndex;
-    if (!isLastCompleted) return null;
+    const isMarch = index === mrmMonthlyData.length - 1;
+    if (!isLastCompleted && !isMarch) return null;
 
     const formatted = typeof value === 'number' ? (value % 1 === 0 ? value : value.toFixed(1)) : value;
     const row = mrmMonthlyData[index];
     const pct = row ? row['CumAchievement %'] : 0;
     const labelText = pct > 0 ? `${formatted} (${pct}%)` : `${formatted}`;
+    const labelX = isMarch ? x - 18 : x;
 
     return (
       <g>
         <rect
-          x={x - 38}
+          x={labelX - 38}
           y={y - 25}
           width={76}
           height={20}
@@ -958,7 +1140,7 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
           strokeWidth={1.5}
         />
         <text
-          x={x}
+          x={labelX}
           y={y - 11}
           fill="#ffffff"
           fontSize={10.5}
@@ -999,21 +1181,6 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
   }, [activeLeader]);
 
   const onTrackCount = spiStats.green;
-
-  // 1. Speed of construction = (VOWD ach / area) * 10^7 (unit: VOWD/Sqft)
-  const speedOfConstruction = (stats && stats.areaUnderConstruction > 0
-    ? (stats.vowd.ach / stats.areaUnderConstruction)
-    : 0) * 10000000;
-
-  // 2. Labour productivity = (VOWD ach / Labour ach) * 10^7 (unit: VOWD/lab/day)
-  const labourProductivity = (stats && stats.labour.ach > 0
-    ? (stats.vowd.ach / stats.labour.ach)
-    : 0) * 10000000;
-
-  // 3. Labour efficiency = labour productivity * 26 * 100 / 10^7 * 10^7 (unit: Cr. per 100 labours)
-  const labourEfficiency = (stats && stats.labour.ach > 0
-    ? (stats.vowd.ach / stats.labour.ach)
-    : 0) * 26 * 100;
 
   const formatMetricValue = (val: number, decimals: number = 2) => {
     if (val === 0) return '0';
@@ -2030,6 +2197,16 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
                     >
                       🏢 Unit Delivery (Commercial)
                     </button>
+                    <button
+                      onClick={() => setMrmChartMetric('spi')}
+                      className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                        mrmChartMetric === 'spi'
+                          ? 'bg-indigo-600 text-white shadow-xs'
+                          : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                      }`}
+                    >
+                      ⚡ SPI
+                    </button>
                   </div>
                 </div>
 
@@ -2099,7 +2276,7 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
                     <ResponsiveContainer width="100%" height="100%">
                       <ComposedChart
                         data={mrmMonthlyData}
-                        margin={{ top: 15, right: mrmShowMonthlyBars && mrmShowCumulativeLines ? 30 : 10, left: -10, bottom: 0 }}
+                        margin={{ top: 32, right: mrmShowMonthlyBars && mrmShowCumulativeLines ? 35 : 20, left: -5, bottom: 5 }}
                       >
                         <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                         <XAxis 
@@ -2119,6 +2296,7 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
                           fontWeight={600} 
                           tickLine={false} 
                           axisLine={false}
+                          domain={mrmChartMetric === 'spi' ? [0.5, 1.5] : [0, (dataMax) => Math.ceil((dataMax || 10) * 1.18)]}
                           tickFormatter={(val) => formatValue(val, currentMrmConfig.isCurrency)}
                         />
 
@@ -2131,6 +2309,7 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
                             fontWeight={600} 
                             tickLine={false} 
                             axisLine={false}
+                            domain={mrmChartMetric === 'spi' ? [0.5, 1.5] : [0, (dataMax) => Math.ceil((dataMax || 10) * 1.18)]}
                             tickFormatter={(val) => formatValue(val, currentMrmConfig.isCurrency)}
                           />
                         )}
@@ -2430,7 +2609,8 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
                 {sortedProjects.length > 0 ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5" id="leader-projects-blocks-grid">
                     {sortedProjects.map((p) => {
-                      const parsedSpi = p.spi ? parseFloat(p.spi) : null;
+                      const effectiveSpi = getEffectiveProjectSpi(p);
+                      const parsedSpi = effectiveSpi.spiVal;
                       const vowdPct = getPercent(p.vowdPctAch, p.vowdPlan, p.vowdAch);
                       const milestonePct = getPercent(p.milestonePctAch, p.milestonePlan, p.milestoneAch);
                       const labourPct = getPercent(p.labourPctAch, p.labourPlan, p.labourAch);
@@ -2439,19 +2619,18 @@ export default function LeaderList({ leaderDataList, software2Projects, onProjec
                         ? parseFloat(p.areaSqft.replace(/,/g, '')).toLocaleString() 
                         : '';
 
-                      const isSpiNA = !p.spi || /^(NA|N\/A|-|NONE|)$/i.test(String(p.spi).trim()) || isNaN(parseFloat(p.spi));
+                      const isSpiNA = parsedSpi === null;
                       const stripColor = isSpiNA ? 'bg-slate-400' : (
-                        p.status === 'Green' ? 'bg-emerald-500' :
-                        p.status === 'Amber' ? 'bg-amber-500' :
-                        p.status === 'Red' ? 'bg-rose-500' : 'bg-slate-400'
+                        parsedSpi >= 1.0 || p.status === 'Green' ? 'bg-emerald-500' :
+                        parsedSpi >= 0.85 || p.status === 'Amber' ? 'bg-amber-500' :
+                        'bg-rose-500'
                       );
                       const badgeClass = isSpiNA ? 'bg-slate-100 text-slate-600 border-slate-200' : (
-                        p.status === 'Green' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
-                        p.status === 'Amber' ? 'bg-amber-50 text-amber-700 border-amber-200' :
-                        p.status === 'Red' ? 'bg-rose-50 text-rose-700 border-rose-100' :
-                        'bg-slate-50 text-slate-700 border-slate-100'
+                        parsedSpi >= 1.0 || p.status === 'Green' ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
+                        parsedSpi >= 0.85 || p.status === 'Amber' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                        'bg-rose-50 text-rose-700 border-rose-100'
                       );
-                      const badgeText = isSpiNA ? 'N/A' : p.status;
+                      const badgeText = isSpiNA ? 'N/A' : (p.status || (parsedSpi >= 1.0 ? 'Green' : parsedSpi >= 0.85 ? 'Amber' : 'Red'));
 
                       return (
                         <div 
